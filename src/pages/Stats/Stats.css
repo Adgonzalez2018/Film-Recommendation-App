@@ -1,0 +1,343 @@
+@import url("https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Cinzel:wght@400;600&display=swap");
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: #000;
+}
+
+.root {
+  background: #000;
+  color: #e2ddd4;
+  font-family: "EB Garamond", Georgia, serif;
+  overflow: hidden;
+  position: relative;
+  height: 100vh;
+}
+
+/* film-grain overlay */
+.root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  z-index: 50;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.07'/%3E%3C/svg%3E");
+}
+
+/* vignette fades */
+.fade-top,
+.fade-bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+.fade-top {
+  top: 0;
+  height: 140px;
+  background: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+.fade-bottom {
+  bottom: 0;
+  height: 140px;
+  background: linear-gradient(to top, #000 0%, transparent 100%);
+}
+
+/* scrollport */
+.scrollport {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-behavior: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollport::-webkit-scrollbar {
+  display: none;
+}
+
+/* inner stage */
+.stage {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 100vh 24px 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* ── SECTION 1: big watch count ── */
+.s-watches {
+  padding: 0 0 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.s-watches-label {
+  font-family: "Cinzel", serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.35);
+  margin-bottom: 20px;
+}
+.s-watches-num {
+  font-family: "Cinzel", serif;
+  font-size: clamp(6rem, 25vw, 10rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #e2ddd4;
+}
+.s-watches-unit {
+  font-family: "EB Garamond", serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 4vw, 1.7rem);
+  color: rgba(226, 221, 212, 0.45);
+  margin-top: 12px;
+  letter-spacing: 0.1em;
+}
+.s-watches-change {
+  margin-top: 18px;
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.3);
+}
+
+/* thin vertical rule between sections */
+.rule {
+  width: 1px;
+  background: rgba(226, 221, 212, 0.12);
+  height: 70px;
+  flex-shrink: 0;
+}
+
+/* ── SECTION 2: bar chart ── */
+.s-chart {
+  padding: 90px 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.s-chart-label {
+  font-family: "Cinzel", serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.35);
+  margin-bottom: 32px;
+}
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  height: 100px;
+  width: 100%;
+}
+.chart-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.bar-pair {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.bar {
+  width: 9px;
+  border-radius: 1px 1px 0 0;
+  transition: height 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.bar-this {
+  background: #e2ddd4;
+}
+.bar-last {
+  background: rgba(226, 221, 212, 0.18);
+}
+.chart-day {
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.22);
+}
+.chart-legend {
+  display: flex;
+  gap: 24px;
+  margin-top: 22px;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.3);
+}
+.leg-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── CREDITED SECTIONS ── */
+.credited {
+  padding: 90px 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 1.2s ease, transform 1.2s ease;
+}
+.credited.vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cr-header {
+  font-family: "Cinzel", serif;
+  font-size: clamp(0.9rem, 3.5vw, 1.25rem);
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #e2ddd4;
+  margin-bottom: 36px;
+}
+
+.cr-list {
+  width: 100%;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.cr-item {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid rgba(226, 221, 212, 0.07);
+}
+.cr-item:last-child {
+  border-bottom: none;
+}
+.cr-ord {
+  font-family: "Cinzel", serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: rgba(226, 221, 212, 0.28);
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.cr-name {
+  font-family: "EB Garamond", serif;
+  font-size: clamp(1rem, 3.8vw, 1.35rem);
+  letter-spacing: 0.06em;
+  color: #e2ddd4;
+  text-align: left;
+  flex: 1;
+  max-width: 280px;
+}
+.cr-item:first-child .cr-name {
+  font-style: italic;
+  font-size: clamp(1.15rem, 4.2vw, 1.5rem);
+}
+
+/* ── DECADE SECTION ── */
+.decade-list {
+  width: 100%;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.decade-item {
+  display: grid;
+  grid-template-columns: 80px 1fr 36px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(226, 221, 212, 0.07);
+}
+.decade-item:last-child {
+  border-bottom: none;
+}
+.decade-lbl {
+  font-family: "Cinzel", serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  color: rgba(226, 221, 212, 0.45);
+  text-align: right;
+  text-transform: uppercase;
+}
+.decade-bar-wrap {
+  height: 5px;
+  background: rgba(226, 221, 212, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.decade-bar-fill {
+  height: 100%;
+  background: #e2ddd4;
+  border-radius: 2px;
+}
+.decade-count {
+  font-family: "EB Garamond", serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  color: rgba(226, 221, 212, 0.4);
+  text-align: left;
+}
+
+/* ── FIN ── */
+.fin {
+  padding: 60px 0 20px;
+  font-family: "Cinzel", serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.45em;
+  color: rgba(226, 221, 212, 0.18);
+  text-transform: uppercase;
+}
+
+/* ── CONTROLS ── */
+.controls {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 40;
+  display: flex;
+  gap: 8px;
+}
+.ctrl-btn {
+  background: transparent;
+  border: 1px solid rgba(226, 221, 212, 0.2);
+  color: #e2ddd4;
+  padding: 8px 14px;
+  font-family: "Cinzel", serif;
+  font-size: 0.55rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ctrl-btn:hover {
+  border-color: rgba(226, 221, 212, 0.6);
+  background: rgba(226, 221, 212, 0.05);
+}
