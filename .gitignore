@@ -1,0 +1,24 @@
+# ---- Python ----
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+db.sqlite3
+.env
+
+# ---- Django ----
+staticfiles/
+media/
+
+# ---- Node ----
+client/node_modules/
+client/build/
+
+# ---- macOS ----
+.DS_Store
+
+# ---- Editor ----
+.vscode/
+.idea/

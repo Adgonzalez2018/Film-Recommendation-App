@@ -50,12 +50,13 @@ def _build_letterboxd_rss_url(raw: str) -> str:
         s = "https://" + s
     
     # Full URL with scheme
-    if s.startsqwith("http://") or s.startswith("https://"):
-        # if it's already an rss URL, keep it
-        if s.rstrip("/").endswith("/rss/"):
+    if s.startswith("http://") or s.startswith("https://"):
+        # already RSS
+        if s.rstrip("/").endswith("/rss"):
             return s.rstrip("/") + "/"
+        
         # if it's a profile URL like httsp://letterboxd.com/<user>/
-        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s.rstrip("/"))
+        m = re.match(r"^https?://(www\.?letterboxd\.com/(^/]+)/?$)", s.rstrip("/"))
         if m:
             username = m.group(2)
             return f"https://letterboxd.com/{username}/rss/"
