@@ -1,0 +1,285 @@
+/* LetterboxdConnect.css — extends Auth.css design system */
+
+/* ── Page shell ─────────────────────────────────────────── */
+.connect-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: 4rem 1rem;
+  box-sizing: border-box;
+}
+
+.connect-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: brightness(0.7) contrast(1.1);
+}
+
+.connect-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    transparent 0%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+/* ── Card ────────────────────────────────────────────────── */
+.connect-box {
+  position: relative;
+  z-index: 10;
+  width: 520px;
+  max-width: 95%;
+  padding: 3rem 2.5rem;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.connect-title {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: #00ffff;
+  letter-spacing: 0.1em;
+}
+
+.connect-subtitle {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 0.9rem;
+  text-align: center;
+  color: rgba(0, 255, 255, 0.6);
+  letter-spacing: 0.06em;
+  margin-bottom: 2.5rem;
+}
+
+/* ── Sections ────────────────────────────────────────────── */
+.connect-section {
+  margin-bottom: 0.5rem;
+}
+
+.connect-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.connect-section-badge {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: #000;
+  background: #00ffff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Description text ───────────────────────────────────── */
+.connect-description {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: rgba(0, 255, 255, 0.72);
+  letter-spacing: 0.03em;
+  margin-bottom: 1.4rem;
+}
+
+.connect-description strong {
+  color: #00ffff;
+  font-weight: 600;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+.connect-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.connect-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 255, 255, 0.25);
+}
+
+.connect-divider-text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: rgba(0, 255, 255, 0.4);
+  white-space: nowrap;
+}
+
+/* ── Shared field label ──────────────────────────────────── */
+.connect-label {
+  display: block;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: #00ffff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.connect-hint {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 0.8rem;
+  color: rgba(0, 255, 255, 0.5);
+  margin-top: 0.4rem;
+  letter-spacing: 0.04em;
+}
+
+/* ── Form group spacing ──────────────────────────────────── */
+.connect-group {
+  margin-bottom: 1.25rem;
+}
+
+/* ── CSV Upload rows ─────────────────────────────────────── */
+.csv-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.csv-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(5px);
+  border: 2px solid rgba(0, 255, 255, 0.4);
+  border-radius: 2px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
+}
+
+.csv-row:hover {
+  border-color: #00ffff;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.18);
+}
+
+.csv-row.has-file {
+  border-color: #00ffff;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+}
+
+.csv-row input[type="file"] {
+  display: none;
+}
+
+.csv-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.csv-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.csv-name {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00ffff;
+}
+
+.csv-file-name {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 0.78rem;
+  color: rgba(0, 255, 255, 0.6);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.csv-status {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Error / success ─────────────────────────────────────── */
+.connect-error {
+  background-color: #ff4444;
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.connect-success {
+  background-color: rgba(0, 255, 136, 0.12);
+  border: 1px solid rgba(0, 255, 136, 0.45);
+  color: #00ff88;
+  padding: 0.75rem 1rem;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+/* ── Skip / continue ─────────────────────────────────────── */
+.connect-skip {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.connect-skip-link {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: rgba(0, 255, 255, 0.5);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.connect-skip-link:hover {
+  opacity: 0.8;
+  color: #00ffff;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .connect-box {
+    padding: 2rem 1.5rem;
+  }
+
+  .connect-title {
+    font-size: 2rem;
+  }
+}

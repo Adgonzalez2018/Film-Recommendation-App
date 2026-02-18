@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/static/css/main.693d29d6.css",
+    "main.js": "/static/js/main.0cb3878b.js",
+    "static/media/shining.png": "/static/media/shining.8348c4b9f68845f44ffc.png",
+    "static/media/thething.png": "/static/media/thething.7fee2bda47b5e4c88241.png",
+    "static/media/Albertus Medium Regular.ttf": "/static/media/Albertus Medium Regular.091c9d6505188f1e3c8a.ttf",
+    "index.html": "/index.html",
+    "main.693d29d6.css.map": "/static/css/main.693d29d6.css.map",
+    "main.0cb3878b.js.map": "/static/js/main.0cb3878b.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.693d29d6.css",
+    "static/js/main.0cb3878b.js"
+  ]
+}
