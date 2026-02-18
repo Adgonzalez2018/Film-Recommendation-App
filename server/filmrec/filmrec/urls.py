@@ -17,14 +17,20 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from django.urls import include  # Import include for including app URLs
-from api.views import *
+#from api.views import *
+
+from api.views.auth_views import loginView, registerView, ping
+from api.views.stats_views import stats_payload
+from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/login/', loginView, name='login'),
-    path('api/register/', registerView, name='register'),
-    path('api/ping/', ping, name='ping'),
-    path('api/stats/', stats_payload, name='stats-payload'),
-    path('api/letterboxd/import/', letterboxd_import, name='letterboxd-import'),
+    path("admin/", admin.site.urls),
+
+    path("api/login/", loginView, name="login"),
+    path("api/register/", registerView, name="register"),
+    path("api/ping/", ping, name="ping"),
+    path("api/stats/", stats_payload, name="stats-payload"),
+
+    path("api/letterboxd/import/", letterboxd_import, name="letterboxd-import"),
     path("api/letterboxd/rss/", letterboxd_rss, name="letterboxd-rss"),
 ]
