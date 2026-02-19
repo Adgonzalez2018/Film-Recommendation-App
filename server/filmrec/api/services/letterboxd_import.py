@@ -1,6 +1,8 @@
 import csv
 import io
-from datetime import date
+import re
+from datetime import date, datetime
+
 from django.db import transaction
 
 from ..models import Movie, MovieUser
@@ -155,3 +157,51 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         "relationships_created": rel_created,
         "relationships_updated": rel_updated,
     }
+
+# RSS Helper Function
+def _build_letterboxd_rss_url(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    
+    # if they paste "letterboxd.com/username" without scheme
+    if s.startswith("letterboxd.com/"):
+        s = "https://" + s
+    
+    # Full URL with scheme
+    if s.startsqwith("http://") or s.startswith("https://"):
+        # if it's already an rss URL, keep it
+        if s.rstrip("/").endswith("/rss/"):
+            return s.rstrip("/") + "/"
+        # if it's a profile URL like httsp://letterboxd.com/<user>/
+        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s.rstrip("/"))
+        if m:
+            username = m.group(2)
+            return f"https://letterboxd.com/{username}/rss/"
+        # unnknown URL Format
+        return ""
+    
+    # otherwise treat as username
+    username = s.strip("/").replace(" ", "")
+    if not username:
+        return ""
+    return f"https://letterboxd.com/{username}/rss/"
+
+def _parse_published_date(entry) -> datetime | None:
+    # feedparser gives published_parsed as a time.struct_time sometimes
+    tp = getattr(entry, "published_parsed", None)
+    if tp:
+        try:
+            return datetime(tp.tm_year, tp.tm_mon, tp.tm_mday, tp.tm_hour, tp.tm_min, tp.tm_sec)
+        except Exception:
+            return None
+        
+    # fallback: try published string
+    pub = getattr(entry, "published", None)
+    if pub:
+        try:
+            # very lose fallback; tighten later
+            return datetime.fromisoformat(pub)
+        except Exception:
+            return None
+        

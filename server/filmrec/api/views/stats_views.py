@@ -12,6 +12,12 @@ from ..utils.dates import week_window_sunday_anchor  # you already created this
 
 DECADE_ORDER = ["Pre-1960s", "60s", "70s", "80s", "90s", "00s", "10s", "20s"]
 
+def loadAllTime(user):
+    return MovieUser.objects.filter(
+        user=user,
+        watch_status="Watched",
+        watched_date__isnull=False,
+    )
 
 def loadWeekly(user, start_date, end_date):
     return MovieUser.objects.filter(
@@ -104,6 +110,46 @@ def stats_payload(request):
             "days": days,
             "thisWeek": thisWeekArr,
             "lastWeek": lastWeekArr,
+            "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
+            "actors": [{"name": a.name, "count": a.count} for a in topActors],
+            "genres": [{"name": g.name, "count": g.count} for g in topGenres],
+            "recentFilms": [{"name": m.title} for m in recentMovies],
+            "byDecade": decadeCounts,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stats_all_time(request):
+    allMovies = loadAllTime(request.user)
+
+    topDirectors = {
+        Director.objects.filter(moviedirector__movie__movieuser__in=allMovies)
+        .annotate(count=models.Count("moviedirector__movie__movieuser",distinct=True))
+        .order_by("-count")[:5]
+    }
+
+    topActors = {
+        Actor.objects.filter(movieactor__movie__movieuser__in=allMovies)
+        .annotate(count=models.Count("movieactor__movie__movieuser",distinct=True))
+        .order_by("-count")[:5]
+    }
+
+    topGenres = {
+        Actor.objects.filter(moviegenre__movie__movieuser__in=allMovies)
+        .annotate(count=models.Count("moviegenre__movie__movieuser",distinct=True))
+        .order_by("-count")[:5]
+    }
+
+    recentEntries = allMovies.select_related("movie")
+    recentMovies = [entry.movie for entry in recentEntries]
+
+    totalCount = allMovies.count()
+    decadeCounts = byDecadePayload(allMovies)
+    return Response(
+        {
+            "totalWatches": totalCount,
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
             "genres": [{"name": g.name, "count": g.count} for g in topGenres],
