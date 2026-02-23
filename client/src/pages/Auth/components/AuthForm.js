@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function AuthForm({
-  mode = "signin", // "signin" | "signup"
+  mode = "signin",
   title = "SIGN IN",
   backgroundImg,
   onSubmit,
@@ -12,7 +12,7 @@ export default function AuthForm({
   const isSignIn = mode === "signin";
 
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
     confirmPassword: "",
   });
@@ -25,9 +25,9 @@ export default function AuthForm({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const { username, password, confirmPassword } = formData;
+    const { email, password, confirmPassword } = formData;
 
-    if (!username || !password) {
+    if (!email || !password) {
       alert("Please fill in all fields!");
       return;
     }
@@ -37,7 +37,7 @@ export default function AuthForm({
       return;
     }
 
-    onSubmit?.({ username, password });
+    onSubmit?.({ email, password });
   };
 
   return (
@@ -54,13 +54,13 @@ export default function AuthForm({
 
         <form onSubmit={handleSubmit}>
           <div className="auth-group">
-            <label className="auth-label">USERNAME</label>
+            <label className="auth-label">EMAIL</label>
             <input
               className="neon-field"
-              type="text"
-              name="username"
-              placeholder="Enter your Letterboxd username"
-              value={formData.username}
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              value={formData.email}
               onChange={handleChange}
               required
               disabled={loading}
@@ -112,7 +112,7 @@ export default function AuthForm({
             </>
           ) : (
             <>
-              Already have an account?
+              Already have an account?{" "}
               <Link to="/signin" className="auth-link">
                 Sign In
               </Link>

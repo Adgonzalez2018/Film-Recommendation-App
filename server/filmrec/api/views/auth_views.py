@@ -4,7 +4,8 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
-
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -13,9 +14,11 @@ from rest_framework.response import Response
 from rest_framework_simplejwt import tokens
 
 from ..serializer import LoginSerializer, RegistrationSerializer, ProfileSerializer
+from ..utils.letterboxd import extract_letterboxd_username
 
 User = get_user_model()
 token_generator = PasswordResetTokenGenerator()
+
 
 # create a user token once logged in, store in local storage (frontend)
 def get_user_tokens(user):
@@ -56,14 +59,16 @@ def ping(request):
     return Response({
         "email": user.email, 
         "first_name": user.first_name,
+        "username": user.first_name or user.email,
         "id": user.id,
         }, 
         status=status.HTTP_200_OK)
 
 # Pass Reset Request
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def password_reset_request(request):
-    email = request.data.get("email")
+    email = (request.data.get("email") or "").strip()
 
     if not email:
         return Response(
@@ -82,8 +87,7 @@ def password_reset_request(request):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = token_generator.make_token(user)
 
-    reset_link = f"http://localhost:3000/reset-password/{uid}/{token}/"
-
+    reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password/{uid}/{token}/"  
     # DEV: print link instead of emailing
     print("PASSWORD RESET LINK:", reset_link)
 
@@ -102,6 +106,7 @@ def password_reset_request(request):
 
 # Set new password
 @api_view(["POST"])
+@permission_classes([AllowAny])
 def password_reset_confirm(request):
     uid = request.data.get("uid")
     token = request.data.get("token")
@@ -131,9 +136,13 @@ def password_reset_confirm(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        return Response({"detail": e.messages}, status=status.HTTP_400_BAD_REQUEST)
     # passed checks save new password
     user.set_password(new_password)
-    user.save()
+    user.save(update_fields=["password"])
 
     return Response({"detail": "Password has been reset successfuly."})
 
@@ -151,3 +160,4 @@ def profileView(request):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data, status=status.HTTP_200_OK)
+

@@ -3,11 +3,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from ..models import ImportBatch
+from ..utils.letterboxd import extract_letterboxd_username
+from django.utils import timezone
 
 from ..services.letterboxd_import import (
     run_letterboxd_import, 
     _build_letterboxd_rss_url,
     _parse_published_date)
+
 from ..models import Movie, MovieUser
 
 import feedparser
@@ -31,6 +35,26 @@ def letterboxd_import(request):
         watchlist_file=watchlist_file,
         films_file=films_file,
     )
+    
+    # log batch
+    ImportBatch.objects.create(
+        user=request.user,
+        source="csv",
+        movies_created=counters.get("movies_created", 0),
+        movies_matched=counters.get("movies_matched", 0),
+        rel_created=counters.get("rel_created", 0),
+        rel_updated=counters.get("rel_updated", 0),
+        had_reviews=bool(reviews_file),
+        had_watchlist=bool(watchlist_file),
+        had_films=bool(films_file),
+    )
+
+    # update profile summary (fast reads for profile page)
+    prof = request.user
+    prof.manual_import_count = prof.manual_import_count + 1
+    prof.last_sync = timezone.now()
+    prof.save(update_fields=["manual_import_count", "last_sync"])
+
 
     return Response({"status": "ok", **counters}, status=status.HTTP_200_OK)
 
@@ -49,6 +73,15 @@ def letterboxd_rss(request):
             {"error": "Invalid RSS input"}, 
             status=status.HTTP_400_BAD_REQUEST,
             )
+    
+    # save username when they link RSS
+    username = extract_letterboxd_username(rss_input) or extract_letterboxd_username(rss_url)
+    if username:
+        prof = request.user
+        if prof.letterboxd_username != username:
+            prof.letterboxd_username = username
+            prof.save(update_fields=["letterboxd_username"])
+    
     feed = feedparser.parse(rss_url)
     # feed.bozo indicates a parsing error
     if getattr(feed, "bozo", False):
@@ -100,12 +133,27 @@ def letterboxd_rss(request):
 
         synced += 1
 
-        return Response({
-            "status": "ok",
-            "rss_url": rss_url,
-            "entries_processed": synced,
-            "movies_created": created_movies,
-            "movieuser_created": created_links,
-            "movieuser_updated": updated_links,
-        })
+    # log batch
+    ImportBatch.objects.create(
+        user=user,
+        source="rss",
+        movies_created=created_movies,
+        rel_created=created_links,
+        rel_updated=updated_links,
+    )
+
+    prof = user
+    prof.rss_import_count = prof.rss_import_count + 1
+    prof.last_sync = timezone.now()
+    prof.save(update_fields=["rss_import_count", "last_sync"])
+
+
+    return Response({
+        "status": "ok",
+        "rss_url": rss_url,
+        "entries_processed": synced,
+        "movies_created": created_movies,
+        "movieuser_created": created_links,
+        "movieuser_updated": updated_links,
+    })
         

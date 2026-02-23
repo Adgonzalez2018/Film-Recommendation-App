@@ -1,5 +1,7 @@
 from urllib.parse import urlparse
+import re
 
+_USERNAME_RE = re.compile(r"^/([^/]+)/?$")
 
 def normalize_letterboxd_uri(uri: str):
     """
@@ -38,3 +40,45 @@ def normalize_letterboxd_uri(uri: str):
         return None
 
     return f"https://letterboxd.com/film/{slug}/"
+
+def extract_letterboxd_username(input_str: str) -> str | None:
+    """
+    Accepts:
+      - "username"
+      - "https://letterboxd.com/username/"
+      - "https://letterboxd.com/username/rss/"
+    Returns:
+      - "username" or None
+    """
+    s = (input_str or "").strip()
+    if not s:
+        return None
+
+    # raw username
+    if "://" not in s and "/" not in s:
+        return s.strip("@")
+
+    try:
+        u = urlparse(s)
+    except Exception:
+        return None
+
+    # allow letterboxd.com only (or loosen if you want)
+    host = (u.netloc or "").lower()
+    if "letterboxd.com" not in host:
+        return None
+
+    # path forms: /username/ or /username/rss/
+    path = (u.path or "").rstrip("/")
+    if path.endswith("/rss"):
+        path = path[:-4].rstrip("/")  # remove trailing /rss
+
+    m = _USERNAME_RE.match(path)
+    if not m:
+        return None
+
+    username = m.group(1)
+    # quick sanity
+    if not re.match(r"^[A-Za-z0-9_]+$", username):
+        return None
+    return username

@@ -13,8 +13,14 @@ export default function SignIn() {
   const handleSignIn = async ({ email, password }) => {
     setLoading(true);
     setError(null);
+
     try{
-      await loginAction(email, password, navigate);
+      const data = await loginAction(email, password, navigate);
+      // store token
+      localStorage.setItem("access_token", data.access_token);
+      
+      // nav
+      navigate("/chat");
     } catch (err) {
       setError(err.message);
     } finally {

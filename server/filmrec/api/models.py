@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 
 WATCH_STATUS_CHOICES = [
     ("Watched", "Watched"),
@@ -37,9 +38,42 @@ class Movie(models.Model):
 
 # --- User Model ---
 class User(AbstractUser):
-    last_sync = models.DateTimeField(auto_now=True)         # Track when the user last synced their data
+    last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
+    
+    #letterboxd
+    letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
+
+    # import tracking
+    manual_import_count = models.PositiveIntegerField(default=0)
+    rss_import_count = models.PositiveIntegerField(default=0)
+
+
     def __str__(self):
         return self.username
+    
+class ImportBatch(models.Model):
+    SOURCE_CHOICES = [
+        ("csv", "CSV"),
+        ("rss", "RSS"),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="import_batches")
+    source = models.CharField(max_length=8, choices=SOURCE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # store whatever counters you want (from your importer)
+    movies_created = models.IntegerField(default=0)
+    movies_matched = models.IntegerField(default=0)
+    rel_created = models.IntegerField(default=0)
+    rel_updated = models.IntegerField(default=0)
+
+    # optional: what files were included
+    had_reviews = models.BooleanField(default=False)
+    had_watchlist = models.BooleanField(default=False)
+    had_films = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"ImportBatch<{self.user_id}:{self.source}:{self.created_at}>"
 
 # --- Actor Model ---
 class Actor(models.Model):

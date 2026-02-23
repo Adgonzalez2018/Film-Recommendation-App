@@ -23,7 +23,7 @@ from api.views.auth_views import (
     password_reset_confirm, password_reset_request, profileView)
 from api.views.stats_views import stats_payload, stats_all_time
 from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
-
+from api.views.profile_views import *
 urlpatterns = [
     path("admin/", admin.site.urls),
 
@@ -31,7 +31,9 @@ urlpatterns = [
     path("api/register/", registerView, name="register"),
 
     path("api/profile/", profileView, name="profile"),
-
+    path("api/import/letterboxd/csv/", letterboxd_import, name="letterboxd-import-csv"),
+    path("api/import/letterboxd/rss/", letterboxd_rss, name="letterboxd-import-rss"),
+    
     path("api/password-reset/", password_reset_request, name="password_reset"),
     path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
 

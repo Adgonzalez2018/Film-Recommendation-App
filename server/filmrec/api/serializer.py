@@ -54,11 +54,49 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return user
     
 class ProfileSerializer(serializers.ModelSerializer):
+    letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
+
+    has_letterboxd_link = serializers.SerializerMethodField()
+    has_imports = serializers.SerializerMethodField()
+    manual_import_count = serializers.SerializerMethodField()
+    rss_import_count = serializers.SerializerMethodField()
+    last_sync = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "first_name", "email"]
-        read_only_fields = ["id", "email"]  # email immutable
+        fields = ["id", 
+                  "first_name", 
+                  "email",
+                  "letterboxd_username",
+                  "has_letterboxd_link",
+                  "has_imports",
+                  "manual_import_count",
+                  "rss_import_count",
+                  "last_sync",
+                  ]
+        read_only_fields = [
+            "id",
+            "email",
+            "has_letterboxd_link",
+            "has_imports",
+            "manual_import_count",
+            "rss_import_count",
+            "last_sync",
+        ]
+    def get_letterboxd_username(self, obj):
+        return getattr(obj, "letterboxd_username", None)
 
+    def get_has_imports(self, obj):
+        return MovieUser.objects.filter(user=obj).exists()
+
+    def get_manual_import_count(self, obj):
+        return obj.manual_import_count
+    
+    def get_rss_import_count(self, obj):
+        return obj.rss_import_count
+    
+    def get_last_sync(self, obj):
+        return obj.last_sync.isoformat() if obj.last_sync else None
 
 # --- Movie Serializer ---
 class MovieSerializer(serializers.ModelSerializer):

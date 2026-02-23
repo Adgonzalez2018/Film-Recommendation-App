@@ -18,7 +18,12 @@ export default function SignUp() {
     setLoading(true);
     setError(null);
     try {
-      await registerAction(username, password, navigate);
+      const data = await registerAction(username, password, navigate);
+      localStorage.setItem("access_token", data.access_token);
+
+      // navigate 
+      navigate("/connect"); 
+      
     } catch (err) {
       setError(err.message);
     } finally {
