@@ -204,7 +204,7 @@
   gap: 8px;
 }
 .profile-password-center {
-  margin-top: -10px;
+  margin-top: -50px;
   text-align: center;
   display: flex !important;
   flex-direction: column !important;
@@ -228,7 +228,6 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: 380px;
   margin: 0 auto;
 }
 
@@ -265,7 +264,7 @@
   color: #fff;
   cursor: pointer;
   transition: background 0.2s ease, opacity 0.2s ease;
-  margin-top: 0.5rem;
+  margin-top: 0.1rem;
 }
 
 .profile-save-btn:hover { background: #111; }
@@ -298,7 +297,6 @@
 ════════════════════════════════════════════════════════ */
 .profile-letterboxd-strip {
   background: #000;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
   padding: 2.5rem 1rem 4rem;
   display: flex;
   flex-direction: column;
@@ -307,7 +305,7 @@
 
 .profile-letterboxd-strip .profile-inner {
   width: 100%;
-  max-width: 520px;
+  max-width: 860px;
 }
 
 .profile-strip-description {
@@ -324,26 +322,59 @@
   font-weight: 700;
 }
 
-/* Divider (no cyan) */
-.profile-divider {
+/* ── Side-by-side import layout ──────────────────────── */
+.profile-import-row {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin: 1.8rem 0;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  margin-bottom: 2.5rem;
 }
 
-.profile-divider-line {
+.profile-import-col {
   flex: 1;
-  height: 1px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-import-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1.25rem;
+  padding-top: 2rem;
+}
+
+.profile-import-divider-line {
+  flex: 1;
+  width: 1px;
   background: rgba(255, 255, 255, 0.22);
 }
 
-.profile-divider-text {
+.profile-import-divider-text {
   font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   letter-spacing: 0.15em;
   color: rgba(255, 255, 255, 0.45);
   white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .profile-import-row {
+    flex-direction: column;
+  }
+  .profile-import-divider {
+    flex-direction: row;
+    padding: 1rem 0;
+    width: 100%;
+  }
+  .profile-import-divider-line {
+    flex: 1;
+    width: auto;
+    height: 1px;
+  }
 }
 
 /* ── CSV upload list — fully standalone, no LetterboxdConnect dependency ── */

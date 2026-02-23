@@ -267,101 +267,105 @@ export default function Profile() {
       <div className="profile-letterboxd-strip">
         <div className="profile-inner">
 
-          {/* ── CSV Import ── */}
-          <div className="profile-section">
-            <div className="profile-section-header">
-              <span className="profile-section-label">Import Your Data</span>
-            </div>
+          <div className="profile-import-row">
 
-            <p className="profile-strip-description">
-              For the best film recommendation experience, import your Letterboxd data via{" "}
-              <strong>letterboxd.com → Settings → Import &amp; Export → Export Your Data</strong>.
-              Upload the three CSV files below to unlock your{" "}
-              <strong>all-time stats report</strong> and an{" "}
-              <strong>initial weekly stats report</strong>.
-            </p>
+            {/* ── CSV Import ── */}
+            <div className="profile-import-col">
+              <div className="profile-section-header">
+                <span className="profile-section-label">Import Your Data</span>
+              </div>
 
-            {csvError   && <div className="profile-error">{csvError}</div>}
-            {csvSuccess && <div className="profile-success">{csvSuccess}</div>}
+              <p className="profile-strip-description">
+                For the best film recommendation experience, import your Letterboxd data via{" "}
+                <strong>letterboxd.com → Settings → Import &amp; Export → Export Your Data</strong>.
+                Upload the three CSV files below to unlock your{" "}
+                <strong>all-time stats report</strong> and an{" "}
+                <strong>initial weekly stats report</strong>.
+              </p>
 
-            <form onSubmit={handleCSVSubmit}>
-              <div className="csv-upload-list">
-                {CSV_FILES.map(({ key, label, hint, icon }) => (
-                  <div
-                    key={key}
-                    className={`csv-row ${files[key] ? "has-file" : ""}`}
-                    onClick={() => fileInputRefs[key].current.click()}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && fileInputRefs[key].current.click()}
-                  >
-                    <input
-                      type="file"
-                      accept=".csv"
-                      ref={fileInputRefs[key]}
-                      onChange={(e) => handleFileChange(key, e)}
-                    />
-                    <span className="csv-icon">{icon}</span>
-                    <div className="csv-info">
-                      <div className="csv-name">{label}</div>
-                      <div className="csv-file-name">{files[key] ? files[key].name : hint}</div>
+              {csvError   && <div className="profile-error">{csvError}</div>}
+              {csvSuccess && <div className="profile-success">{csvSuccess}</div>}
+
+              <form onSubmit={handleCSVSubmit}>
+                <div className="csv-upload-list">
+                  {CSV_FILES.map(({ key, label, hint, icon }) => (
+                    <div
+                      key={key}
+                      className={`csv-row ${files[key] ? "has-file" : ""}`}
+                      onClick={() => fileInputRefs[key].current.click()}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && fileInputRefs[key].current.click()}
+                    >
+                      <input
+                        type="file"
+                        accept=".csv"
+                        ref={fileInputRefs[key]}
+                        onChange={(e) => handleFileChange(key, e)}
+                      />
+                      <span className="csv-icon">{icon}</span>
+                      <div className="csv-info">
+                        <div className="csv-name">{label}</div>
+                        <div className="csv-file-name">{files[key] ? files[key].name : hint}</div>
+                      </div>
+                      <span className="csv-status">{files[key] ? "✅" : "＋"}</span>
                     </div>
-                    <span className="csv-status">{files[key] ? "✅" : "＋"}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
 
-              <button type="submit" className="profile-save-btn" disabled={csvLoading}>
-                {csvLoading ? "IMPORTING…" : "IMPORT DATA"}
-              </button>
-            </form>
-          </div>
-
-          {/* ── Divider ── */}
-          <div className="profile-divider">
-            <span className="profile-divider-line" />
-            <span className="profile-divider-text">AND / OR</span>
-            <span className="profile-divider-line" />
-          </div>
-
-          {/* ── RSS Sync ── */}
-          <div className="profile-section">
-            <div className="profile-section-header">
-              <span className="profile-section-label">Weekly Auto Sync</span>
+                <button type="submit" className="profile-save-btn" disabled={csvLoading}>
+                  {csvLoading ? "IMPORTING…" : "IMPORT DATA"}
+                </button>
+              </form>
             </div>
 
-            <p className="profile-strip-description">
-              For <strong>constant weekly reports</strong> of your movies, link your
-              Letterboxd URL. We'll sync your public RSS feed automatically every week.
-            </p>
+            {/* ── Vertical divider ── */}
+            <div className="profile-import-divider">
+              <span className="profile-import-divider-line" />
+              <span className="profile-import-divider-text">OR</span>
+              <span className="profile-import-divider-line" />
+            </div>
 
-            {rssError   && <div className="profile-error">{rssError}</div>}
-            {rssSuccess && <div className="profile-success">{rssSuccess}</div>}
-
-            <form onSubmit={handleRSSSubmit}>
-              <div className="profile-group">
-                <label className="profile-label" htmlFor="rss-profile-input">
-                  Letterboxd URL or Username
-                </label>
-                <input
-                  id="rss-profile-input"
-                  className="neon-field"
-                  type="text"
-                  placeholder="e.g.  yourname  or  letterboxd.com/yourname"
-                  value={rssInput}
-                  onChange={(e) => { setRssInput(e.target.value); setRssError(null); }}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <p className="connect-hint">
-                  We'll build your RSS feed URL automatically from your username.
-                </p>
+            {/* ── RSS Sync ── */}
+            <div className="profile-import-col">
+              <div className="profile-section-header">
+                <span className="profile-section-label">Weekly Auto Sync</span>
               </div>
 
-              <button type="submit" className="profile-save-btn" disabled={rssLoading}>
-                {rssLoading ? "LINKING…" : "LINK FOR WEEKLY REPORTS"}
-              </button>
-            </form>
+              <p className="profile-strip-description">
+                For <strong>constant weekly reports</strong> of your movies, link your
+                Letterboxd URL. We'll sync your public RSS feed automatically every week.
+              </p>
+
+              {rssError   && <div className="profile-error">{rssError}</div>}
+              {rssSuccess && <div className="profile-success">{rssSuccess}</div>}
+
+              <form onSubmit={handleRSSSubmit}>
+                <div className="profile-group">
+                  <label className="profile-label" htmlFor="rss-profile-input">
+                    Letterboxd URL or Username
+                  </label>
+                  <input
+                    id="rss-profile-input"
+                    className="neon-field"
+                    type="text"
+                    placeholder="e.g.  yourname  or  letterboxd.com/yourname"
+                    value={rssInput}
+                    onChange={(e) => { setRssInput(e.target.value); setRssError(null); }}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <p className="connect-hint">
+                    We'll build your RSS feed URL automatically from your username.
+                  </p>
+                </div>
+
+                <button type="submit" className="profile-save-btn" disabled={rssLoading}>
+                  {rssLoading ? "LINKING…" : "LINK FOR WEEKLY REPORTS"}
+                </button>
+              </form>
+            </div>
+
           </div>
 
         </div>
