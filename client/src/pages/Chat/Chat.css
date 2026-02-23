@@ -418,3 +418,15 @@
     display: none;
   }
 }
+
+.profile-section {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.profile-section:hover {
+  opacity: 0.9;
+}

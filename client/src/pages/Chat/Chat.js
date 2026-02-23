@@ -1,14 +1,12 @@
-// filepath: /Users/adgonzalez2018/Desktop/Agent/Film-Recommendation-App/client/src/pages/Chat/Chat.js
 import React, { useState, useRef, useEffect } from "react";
 import "./Chat.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import AuthForm from "../Auth/components/AuthForm";
 
-const Chat = ({ onNavigate }) => {
+const Chat = () => {
   const navigate = useNavigate();
   const { isAuthenticating, authError } = useAuth();
-  
+
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -18,17 +16,17 @@ const Chat = ({ onNavigate }) => {
       timestamp: new Date(),
     },
   ]);
+
   const [input, setInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
     { id: 1, title: "New conversation", date: "Today", active: true },
   ]);
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   const messagesEndRef = useRef(null);
-  const username = localStorage.getItem("username") || "User";
 
-  // Auto-scroll to bottom when new messages arrive
+  const PROMPT = "user@film:~$"; // <-- no username
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -48,7 +46,7 @@ const Chat = ({ onNavigate }) => {
       timestamp: new Date(),
     };
 
-    setMessages([...messages, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
 
@@ -77,14 +75,14 @@ const Chat = ({ onNavigate }) => {
       ...chat,
       active: false,
     }));
+
     setChatHistory([newChat, ...updatedHistory]);
 
     setMessages([
       {
         id: 1,
         role: "assistant",
-        content:
-          "Hello! I'm your film recommendation AI. What would you like to know?",
+        content: "Hello! I'm your film recommendation AI. What would you like to know?",
         timestamp: new Date(),
       },
     ]);
@@ -98,11 +96,7 @@ const Chat = ({ onNavigate }) => {
     setChatHistory(updatedHistory);
   };
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
-  // Show loading screen while authenticating
+  // Auth guards
   if (isAuthenticating) {
     return (
       <div className="chat-container dark-mode">
@@ -113,16 +107,12 @@ const Chat = ({ onNavigate }) => {
     );
   }
 
-  // Show error screen if auth failed with server error
   if (authError) {
     return (
       <div className="chat-container dark-mode">
         <div className="auth-error-container">
           <div className="error-message">{authError}</div>
-          <button 
-            className="retry-button"
-            onClick={() => window.location.reload()}
-          >
+          <button className="retry-button" onClick={() => window.location.reload()}>
             RETRY
           </button>
         </div>
@@ -153,25 +143,32 @@ const Chat = ({ onNavigate }) => {
           ))}
         </div>
 
-        {/* Profile section at bottom */}
-        <div className="profile-section">
-          <div className="profile-avatar">
-            {username.charAt(0).toUpperCase()}
-          </div>
+        {/* Bottom-left Profile access (clickable) */}
+        <button
+          type="button"
+          className="profile-section"
+          onClick={() => navigate("/profile")}
+          aria-label="Go to profile"
+        >
+          <div className="profile-avatar">U</div>
           <div className="profile-info">
-            <div className="profile-name">{username}</div>
-            <div className="profile-email">Letterboxd User</div>
+            <div className="profile-name">Profile</div>
+            <div className="profile-email">Account</div>
           </div>
-        </div>
+        </button>
       </aside>
 
       {/* Main chat area */}
       <main className="chat-main">
         <header className="chat-header">
           <h1 className="header-title">Film-Recommender v0.1</h1>
-          <button className="stats-button" onClick={() => navigate("/stats")}>
-            Statistics
-          </button>
+
+          {/* Header nav: keep Stats, remove Profile */}
+          <div className="chat-header-nav">
+            <button className="stats-button" onClick={() => navigate("/stats")}>
+              Stats
+            </button>
+          </div>
         </header>
 
         {/* Messages */}
@@ -179,13 +176,12 @@ const Chat = ({ onNavigate }) => {
           {messages.map((m) => (
             <div key={m.id} className={`log-line ${m.role}`}>
               <span className="log-prefix">
-                {m.role === "user"
-                  ? `${username.toLowerCase()}@film:~$`
-                  : "ai@film:~#"}
+                {m.role === "user" ? PROMPT : "ai@film:~#"}
               </span>
               <span className="log-text">{m.content}</span>
             </div>
           ))}
+
           {isLoading && (
             <div className="log-line assistant">
               <span className="log-prefix">ai@film:~#</span>
@@ -199,9 +195,7 @@ const Chat = ({ onNavigate }) => {
         {/* Input area */}
         <div className="input-container">
           <form onSubmit={handleSendMessage} className="input-form">
-            <span className="prompt-label">
-              {username.toLowerCase()}@film:~$
-            </span>
+            <span className="prompt-label">{PROMPT}</span>
 
             <textarea
               value={input}
@@ -216,11 +210,8 @@ const Chat = ({ onNavigate }) => {
                 }
               }}
             />
-            <button
-              type="submit"
-              className="send-button"
-              disabled={!input.trim()}
-            >
+
+            <button type="submit" className="send-button" disabled={!input.trim()}>
               ENTER
             </button>
           </form>

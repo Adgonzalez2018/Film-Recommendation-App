@@ -1,4 +1,15 @@
-/* Profile.css — La Haine poster layout */
+@font-face {
+  font-family: "Antique-Olive";
+  src: url("../../assets/fonts/Antique-Olive-Std-Compact_3864.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+.Antique_Olive {
+  font-family: "Antique-Olive";
+}
+
+/* Profile.css — LA HAINE poster layout (Black/White Helvetica) */
 
 /* ── Reset / base ──────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
@@ -6,12 +17,17 @@
 .profile-page {
   min-height: 100vh;
   background: #000;
-  color: #00ffff;
+  color: #fff;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+/* Force Helvetica everywhere inside Profile even if other CSS is imported */
+.profile-page {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+}
+
 /* ════════════════════════════════════════════════════════
-   HERO — the eyes image, just like the poster
+   HERO
 ════════════════════════════════════════════════════════ */
 .profile-hero {
   position: relative;
@@ -26,7 +42,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 50%;
   filter: grayscale(100%) contrast(1.15) brightness(0.85);
   display: block;
 }
@@ -44,29 +60,29 @@
 }
 
 /* ════════════════════════════════════════════════════════
-   TITLE BAND — slams across like "LA HAINE"
+   TITLE BAND
 ════════════════════════════════════════════════════════ */
 .profile-title-band {
-  background: #fff;
+  background: #000;
   padding: 0.15rem 0;
   text-align: center;
   line-height: 1;
 }
 
 .profile-title {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: Antique-Olive;
   font-weight: 900;
   font-size: clamp(3.5rem, 12vw, 7rem);
   letter-spacing: -0.01em;
   text-transform: uppercase;
-  color: #000;
+  color: #fff;
   line-height: 0.88;
   padding: 0.1em 0.3em;
   display: block;
 }
 
 /* ════════════════════════════════════════════════════════
-   BODY — pure black, centered content
+   BODY
 ════════════════════════════════════════════════════════ */
 .profile-body {
   background: #000;
@@ -78,7 +94,7 @@
 
 .profile-inner {
   width: 100%;
-  max-width: 520px;
+  max-width: 440px;
 }
 
 /* ── Tagline ─────────────────────────────────────────── */
@@ -86,22 +102,18 @@
   font-weight: 300;
   font-size: 0.95rem;
   letter-spacing: 0.12em;
-  color: rgba(0, 255, 255, 0.55);
+  color: #fff;
   text-align: center;
   margin-bottom: 2.5rem;
   font-style: italic;
 }
 
-/* ── Section headers (same badge style as LetterboxdConnect) */
+/* ── Section headers ──────────────────────────────────── */
 .profile-section {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
   margin-bottom: 2.5rem;
-}
-
-.profile-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.2rem;
 }
 
 .profile-section-badge {
@@ -109,7 +121,7 @@
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   color: #000;
-  background: #00ffff;
+  background: #fff;
   padding: 0.2rem 0.5rem;
   border-radius: 2px;
   flex-shrink: 0;
@@ -120,13 +132,11 @@
   font-size: 0.9rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #00ffff;
+  color: #fff;
 }
 
-/* ── Form fields (extend neon-field from Auth.css) ─── */
-.profile-group {
-  margin-bottom: 1.3rem;
-}
+/* ── Form fields ──────────────────────────────────────── */
+.profile-group { margin-bottom: 1.3rem; }
 
 .profile-label {
   display: block;
@@ -134,24 +144,92 @@
   font-size: 0.85rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #00ffff;
+  color: #fff;                 /* was cyan */
   margin-bottom: 0.45rem;
 }
 
-/* reuse .neon-field from Auth.css — no redefinition needed */
-
-/* two-col grid for name / birthday */
-.profile-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+/* Override neon-field from Auth.css to be black/white */
+.profile-page .neon-field {
+  width: 100%;
+  background: #000 !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+  border-radius: 2px;
+  box-shadow: none !important;
 }
 
-/* ── Password toggle row ─────────────────────────────── */
+/* Read-only email styling */
+.profile-page .neon-field:disabled{
+  opacity:0.75;
+  cursor:not-allowed;
+}
+
+.profile-page #profile-email[readonly]{
+  opacity: 0.8;
+  border-color: rgba(255, 255, 255, 0.35);
+  background-color: rgba(255,255,255,0.04);
+  cursor: default;
+}
+.profile-page .neon-field:disabled::placeholder{
+  color: rgba(255,255,255,.35);
+}
+
+.profile-page .neon-field::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.profile-page .neon-field:focus {
+  outline: none !important;
+  border-color: #fff !important;
+  box-shadow: none !important;
+}
+
+.profile-stack-title {
+  display: block !important;
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: .85rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  margin: 0 0 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
+  opacity: .95;
+}
+
+.profile-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px;
+}
+.profile-password-center {
+  margin-top: -10px;
+  text-align: center;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.profile-password-title {
+  display: block !important;
+  width: 100%;
+  margin: 0 0 10px;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+
 .profile-password-row {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
-  gap: 0.75rem;
+  gap: 12px;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
 }
 
 .profile-password-row .neon-field {
@@ -159,41 +237,39 @@
 }
 
 .profile-eye-btn {
-  background: rgba(0,0,0,0.32);
-  border: 2px solid rgba(0, 255, 255, 0.55);
+  background: #000;
+  border: 2px solid #fff;
   border-radius: 2px;
-  color: #00ffff;
+  color: #fff;
   padding: 0.72rem 0.9rem;
   cursor: pointer;
   font-size: 1rem;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  transition: background 0.2s ease, opacity 0.2s ease;
   flex-shrink: 0;
 }
 
 .profile-eye-btn:hover {
-  border-color: #00ffff;
-  box-shadow: 0 0 10px rgba(0,255,255,0.25);
+  background: #111;
 }
 
-/* ── Save button ─────────────────────────────────────── */
+/* ── Primary button (used for save + import + rss) ─────── */
 .profile-save-btn {
   width: 100%;
   padding: 1rem;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   background: transparent;
-  border: 2px solid #00ffff;
-  color: #00ffff;
+  border: 2px solid #fff;
+  color: #fff;
   cursor: pointer;
-  transition: background 0.25s;
+  transition: background 0.2s ease, opacity 0.2s ease;
   margin-top: 0.5rem;
 }
 
-.profile-save-btn:hover  { background: rgba(0,255,255,0.08); }
-.profile-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.profile-save-btn:hover { background: #111; }
+.profile-save-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* ── Feedback banners ────────────────────────────────── */
 .profile-error {
@@ -207,9 +283,9 @@
 }
 
 .profile-success {
-  background: rgba(0,255,136,0.12);
-  border: 1px solid rgba(0,255,136,0.45);
-  color: #00ff88;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
   padding: 0.7rem 1rem;
   border-radius: 2px;
   margin-bottom: 1rem;
@@ -218,12 +294,11 @@
 }
 
 /* ════════════════════════════════════════════════════════
-   LETTERBOXD STRIP — below the black body, like poster credits
-   Uses same csv-row / csv-upload-list classes from LetterboxdConnect.css
+   LETTERBOXD STRIP (bottom "credits" section)
 ════════════════════════════════════════════════════════ */
 .profile-letterboxd-strip {
   background: #000;
-  border-top: 1px solid rgba(0,255,255,0.15);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   padding: 2.5rem 1rem 4rem;
   display: flex;
   flex-direction: column;
@@ -235,22 +310,21 @@
   max-width: 520px;
 }
 
-/* reuse .connect-section-header / badge / description patterns */
 .profile-strip-description {
   font-weight: 300;
   font-size: 0.88rem;
   line-height: 1.7;
-  color: rgba(0, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.72);
   letter-spacing: 0.03em;
   margin-bottom: 1.4rem;
 }
 
 .profile-strip-description strong {
-  color: #00ffff;
-  font-weight: 600;
+  color: #fff;
+  font-weight: 700;
 }
 
-/* ── Divider ─────────────────────────────────────────── */
+/* Divider (no cyan) */
 .profile-divider {
   display: flex;
   align-items: center;
@@ -261,23 +335,83 @@
 .profile-divider-line {
   flex: 1;
   height: 1px;
-  background: rgba(0,255,255,0.2);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .profile-divider-text {
   font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.15em;
-  color: rgba(0,255,255,0.35);
+  color: rgba(255, 255, 255, 0.45);
   white-space: nowrap;
 }
 
-/* ── RSS input row ───────────────────────────────────── */
-.profile-group .connect-hint {
+/* ── CSV upload list — fully standalone, no LetterboxdConnect dependency ── */
+.profile-page .csv-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.profile-page .csv-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #000 !important;
+  border: 2px solid rgba(255, 255, 255, 0.55) !important;
+  border-radius: 2px;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.profile-page .csv-row:hover {
+  border-color: #fff !important;
+  background: #111 !important;
+  box-shadow: none !important;
+}
+
+.profile-page .csv-row.has-file {
+  border-color: #fff !important;
+  box-shadow: none !important;
+}
+
+.profile-page .csv-row input[type="file"] { display: none; }
+
+.profile-page .csv-icon { font-size: 1.2rem; flex-shrink: 0; opacity: 0.85; }
+.profile-page .csv-info { flex: 1; min-width: 0; }
+
+.profile-page .csv-name {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff !important;
+}
+
+.profile-page .csv-file-name {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 0.78rem;
-  color: rgba(0,255,255,0.45);
-  margin-top: 0.35rem;
+  color: rgba(255, 255, 255, 0.6) !important;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-page .csv-status { font-size: 1rem; flex-shrink: 0; color: #fff; }
+
+/* Hint text in RSS section */
+.profile-page .connect-hint {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55) !important;
+  margin-top: 0.4rem;
   letter-spacing: 0.04em;
 }
 

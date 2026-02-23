@@ -1,8 +1,13 @@
-/* LetterboxdConnect.css — extends Auth.css design system */
+/* ═══════════════════════════════════════════════════════════
+   LetterboxdConnect.css — FULLY STANDALONE
+   No dependency on Auth.css. All shared primitives
+   (neon-field, auth-button) are redefined here, scoped
+   under .connect-container so they never bleed elsewhere.
+═══════════════════════════════════════════════════════════ */
 
 @font-face {
   font-family: "Fargo";
-  src: url("../../assets/fonts/Fargo_PERSONAL_USE_ONLY.otf") format("truetype");
+  src: url("../../assets/fonts/Fargo_PERSONAL_USE_ONLY.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
@@ -13,6 +18,7 @@
   font-weight: normal;
   font-style: normal;
 }
+
 /* ── Page shell ─────────────────────────────────────────── */
 .connect-container {
   display: flex;
@@ -21,30 +27,28 @@
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  /* inset padding clears the diamond border on all sides */
   padding: calc(var(--border-thick, 130px) + 2rem) 1rem
            calc(var(--border-thick, 130px) + 2rem);
   box-sizing: border-box;
-  background: #F0F0EC; /* match star.js bg — dark navy */
+  background: #F0F0EC;
 }
 
-/* no longer needed — PageFrame replaces it */
 .connect-background { display: none; }
 
-/* ── Card ────────────────────────────────────────────────── */
+/* ── Card ───────────────────────────────────────────────── */
 .connect-box {
   position: relative;
-  z-index: 10;          /* above PageFrame (z-index: 5) */
+  z-index: 10;
   width: 520px;
   max-width: 95%;
   padding: 3rem 2.5rem;
-  background: rgba(2, 62, 138, 0.6);   /* slight navy tint so box reads against frame */
+  background: rgba(2, 62, 138, 0.6);
   backdrop-filter: blur(2px);
 }
 
 /* ── Header ─────────────────────────────────────────────── */
 .connect-title {
-  font-family: Fargo;
+  font-family: "Fargo", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-size: 2.5rem;
   text-align: center;
@@ -54,7 +58,7 @@
 }
 
 .connect-subtitle {
-  font-family: Opus;
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 0.9rem;
   text-align: center;
@@ -63,10 +67,8 @@
   margin-bottom: 2.5rem;
 }
 
-/* ── Sections ────────────────────────────────────────────── */
-.connect-section {
-  margin-bottom: 0.5rem;
-}
+/* ── Sections ───────────────────────────────────────────── */
+.connect-section { margin-bottom: 0.5rem; }
 
 .connect-section-header {
   display: flex;
@@ -87,9 +89,9 @@
   flex-shrink: 0;
 }
 
-/* ── Description text ───────────────────────────────────── */
+/* ── Description ────────────────────────────────────────── */
 .connect-description {
-  font-family: Opus;
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 0.88rem;
   line-height: 1.7;
@@ -103,7 +105,7 @@
   font-weight: 600;
 }
 
-/* ── Divider ─────────────────────────────────────────────── */
+/* ── Divider ────────────────────────────────────────────── */
 .connect-divider {
   display: flex;
   align-items: center;
@@ -114,7 +116,7 @@
 .connect-divider-line {
   flex: 1;
   height: 1px;
-  background: rgba(0, 255, 255, 0.25);
+  background: rgba(225, 6, 0, 0.3);
 }
 
 .connect-divider-text {
@@ -126,20 +128,20 @@
   white-space: nowrap;
 }
 
-/* ── Shared field label ──────────────────────────────────── */
+/* ── Field label ────────────────────────────────────────── */
 .connect-label {
   display: block;
-  font-family: Opus;
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-size: 1.5rem;
-  margin-bottom: 0rem;
+  margin-bottom: 0;
   color: #E10600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .connect-hint {
-  font-family: Opus;
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 0.8rem;
   color: #E10600;
@@ -147,12 +149,77 @@
   letter-spacing: 0.04em;
 }
 
-/* ── Form group spacing ──────────────────────────────────── */
-.connect-group {
-  margin-bottom: 1.25rem;
+/* ── Form group ─────────────────────────────────────────── */
+.connect-group { margin-bottom: 1.25rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   SCOPED PRIMITIVES — replaces Auth.css within this page only
+   All selectors prefixed with .connect-container so they
+   cannot affect the sign-in / sign-up pages.
+═══════════════════════════════════════════════════════════ */
+
+/* Text inputs & RSS field */
+.connect-container .neon-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
+
+  background: rgba(2, 62, 138, 0.35);
+  backdrop-filter: blur(4px);
+
+  border: 2px solid rgba(225, 6, 0, 0.6);
+  border-radius: 2px;
+
+  color: #fff;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-/* ── CSV Upload rows ─────────────────────────────────────── */
+.connect-container .neon-field::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 300;
+}
+
+.connect-container .neon-field:focus {
+  outline: none;
+  border-color: #E10600;
+  background: rgba(2, 62, 138, 0.55);
+  box-shadow: 0 0 14px rgba(225, 6, 0, 0.25);
+}
+
+/* Primary action button */
+.connect-container .auth-button {
+  width: 100%;
+  padding: 1rem;
+  margin-top: 1rem;
+
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+
+  background: transparent;
+  border: 2px solid #E10600;
+  color: #E10600;
+
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.connect-container .auth-button:hover {
+  background: rgba(225, 6, 0, 0.12);
+}
+
+.connect-container .auth-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── CSV upload rows ────────────────────────────────────── */
 .csv-upload-list {
   display: flex;
   flex-direction: column;
@@ -160,32 +227,31 @@
   margin-bottom: 1.25rem;
 }
 
-.csv-row {
+.connect-container .csv-row {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(5px);
-  border: 2px solid rgba(0, 255, 255, 0.4);
+  background: rgba(2, 62, 138, 0.35);
+  backdrop-filter: blur(4px);
+  border: 2px solid rgba(225, 6, 0, 0.5);
   border-radius: 2px;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: border-color 0.25s ease, background 0.25s ease;
   cursor: pointer;
 }
 
-.csv-row:hover {
-  border-color: #00ffff;
-  box-shadow: 0 0 12px rgba(0, 255, 255, 0.18);
+.connect-container .csv-row:hover {
+  border-color: #E10600;
+  background: rgba(2, 62, 138, 0.5);
+  box-shadow: none;
 }
 
-.csv-row.has-file {
-  border-color: #00ffff;
-  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+.connect-container .csv-row.has-file {
+  border-color: #E10600;
+  box-shadow: none;
 }
 
-.csv-row input[type="file"] {
-  display: none;
-}
+.connect-container .csv-row input[type="file"] { display: none; }
 
 .csv-icon {
   font-size: 1.2rem;
@@ -198,34 +264,31 @@
   min-width: 0;
 }
 
-.csv-name {
-  font-family: Opus;
+.connect-container .csv-name {
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   letter-spacing: 0.08em;
   color: #E10600;
 }
 
-.csv-file-name {
-  font-family: Opus;
+.connect-container .csv-file-name {
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 0.78rem;
-  color: #E10600;
+  color: rgba(225, 6, 0, 0.7);
   margin-top: 0.15rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.csv-status {
-  font-size: 1rem;
-  flex-shrink: 0;
-}
+.csv-status { font-size: 1rem; flex-shrink: 0; }
 
-/* ── Error / success ─────────────────────────────────────── */
+/* ── Feedback banners ───────────────────────────────────── */
 .connect-error {
   background-color: #ff4444;
-  color: white;
+  color: #fff;
   padding: 0.75rem 1rem;
   border-radius: 2px;
   margin-bottom: 1rem;
@@ -235,9 +298,9 @@
 }
 
 .connect-success {
-  background-color: rgba(0, 255, 136, 0.12);
-  border: 1px solid rgba(0, 255, 136, 0.45);
-  color: #00ff88;
+  background: rgba(225, 6, 0, 0.1);
+  border: 1px solid rgba(225, 6, 0, 0.4);
+  color: #E10600;
   padding: 0.75rem 1rem;
   border-radius: 2px;
   margin-bottom: 1rem;
@@ -246,18 +309,18 @@
   font-size: 0.88rem;
 }
 
-/* ── Skip / continue ─────────────────────────────────────── */
+/* ── Skip / continue ────────────────────────────────────── */
 .connect-skip {
   margin-top: 2rem;
   text-align: center;
 }
 
 .connect-skip-link {
-  font-family: Opus;
+  font-family: "Opus", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 0.9rem;
   letter-spacing: 0.06em;
-  color: #E10600;
+  color: rgba(225, 6, 0, 0.65);
   text-decoration: underline;
   text-underline-offset: 4px;
   cursor: pointer;
@@ -269,16 +332,11 @@
 
 .connect-skip-link:hover {
   opacity: 0.8;
-  color: #00ffff;
+  color: #E10600;
 }
 
-/* ── Responsive ──────────────────────────────────────────── */
+/* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .connect-box {
-    padding: 2rem 1.5rem;
-  }
-
-  .connect-title {
-    font-size: 2rem;
-  }
+  .connect-box { padding: 2rem 1.5rem; }
+  .connect-title { font-size: 2rem; }
 }

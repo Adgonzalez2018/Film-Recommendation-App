@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./Profile.css";
 import "../Auth/Auth.css";
-import "../Connect/LetterboxdConnect.css"; // for csv-row, csv-upload-list, connect-* classes
 
 import { useNavigate } from "react-router-dom";
 
@@ -11,7 +10,7 @@ import { fetchProfile, saveProfile } from "../../api/profile";
 
 // ─── Background / hero image ──────────────────────────────
 // Reuse the same shining.png you already have, or swap for any eyes image
-import heroImg from "../../assets/images/shining.png";
+import heroImg from "../../assets/images/la-haine-1.png";
 
 // ─── Component ────────────────────────────────────────────
 
@@ -23,7 +22,6 @@ export default function Profile() {
   const [name,          setName]          = useState("");
   const [email,         setEmail]         = useState("");
   const [birthday,      setBirthday]      = useState("");
-  const [letterboxdUrl, setLetterboxdUrl] = useState("");
   const [password,      setPassword]      = useState("");
   const [showPassword,  setShowPassword]  = useState(false);
 
@@ -47,13 +45,16 @@ export default function Profile() {
 
   // ── Load profile on mount ──────────────────────────────
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      setProfileLoading(false) 
+      return;
+    }
+
     fetchProfile(accessToken)
       .then((data) => {
         setName(data.name          ?? "");
         setEmail(data.email        ?? "");
         setBirthday(data.birthday  ?? "");
-        setLetterboxdUrl(data.letterboxd_url ?? "");
         setRssInput(data.letterboxd_url ?? "");
       })
       .catch((err) => setProfileError(err.message))
@@ -63,13 +64,30 @@ export default function Profile() {
   // ── Save profile ───────────────────────────────────────
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (!accessToken) { setProfileError("Not authenticated."); return; }
+    if (!accessToken) {
+      setProfileError("Not authenticated."); 
+      return; 
+    }
+
+    const cleanName = (name || "").trim();
+
+    if (!cleanName){
+      setProfileError("Name is Required.");
+      return;
+    }
+
     setSaveLoading(true);
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const payload = { name, email, birthday, letterboxd_url: letterboxdUrl };
+      const payload = { name: cleanName };
+
+      // Only send birthday if the user actually set one
+      if (birthday) payload.birthday = birthday;
+
+      // Only send password if user typed something
       if (password) payload.password = password;
+      
       await saveProfile(payload, accessToken);
       setProfileSuccess("Profile updated.");
       setPassword("");
@@ -123,7 +141,7 @@ export default function Profile() {
   if (isAuthenticating || profileLoading) {
     return (
       <div className="profile-page" style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh" }}>
-        <p style={{ color:"#00ffff", letterSpacing:"0.1em" }}>Loading…</p>
+        <p style={{ color:"#fff", letterSpacing:"0.1em" }}>Loading…</p>
       </div>
     );
   }
@@ -150,7 +168,7 @@ export default function Profile() {
 
       {/* ── TITLE BAND — LA PROFILE slams across ── */}
       <div className="profile-title-band">
-        <span className="profile-title">LA PROFILE</span>
+        <span className="profile-title">LE PROFIL</span>
       </div>
 
       {/* ── BODY — user info ── */}
@@ -166,25 +184,34 @@ export default function Profile() {
 
             {/* ── 01 — Personal Info ── */}
             <div className="profile-section">
-              <div className="profile-section-header">
-                <span className="profile-section-badge">01</span>
-                <span className="profile-section-label">Personal Info</span>
-              </div>
+              <span className="profile-stack-title">PERSONAL INFO</span>
 
-              <div className="profile-grid-2">
+              <div className="profile-stack">
                 <div className="profile-group">
                   <label className="profile-label" htmlFor="profile-name">Name</label>
                   <input
                     id="profile-name"
                     className="neon-field"
                     type="text"
-                    placeholder="Your name"
+                    placeholder="Your Name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="name"
                   />
                 </div>
 
+                <div className="profile-group">
+                <label className="profile-label" htmlFor="profile-email">Email</label>
+                  <input
+                  id = "profile-email"
+                  className="neon-field"
+                  type="email"
+                  value={email}
+                  readOnly
+                  aria-readonly="true"
+                  tabIndex={-1}
+                  />
+                </div>
                 <div className="profile-group">
                   <label className="profile-label" htmlFor="profile-birthday">Birthday</label>
                   <input
@@ -197,29 +224,13 @@ export default function Profile() {
                 </div>
               </div>
 
-              <div className="profile-group">
-                <label className="profile-label" htmlFor="profile-email">Email</label>
-                <input
-                  id="profile-email"
-                  className="neon-field"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
+
             </div>
 
             {/* ── 02 — Security ── */}
             <div className="profile-section">
-              <div className="profile-section-header">
-                <span className="profile-section-badge">02</span>
-                <span className="profile-section-label">Security</span>
-              </div>
-
-              <div className="profile-group">
-                <label className="profile-label" htmlFor="profile-password">New Password</label>
+              <div className="profile-password-center">
+                <label className="profile-password-title">New Password</label>
                 <div className="profile-password-row">
                   <input
                     id="profile-password"
@@ -242,28 +253,6 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* ── 03 — Letterboxd URL ── */}
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <span className="profile-section-badge">03</span>
-                <span className="profile-section-label">Letterboxd</span>
-              </div>
-
-              <div className="profile-group">
-                <label className="profile-label" htmlFor="profile-lburl">Profile URL</label>
-                <input
-                  id="profile-lburl"
-                  className="neon-field"
-                  type="text"
-                  placeholder="letterboxd.com/yourname"
-                  value={letterboxdUrl}
-                  onChange={(e) => setLetterboxdUrl(e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            </div>
-
             <button type="submit" className="profile-save-btn" disabled={saveLoading}>
               {saveLoading ? "SAVING…" : "SAVE CHANGES"}
             </button>
@@ -281,7 +270,6 @@ export default function Profile() {
           {/* ── CSV Import ── */}
           <div className="profile-section">
             <div className="profile-section-header">
-              <span className="profile-section-badge">01</span>
               <span className="profile-section-label">Import Your Data</span>
             </div>
 
@@ -339,7 +327,6 @@ export default function Profile() {
           {/* ── RSS Sync ── */}
           <div className="profile-section">
             <div className="profile-section-header">
-              <span className="profile-section-badge">02</span>
               <span className="profile-section-label">Weekly Auto Sync</span>
             </div>
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./Stats.css";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { fetchStats } from "../../api/stats";
 
@@ -115,6 +116,7 @@ function BarChart({ report }) {
 
 /* ─── Main component ───── */
 export default function Stats() {
+  const navigate = useNavigate();
   const { isAuthenticating, authError, accessToken } = useAuth();
 
   const [report, setReport] = useState(null);
@@ -263,6 +265,8 @@ export default function Stats() {
       </div>
 
       <div className="controls">
+        <button className="ctrl-btn" onClick={() => navigate("/chat")}>Chat</button>
+        <button className="ctrl-btn" onClick={() => navigate("/profile")}>Profile</button>
         <button className="ctrl-btn" onClick={toggle}>
           {playing ? "⏸ Pause" : "▶ Roll Credits"}
         </button>
