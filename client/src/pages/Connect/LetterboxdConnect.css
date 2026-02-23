@@ -39,10 +39,10 @@
 .connect-box {
   position: relative;
   z-index: 10;
-  width: 520px;
-  max-width: 95%;
+  width: 100%;
+  max-width: 900px;
   padding: 3rem 2.5rem;
-  background: rgba(2, 62, 138, 0.6);
+  background: rgba(240, 240, 236, 0.80); /* see-through */
   backdrop-filter: blur(2px);
 }
 
@@ -82,7 +82,7 @@
   font-weight: 800;
   font-size: 0.75rem;
   letter-spacing: 0.1em;
-  color: #000;
+  color: #F0F0EC;
   background: #E10600;
   padding: 0.2rem 0.5rem;
   border-radius: 2px;
@@ -128,6 +128,61 @@
   white-space: nowrap;
 }
 
+/* ── Side-by-side import layout ─────────────────────────── */
+.connect-import-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  margin-bottom: 2rem;
+}
+
+.connect-import-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.connect-import-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1.25rem;
+  padding-top: 2rem;
+}
+
+.connect-import-divider-line {
+  flex: 1;
+  width: 1px;
+  background: rgba(225, 6, 0, 0.3);
+}
+
+.connect-import-divider-text {
+  font-weight: 600;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: rgba(225, 6, 0, 0.6);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .connect-import-row {
+    flex-direction: column;
+  }
+  .connect-import-divider {
+    flex-direction: row;
+    padding: 1rem 0;
+    width: 100%;
+  }
+  .connect-import-divider-line {
+    flex: 1;
+    width: auto;
+    height: 1px;
+  }
+}
+
 /* ── Field label ────────────────────────────────────────── */
 .connect-label {
   display: block;
@@ -168,8 +223,7 @@
   font-weight: 400;
   font-size: 1rem;
 
-  background: rgba(2, 62, 138, 0.35);
-  backdrop-filter: blur(4px);
+  background: #F0F0EC;
 
   border: 2px solid rgba(225, 6, 0, 0.6);
   border-radius: 2px;
@@ -186,8 +240,32 @@
 .connect-container .neon-field:focus {
   outline: none;
   border-color: #E10600;
-  background: rgba(2, 62, 138, 0.55);
+  background: #F0F0EC;
   box-shadow: 0 0 14px rgba(225, 6, 0, 0.25);
+}
+
+/* Images Car & Person */
+.connect-person {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+  max-width: 40vw;
+  z-index: 1;           /* below connect-box (z=10) */
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.connect-car {
+  position: absolute;
+  bottom: 5%;
+  right: 12%;
+  width: 800px;
+  max-width: 45vw;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.95;
 }
 
 /* Primary action button */
@@ -232,8 +310,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: rgba(2, 62, 138, 0.35);
-  backdrop-filter: blur(4px);
+  background: #F0F0EC;
   border: 2px solid rgba(225, 6, 0, 0.5);
   border-radius: 2px;
   transition: border-color 0.25s ease, background 0.25s ease;
@@ -242,7 +319,7 @@
 
 .connect-container .csv-row:hover {
   border-color: #E10600;
-  background: rgba(2, 62, 138, 0.5);
+  background: #fff;
   box-shadow: none;
 }
 

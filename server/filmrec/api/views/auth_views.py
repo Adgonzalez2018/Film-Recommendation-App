@@ -146,18 +146,3 @@ def password_reset_confirm(request):
 
     return Response({"detail": "Password has been reset successfuly."})
 
-# Read Profile
-@api_view(["GET","PATCH"])
-@permission_classes([IsAuthenticated])
-def profileView(request):
-    user = request.user
-
-    if request.method == "GET":
-        return Response(ProfileSerializer(user).data, status=status.HTTP_200_OK)
-    
-    # PATCH
-    serializer = ProfileSerializer(user, data=request.data, partial=True)
-    serializer.is_valid(raise_exception=True)
-    serializer.save()
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
