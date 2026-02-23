@@ -7,12 +7,6 @@ from django.contrib.auth.hashers import make_password
 
 User = get_user_model()
 
-# --- Movie Serializer ---
-class MovieSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Movie
-        fields = '__all__'
-
 # --- User Serializer ---
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)  # Ensure password is write-only
@@ -33,11 +27,16 @@ class LoginSerializer(serializers.Serializer):
     )
 
 class RegistrationSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(required=True, allow_blank=False)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(
         style = {'input_type': 'password'},
         write_only = True
     )
+
+    class Meta:
+        model = User
+        fields = ["first_name", "email", "password"]
     
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -45,13 +44,28 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
+        email = validated_data["email"],
         user = User.objects.create_user(
-            username=validated_data["email"],
+            username=email,
             first_name=validated_data["first_name"],
             email=validated_data["email"],
             password=validated_data["password"],
         )
         return user
+    
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "first_name", "email"]
+        read_only_fields = ["id", "email"]  # email immutable
+
+
+# --- Movie Serializer ---
+class MovieSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Movie
+        fields = '__all__'
+
     
 # --- Actor Serializer ---
 class ActorSerializer(serializers.ModelSerializer):

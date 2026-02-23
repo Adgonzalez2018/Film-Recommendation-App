@@ -1,0 +1,63 @@
+.page-frame-border {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ───────────────────────────────────────── */
+/* QUILT BORDER USING MASK TECHNIQUE        */
+/* ───────────────────────────────────────── */
+
+.page-frame-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  --frame-thickness: 130px;
+  --tile-size: 128px;
+
+  padding: var(--frame-thickness);
+
+  background: url("../../assets/images/diamond-tile.png") repeat;
+  background-size: var(--tile-size) var(--tile-size);
+
+  /* Cut out the center so it becomes a frame */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* ───────────────────────────────────────── */
+/* CORNER STARS                             */
+/* ───────────────────────────────────────── */
+
+.page-frame-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  --star-size: 260px;
+
+  background-image:
+    url("../../assets/images/star.png"),
+    url("../../assets/images/star.png"),
+    url("../../assets/images/star.png"),
+    url("../../assets/images/star.png");
+
+  background-repeat: no-repeat;
+
+  background-size:
+    var(--star-size) var(--star-size),
+    var(--star-size) var(--star-size),
+    var(--star-size) var(--star-size),
+    var(--star-size) var(--star-size);
+
+  background-position:
+    left 20px top 20px,
+    right 20px top 20px,
+    left 20px bottom 20px,
+    right 20px bottom 20px;
+}

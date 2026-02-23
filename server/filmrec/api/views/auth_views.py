@@ -12,7 +12,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt import tokens
 
-from ..serializer import LoginSerializer, RegistrationSerializer
+from ..serializer import LoginSerializer, RegistrationSerializer, ProfileSerializer
 
 User = get_user_model()
 token_generator = PasswordResetTokenGenerator()
@@ -28,10 +28,9 @@ def get_user_tokens(user):
 def loginView(request):
     serializer = LoginSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-
-    username = serializer.validated_data["username"]
+    email = serializer.validated_data["email"]
     password = serializer.validated_data["password"]
-    user = authenticate(username=username, password=password)
+    user = authenticate(username=email, password=password)
 
     if user is None:
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -54,7 +53,12 @@ def registerView(request):
 @permission_classes([IsAuthenticated])
 def ping(request):
     user = request.user
-    return Response({"username": user.username, "id": user.id}, status=status.HTTP_200_OK)
+    return Response({
+        "email": user.email, 
+        "first_name": user.first_name,
+        "id": user.id,
+        }, 
+        status=status.HTTP_200_OK)
 
 # Pass Reset Request
 @api_view(["POST"])
@@ -132,3 +136,18 @@ def password_reset_confirm(request):
     user.save()
 
     return Response({"detail": "Password has been reset successfuly."})
+
+# Read Profile
+@api_view(["GET","PATCH"])
+@permission_classes([IsAuthenticated])
+def profileView(request):
+    user = request.user
+
+    if request.method == "GET":
+        return Response(ProfileSerializer(user).data, status=status.HTTP_200_OK)
+    
+    # PATCH
+    serializer = ProfileSerializer(user, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data, status=status.HTTP_200_OK)

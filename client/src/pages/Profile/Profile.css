@@ -1,0 +1,289 @@
+/* Profile.css — La Haine poster layout */
+
+/* ── Reset / base ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+.profile-page {
+  min-height: 100vh;
+  background: #000;
+  color: #00ffff;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* ════════════════════════════════════════════════════════
+   HERO — the eyes image, just like the poster
+════════════════════════════════════════════════════════ */
+.profile-hero {
+  position: relative;
+  width: 100%;
+  height: 38vh;
+  min-height: 200px;
+  max-height: 340px;
+  overflow: hidden;
+}
+
+.profile-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: grayscale(100%) contrast(1.15) brightness(0.85);
+  display: block;
+}
+
+/* bottom fade into black */
+.profile-hero::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  background: linear-gradient(to bottom, transparent, #000);
+  pointer-events: none;
+}
+
+/* ════════════════════════════════════════════════════════
+   TITLE BAND — slams across like "LA HAINE"
+════════════════════════════════════════════════════════ */
+.profile-title-band {
+  background: #fff;
+  padding: 0.15rem 0;
+  text-align: center;
+  line-height: 1;
+}
+
+.profile-title {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 900;
+  font-size: clamp(3.5rem, 12vw, 7rem);
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: #000;
+  line-height: 0.88;
+  padding: 0.1em 0.3em;
+  display: block;
+}
+
+/* ════════════════════════════════════════════════════════
+   BODY — pure black, centered content
+════════════════════════════════════════════════════════ */
+.profile-body {
+  background: #000;
+  padding: 3rem 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-inner {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ── Tagline ─────────────────────────────────────────── */
+.profile-tagline {
+  font-weight: 300;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: rgba(0, 255, 255, 0.55);
+  text-align: center;
+  margin-bottom: 2.5rem;
+  font-style: italic;
+}
+
+/* ── Section headers (same badge style as LetterboxdConnect) */
+.profile-section {
+  margin-bottom: 2.5rem;
+}
+
+.profile-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.2rem;
+}
+
+.profile-section-badge {
+  font-weight: 800;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: #000;
+  background: #00ffff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.profile-section-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #00ffff;
+}
+
+/* ── Form fields (extend neon-field from Auth.css) ─── */
+.profile-group {
+  margin-bottom: 1.3rem;
+}
+
+.profile-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #00ffff;
+  margin-bottom: 0.45rem;
+}
+
+/* reuse .neon-field from Auth.css — no redefinition needed */
+
+/* two-col grid for name / birthday */
+.profile-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ── Password toggle row ─────────────────────────────── */
+.profile-password-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-password-row .neon-field {
+  flex: 1;
+}
+
+.profile-eye-btn {
+  background: rgba(0,0,0,0.32);
+  border: 2px solid rgba(0, 255, 255, 0.55);
+  border-radius: 2px;
+  color: #00ffff;
+  padding: 0.72rem 0.9rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: border-color 0.25s, box-shadow 0.25s;
+  flex-shrink: 0;
+}
+
+.profile-eye-btn:hover {
+  border-color: #00ffff;
+  box-shadow: 0 0 10px rgba(0,255,255,0.25);
+}
+
+/* ── Save button ─────────────────────────────────────── */
+.profile-save-btn {
+  width: 100%;
+  padding: 1rem;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 2px solid #00ffff;
+  color: #00ffff;
+  cursor: pointer;
+  transition: background 0.25s;
+  margin-top: 0.5rem;
+}
+
+.profile-save-btn:hover  { background: rgba(0,255,255,0.08); }
+.profile-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Feedback banners ────────────────────────────────── */
+.profile-error {
+  background: #ff4444;
+  color: #fff;
+  padding: 0.7rem 1rem;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.profile-success {
+  background: rgba(0,255,136,0.12);
+  border: 1px solid rgba(0,255,136,0.45);
+  color: #00ff88;
+  padding: 0.7rem 1rem;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+/* ════════════════════════════════════════════════════════
+   LETTERBOXD STRIP — below the black body, like poster credits
+   Uses same csv-row / csv-upload-list classes from LetterboxdConnect.css
+════════════════════════════════════════════════════════ */
+.profile-letterboxd-strip {
+  background: #000;
+  border-top: 1px solid rgba(0,255,255,0.15);
+  padding: 2.5rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-letterboxd-strip .profile-inner {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* reuse .connect-section-header / badge / description patterns */
+.profile-strip-description {
+  font-weight: 300;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: rgba(0, 255, 255, 0.65);
+  letter-spacing: 0.03em;
+  margin-bottom: 1.4rem;
+}
+
+.profile-strip-description strong {
+  color: #00ffff;
+  font-weight: 600;
+}
+
+/* ── Divider ─────────────────────────────────────────── */
+.profile-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.8rem 0;
+}
+
+.profile-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(0,255,255,0.2);
+}
+
+.profile-divider-text {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.15em;
+  color: rgba(0,255,255,0.35);
+  white-space: nowrap;
+}
+
+/* ── RSS input row ───────────────────────────────────── */
+.profile-group .connect-hint {
+  font-weight: 300;
+  font-size: 0.78rem;
+  color: rgba(0,255,255,0.45);
+  margin-top: 0.35rem;
+  letter-spacing: 0.04em;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 600px) {
+  .profile-grid-2 { grid-template-columns: 1fr; }
+  .profile-title  { font-size: clamp(3rem, 18vw, 5rem); }
+  .profile-body   { padding: 2rem 1rem 0; }
+}

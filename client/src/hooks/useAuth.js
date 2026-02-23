@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+const DEV_BYPASS_AUTH = true; // <- set to false later
 
 export const useAuth = () => {
   const navigate = useNavigate();
@@ -16,6 +17,11 @@ export const useAuth = () => {
       setIsAuthenticating(true);
       setAuthError(null);
 
+      if (DEV_BYPASS_AUTH) {
+        setIsAuthenticating(false);
+          return;
+      
+        }
       if (!accessToken) {
         setIsAuthenticating(false);
         if (!PUBLIC_ROUTES.includes(location.pathname)) {

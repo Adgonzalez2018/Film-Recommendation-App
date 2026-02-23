@@ -1,0 +1,384 @@
+import React, { useState, useRef, useEffect } from "react";
+import "./Profile.css";
+import "../Auth/Auth.css";
+import "../Connect/LetterboxdConnect.css"; // for csv-row, csv-upload-list, connect-* classes
+
+import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../../hooks/useAuth";
+import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/letterboxd";
+import { fetchProfile, saveProfile } from "../../api/profile";
+
+// ─── Background / hero image ──────────────────────────────
+// Reuse the same shining.png you already have, or swap for any eyes image
+import heroImg from "../../assets/images/shining.png";
+
+// ─── Component ────────────────────────────────────────────
+
+export default function Profile() {
+  const navigate = useNavigate();
+  const { accessToken, isAuthenticating, authError } = useAuth();
+
+  // ── Profile fields ─────────────────────────────────────
+  const [name,          setName]          = useState("");
+  const [email,         setEmail]         = useState("");
+  const [birthday,      setBirthday]      = useState("");
+  const [letterboxdUrl, setLetterboxdUrl] = useState("");
+  const [password,      setPassword]      = useState("");
+  const [showPassword,  setShowPassword]  = useState(false);
+
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError,   setProfileError]   = useState(null);
+  const [profileSuccess, setProfileSuccess] = useState(null);
+  const [saveLoading,    setSaveLoading]    = useState(false);
+
+  // ── CSV state ──────────────────────────────────────────
+  const [files, setFiles] = useState({ reviews: null, watchlist: null, likes: null });
+  const fileInputRefs = { reviews: useRef(), watchlist: useRef(), likes: useRef() };
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvError,   setCsvError]   = useState(null);
+  const [csvSuccess, setCsvSuccess] = useState(null);
+
+  // ── RSS state ──────────────────────────────────────────
+  const [rssInput,   setRssInput]   = useState("");
+  const [rssLoading, setRssLoading] = useState(false);
+  const [rssError,   setRssError]   = useState(null);
+  const [rssSuccess, setRssSuccess] = useState(null);
+
+  // ── Load profile on mount ──────────────────────────────
+  useEffect(() => {
+    if (!accessToken) return;
+    fetchProfile(accessToken)
+      .then((data) => {
+        setName(data.name          ?? "");
+        setEmail(data.email        ?? "");
+        setBirthday(data.birthday  ?? "");
+        setLetterboxdUrl(data.letterboxd_url ?? "");
+        setRssInput(data.letterboxd_url ?? "");
+      })
+      .catch((err) => setProfileError(err.message))
+      .finally(() => setProfileLoading(false));
+  }, [accessToken]);
+
+  // ── Save profile ───────────────────────────────────────
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!accessToken) { setProfileError("Not authenticated."); return; }
+    setSaveLoading(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      const payload = { name, email, birthday, letterboxd_url: letterboxdUrl };
+      if (password) payload.password = password;
+      await saveProfile(payload, accessToken);
+      setProfileSuccess("Profile updated.");
+      setPassword("");
+    } catch (err) {
+      setProfileError(err.message);
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  // ── CSV handlers ───────────────────────────────────────
+  const handleFileChange = (key, e) => {
+    const file = e.target.files?.[0] ?? null;
+    setFiles((prev) => ({ ...prev, [key]: file }));
+    setCsvError(null);
+    setCsvSuccess(null);
+  };
+
+  const handleCSVSubmit = async (e) => {
+    e.preventDefault();
+    if (!Object.values(files).some(Boolean)) { setCsvError("Upload at least one CSV."); return; }
+    if (!accessToken) { setCsvError("Not authenticated."); return; }
+    setCsvLoading(true); setCsvError(null); setCsvSuccess(null);
+    try {
+      await submitCSVImport(files, accessToken);
+      setCsvSuccess("Imported! All-time stats and initial weekly report are ready.");
+    } catch (err) {
+      setCsvError(err.message);
+    } finally {
+      setCsvLoading(false);
+    }
+  };
+
+  // ── RSS handler ────────────────────────────────────────
+  const handleRSSSubmit = async (e) => {
+    e.preventDefault();
+    if (!rssInput.trim()) { setRssError("Enter your Letterboxd username or URL."); return; }
+    if (!accessToken)     { setRssError("Not authenticated."); return; }
+    setRssLoading(true); setRssError(null); setRssSuccess(null);
+    try {
+      await submitRSSSync(rssInput, accessToken);
+      setRssSuccess("RSS linked — weekly reports will sync automatically.");
+    } catch (err) {
+      setRssError(err.message);
+    } finally {
+      setRssLoading(false);
+    }
+  };
+
+  // ── Auth guards ────────────────────────────────────────
+  if (isAuthenticating || profileLoading) {
+    return (
+      <div className="profile-page" style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh" }}>
+        <p style={{ color:"#00ffff", letterSpacing:"0.1em" }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="profile-page" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", gap:"1rem" }}>
+        <div className="profile-error">{authError}</div>
+        <button className="profile-save-btn" style={{ maxWidth:300 }} onClick={() => navigate("/signin")}>
+          GO TO SIGN IN
+        </button>
+      </div>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────
+  return (
+    <div className="profile-page">
+
+      {/* ── HERO — eyes image ── */}
+      <div className="profile-hero">
+        <img src={heroImg} alt="" className="profile-hero-img" />
+      </div>
+
+      {/* ── TITLE BAND — LA PROFILE slams across ── */}
+      <div className="profile-title-band">
+        <span className="profile-title">LA PROFILE</span>
+      </div>
+
+      {/* ── BODY — user info ── */}
+      <div className="profile-body">
+        <div className="profile-inner">
+
+          <p className="profile-tagline">jusqu'ici tout va bien…</p>
+
+          {profileError   && <div className="profile-error">{profileError}</div>}
+          {profileSuccess && <div className="profile-success">{profileSuccess}</div>}
+
+          <form onSubmit={handleSaveProfile}>
+
+            {/* ── 01 — Personal Info ── */}
+            <div className="profile-section">
+              <div className="profile-section-header">
+                <span className="profile-section-badge">01</span>
+                <span className="profile-section-label">Personal Info</span>
+              </div>
+
+              <div className="profile-grid-2">
+                <div className="profile-group">
+                  <label className="profile-label" htmlFor="profile-name">Name</label>
+                  <input
+                    id="profile-name"
+                    className="neon-field"
+                    type="text"
+                    placeholder="Your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div className="profile-group">
+                  <label className="profile-label" htmlFor="profile-birthday">Birthday</label>
+                  <input
+                    id="profile-birthday"
+                    className="neon-field"
+                    type="date"
+                    value={birthday}
+                    onChange={(e) => setBirthday(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="profile-group">
+                <label className="profile-label" htmlFor="profile-email">Email</label>
+                <input
+                  id="profile-email"
+                  className="neon-field"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            {/* ── 02 — Security ── */}
+            <div className="profile-section">
+              <div className="profile-section-header">
+                <span className="profile-section-badge">02</span>
+                <span className="profile-section-label">Security</span>
+              </div>
+
+              <div className="profile-group">
+                <label className="profile-label" htmlFor="profile-password">New Password</label>
+                <div className="profile-password-row">
+                  <input
+                    id="profile-password"
+                    className="neon-field"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Leave blank to keep current"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="profile-eye-btn"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? "🙈" : "👁"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── 03 — Letterboxd URL ── */}
+            <div className="profile-section">
+              <div className="profile-section-header">
+                <span className="profile-section-badge">03</span>
+                <span className="profile-section-label">Letterboxd</span>
+              </div>
+
+              <div className="profile-group">
+                <label className="profile-label" htmlFor="profile-lburl">Profile URL</label>
+                <input
+                  id="profile-lburl"
+                  className="neon-field"
+                  type="text"
+                  placeholder="letterboxd.com/yourname"
+                  value={letterboxdUrl}
+                  onChange={(e) => setLetterboxdUrl(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="profile-save-btn" disabled={saveLoading}>
+              {saveLoading ? "SAVING…" : "SAVE CHANGES"}
+            </button>
+
+          </form>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════
+          LETTERBOXD STRIP — like poster credits at bottom
+      ════════════════════════════════════════════════ */}
+      <div className="profile-letterboxd-strip">
+        <div className="profile-inner">
+
+          {/* ── CSV Import ── */}
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <span className="profile-section-badge">01</span>
+              <span className="profile-section-label">Import Your Data</span>
+            </div>
+
+            <p className="profile-strip-description">
+              For the best film recommendation experience, import your Letterboxd data via{" "}
+              <strong>letterboxd.com → Settings → Import &amp; Export → Export Your Data</strong>.
+              Upload the three CSV files below to unlock your{" "}
+              <strong>all-time stats report</strong> and an{" "}
+              <strong>initial weekly stats report</strong>.
+            </p>
+
+            {csvError   && <div className="profile-error">{csvError}</div>}
+            {csvSuccess && <div className="profile-success">{csvSuccess}</div>}
+
+            <form onSubmit={handleCSVSubmit}>
+              <div className="csv-upload-list">
+                {CSV_FILES.map(({ key, label, hint, icon }) => (
+                  <div
+                    key={key}
+                    className={`csv-row ${files[key] ? "has-file" : ""}`}
+                    onClick={() => fileInputRefs[key].current.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && fileInputRefs[key].current.click()}
+                  >
+                    <input
+                      type="file"
+                      accept=".csv"
+                      ref={fileInputRefs[key]}
+                      onChange={(e) => handleFileChange(key, e)}
+                    />
+                    <span className="csv-icon">{icon}</span>
+                    <div className="csv-info">
+                      <div className="csv-name">{label}</div>
+                      <div className="csv-file-name">{files[key] ? files[key].name : hint}</div>
+                    </div>
+                    <span className="csv-status">{files[key] ? "✅" : "＋"}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button type="submit" className="profile-save-btn" disabled={csvLoading}>
+                {csvLoading ? "IMPORTING…" : "IMPORT DATA"}
+              </button>
+            </form>
+          </div>
+
+          {/* ── Divider ── */}
+          <div className="profile-divider">
+            <span className="profile-divider-line" />
+            <span className="profile-divider-text">AND / OR</span>
+            <span className="profile-divider-line" />
+          </div>
+
+          {/* ── RSS Sync ── */}
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <span className="profile-section-badge">02</span>
+              <span className="profile-section-label">Weekly Auto Sync</span>
+            </div>
+
+            <p className="profile-strip-description">
+              For <strong>constant weekly reports</strong> of your movies, link your
+              Letterboxd URL. We'll sync your public RSS feed automatically every week.
+            </p>
+
+            {rssError   && <div className="profile-error">{rssError}</div>}
+            {rssSuccess && <div className="profile-success">{rssSuccess}</div>}
+
+            <form onSubmit={handleRSSSubmit}>
+              <div className="profile-group">
+                <label className="profile-label" htmlFor="rss-profile-input">
+                  Letterboxd URL or Username
+                </label>
+                <input
+                  id="rss-profile-input"
+                  className="neon-field"
+                  type="text"
+                  placeholder="e.g.  yourname  or  letterboxd.com/yourname"
+                  value={rssInput}
+                  onChange={(e) => { setRssInput(e.target.value); setRssError(null); }}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <p className="connect-hint">
+                  We'll build your RSS feed URL automatically from your username.
+                </p>
+              </div>
+
+              <button type="submit" className="profile-save-btn" disabled={rssLoading}>
+                {rssLoading ? "LINKING…" : "LINK FOR WEEKLY REPORTS"}
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -2,9 +2,10 @@ import React, { useState, useRef } from "react";
 import "./LetterboxdConnect.css";
 import "../Auth/Auth.css";
 import { useNavigate } from "react-router-dom";
-import backgroundImg from "../../assets/images/shining.png";
 import { useAuth } from "../../hooks/useAuth";
-
+import backgroundImg from "../../assets/images/shining.png";
+import PageFrame from "../../components/layout/PageFrame";
+import { submitCSVImport, submitRSSSync } from "../../api/letterboxd";
 // ─── CSV file definitions ─────────────────────────────────
 
 const CSV_FILES = [
@@ -28,40 +29,6 @@ const CSV_FILES = [
   },
 ];
 
-// ─── API calls ────────────────────────────────────────────
-
-async function submitCSVImport(files, accessToken) {
-  const formData = new FormData();
-  if (files.reviews) formData.append("reviews", files.reviews);
-  if (files.watchlist) formData.append("watchlist", files.watchlist);
-  if (files.likes) formData.append("likes", files.likes);
-
-  const response = await fetch("/api/letterboxd/import/", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: formData,
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Import failed");
-  return data;
-}
-
-async function submitRSSSync(rssInput, accessToken) {
-  const response = await fetch("/api/letterboxd/rss/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ rss: rssInput.trim() }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "RSS sync failed");
-  return data;
-}
-
 // ─── Component ────────────────────────────────────────────
 
 export default function LetterboxdConnect() {
@@ -69,7 +36,7 @@ export default function LetterboxdConnect() {
   const { isAuthenticating, authError, accessToken } = useAuth();
 
   // CSV state
-  const [files, setFiles] = useState({ reviews: null, watchlist: null, likes: null });
+  const [files, setFiles] = useState({ Reviews: null, watchlist: null, likes: null });
   const fileInputRefs = {
     reviews: useRef(),
     watchlist: useRef(),
@@ -161,10 +128,7 @@ export default function LetterboxdConnect() {
   if (authError) {
     return (
       <div className="connect-container">
-        <div
-          className="connect-background"
-          style={{ backgroundImage: `url(${backgroundImg})` }}
-        />
+        <PageFrame />
         <div className="connect-box">
           <div className="connect-error">{authError}</div>
           <button className="auth-button" onClick={() => navigate("/signin")}>
@@ -179,13 +143,10 @@ export default function LetterboxdConnect() {
 
   return (
     <div className="connect-container">
-      <div
-        className="connect-background"
-        style={{ backgroundImage: `url(${backgroundImg})` }}
-      />
+      <PageFrame />
 
       <div className="connect-box">
-        <h1 className="connect-title">LETTERBOXD</h1>
+        <h1 className="connect-title">Letterboxd</h1>
         <p className="connect-subtitle">Connect your film data to get started</p>
 
         {/* ── SECTION 1: CSV Import ── */}

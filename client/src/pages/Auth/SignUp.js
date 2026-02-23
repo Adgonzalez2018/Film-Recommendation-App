@@ -1,27 +1,12 @@
 import React, {useState} from "react";
-import "./Auth.css";
 import { useNavigate } from "react-router-dom";
+
+import "./Auth.css";
+import backgroundImg from "../../assets/images/shining.png";
 import AuthForm from "./components/AuthForm";
 
-import backgroundImg from "../../assets/images/shining.png";
+import { registerAction } from "../../api/auth";
 
-const registerAction = async (username, password, navigate) => {
-  const response = await fetch("/api/register/", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-    headers: { "Content-Type": "application/json" },
-  });
-  
-  const myJson = await response.json();
-  if (response.status === 201) {
-    localStorage.setItem("access_token", myJson.access_token);
-    localStorage.setItem("username", username);
-    navigate("/chat");
-  }
-  else {
-    throw new Error(myJson.error || "Registration failed");
-  }
-}
 
 
 export default function SignUp() {
