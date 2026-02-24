@@ -132,7 +132,8 @@ class MovieCrew(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['movie', 'person'], name='uniq_movie_director'
+                fields=['movie', 'person', 'job'], 
+                name='uniq_movie_crew_role'
                 )
         ]
 
@@ -150,6 +151,7 @@ class MovieCast(models.Model):
                 fields=['movie', 'person'], name='uniq_movie_cast'
                 )
         ]
+
 # --- Movie-Genre Relationship ---
 class MovieGenre(models.Model):
     movie = models.ForeignKey("Movie", on_delete=models.CASCADE)
@@ -161,7 +163,6 @@ class MovieGenre(models.Model):
                 fields=['movie', 'genre'], name='uniq_movie_genre'
                 )
         ]
-
 
 
 # --- Film Bank for Recommended Films ---
@@ -178,7 +179,5 @@ class FilmBank(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["user", "movie"], name="uniq+reco_user_movie")
         ]
-
-
 
 # --- Tables ---
