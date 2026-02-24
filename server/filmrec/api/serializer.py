@@ -3,7 +3,7 @@ from .models import Movie, User, Genre, MovieUser, MovieGenre, Person
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-
+from ..api.utils.letterboxd import extract_letterboxd_username
 
 User = get_user_model()
 
@@ -45,11 +45,11 @@ class RegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         email = validated_data["email"]
-        first_name = validated_data.get("first_name", "") 
+        
 
         user = User.objects.create_user(
             username=email,
-            first_name=first_name,
+            first_name=validated_data.get("first_name", ""),
             email=email,
             password=validated_data["password"],
         )
@@ -58,6 +58,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
 
+    rss = serializers.CharField(required=False, allow_bank=True, write_only=True)
     has_letterboxd_link = serializers.SerializerMethodField()
     has_imports = serializers.SerializerMethodField()
     manual_import_count = serializers.SerializerMethodField()
@@ -70,6 +71,7 @@ class ProfileSerializer(serializers.ModelSerializer):
                   "first_name", 
                   "email",
                   "letterboxd_username",
+                  "rss",
                   "has_letterboxd_link",
                   "has_imports",
                   "manual_import_count",
@@ -85,6 +87,18 @@ class ProfileSerializer(serializers.ModelSerializer):
             "rss_import_count",
             "last_sync",
         ]
+
+    def update(self, instance, validated_data):
+        rss_input = (validated_data.pop("rss","") or "").strip()
+        if rss_input:
+            username = extract_letterboxd_username(rss_input)
+            if not username:
+                raise serializers.ValidationError({"rss": "Invalid Letterboxd RSS/profile input."})
+            instance.letterboxd_username = username
+
+        # normal updates (first_name, letterboxd_username, etc)
+        return super().update(instance, validated_data)
+    
     def get_letterboxd_username(self, obj):
         return getattr(obj, "letterboxd_username", None)
 

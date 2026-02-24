@@ -1,6 +1,12 @@
 from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
+from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+from unittest.mock import patch
+from .models import User, Movie, MovieUser, ImportBatch
+from .utils.dates import week_window_sunday_anchor
 
 class AuthFlowTests(APITestCase):
     def setUp(self):
@@ -55,3 +61,22 @@ class ProfileTests(APITestCase):
         # serializer prob?
         if isinstance(p.data, dict):
             self.assertEqual(p.data.get("first_name"), "New Name")
+
+class ImportAndStatsTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="test@example.com",
+            email="test@example.com",
+            password="TestPass123!",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_import_csv_requires_file(self):
+        # No Files -> should 400
+        r = self.client.post("/api/import/letterboxd/csv/", {}, format="multipart")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertin("error", r.data)
+
+        @patch("api.views.letterboxd_views.run_letterboxd_import")
+        def test_import_csv_happy_path_logs_batch_and_updates_profile(self, mock_run):
+            pass

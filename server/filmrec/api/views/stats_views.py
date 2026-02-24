@@ -142,7 +142,6 @@ def stats_all_time(request):
     topActors = {
         Person.objects.filter(
             moviecast__movie__movieuser__in=allMovies,
-            moviecrew__job="Director",
         ).annotate(count=models.Count("moviecast__movie__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
     }
@@ -153,7 +152,7 @@ def stats_all_time(request):
         .order_by("-count")[:5]
     }
 
-    recentEntries = allMovies.select_related("movie")
+    recentEntries = allMovies.select_related("movie").order_by("-watched_date")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
 
     totalCount = allMovies.count()
