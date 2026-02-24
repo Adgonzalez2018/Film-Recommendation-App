@@ -20,7 +20,7 @@ from django.urls import path
 
 from api.views.auth_views import (
     loginView, registerView, ping, 
-    password_reset_confirm, password_reset_request, profileView)
+    password_reset_confirm, password_reset_request)
 from api.views.stats_views import stats_payload, stats_all_time
 from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
 from api.views.profile_views import *

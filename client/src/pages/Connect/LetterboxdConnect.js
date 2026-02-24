@@ -31,7 +31,7 @@ const CSV_FILES = [
   {
     key: "likes",
     label: "films.csv",
-    hint: "Your liked films",
+    hint: "Your liked films (in likes folder)",
     icon: "❤️",
   },
 ];
@@ -43,7 +43,7 @@ export default function LetterboxdConnect() {
   const { isAuthenticating, authError, accessToken } = useAuth();
 
   // CSV state
-  const [files, setFiles] = useState({ Reviews: null, watchlist: null, likes: null });
+  const [files, setFiles] = useState({ reviews: null, watchlist: null, likes: null });
   const fileInputRefs = {
     reviews: useRef(),
     watchlist: useRef(),
@@ -152,7 +152,7 @@ export default function LetterboxdConnect() {
       <img src={carImg} alt="" className="connect-car" />
         
       <div className="connect-box">
-        <h1 className="connect-title">Letterboxd</h1>
+        <h1 className="connect-title">Letterboxd Import</h1>
         <p className="connect-subtitle">Connect your film data to get started</p>
 
         <div className="connect-import-row">
@@ -160,8 +160,7 @@ export default function LetterboxdConnect() {
           {/* ── SECTION 1: CSV Import ── */}
           <div className="connect-import-col">
             <div className="connect-section-header">
-              <span className="connect-section-badge">01</span>
-              <span className="connect-label">Import Your Data</span>
+              <span className="connect-label">Manual Import</span>
             </div>
 
             <p className="connect-description">
@@ -216,14 +215,13 @@ export default function LetterboxdConnect() {
           {/* ── Vertical divider ── */}
           <div className="connect-import-divider">
             <span className="connect-import-divider-line" />
-            <span className="connect-import-divider-text">OR</span>
+            <span className="connect-import-divider-text"></span>
             <span className="connect-import-divider-line" />
           </div>
 
           {/* ── SECTION 2: RSS Sync ── */}
           <div className="connect-import-col">
             <div className="connect-section-header">
-              <span className="connect-section-badge">02</span>
               <span className="connect-label">Weekly Auto Sync</span>
             </div>
 
@@ -240,13 +238,13 @@ export default function LetterboxdConnect() {
             <form onSubmit={handleRSSSubmit}>
               <div className="connect-group">
                 <label className="connect-label" htmlFor="rss-input">
-                  Letterboxd URL or Username
+                  Letterboxd url or Username
                 </label>
                 <input
                   id="rss-input"
                   className="neon-field"
                   type="text"
-                  placeholder="e.g.  yourname  or  letterboxd.com/yourname"
+                  placeholder="e.g.  username  or  letterboxd.com/username"
                   value={rssInput}
                   onChange={(e) => {
                     setRssInput(e.target.value);
@@ -261,7 +259,7 @@ export default function LetterboxdConnect() {
               </div>
 
               <button type="submit" className="auth-button" disabled={rssLoading}>
-                {rssLoading ? "LINKING…" : "LINK FOR WEEKLY REPORTS"}
+                {rssLoading ? "LINKING…" : "Link For Weekly Reports"}
               </button>
             </form>
           </div>
@@ -271,7 +269,7 @@ export default function LetterboxdConnect() {
         {/* ── Continue / Skip ── */}
         <div className="connect-skip">
           <button className="connect-skip-link" onClick={handleContinue}>
-            {csvSuccess || rssSuccess ? "Continue →" : "Skip for now"}
+            {csvSuccess || rssSuccess ? "Continue to Chat" : "Skip for now"}
           </button>
         </div>
       </div>

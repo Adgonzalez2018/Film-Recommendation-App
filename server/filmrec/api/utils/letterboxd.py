@@ -82,3 +82,4 @@ def extract_letterboxd_username(input_str: str) -> str | None:
     if not re.match(r"^[A-Za-z0-9_]+$", username):
         return None
     return username
+
