@@ -16,7 +16,9 @@ class Movie(models.Model):
     title = models.CharField(max_length=255)
 
     # TMDb attributes
-    description = models.TextField(blank=True, null=True)
+    tmdb_id = models.IntegerField(blank=True, null=True, unique=True, db_index=True)
+    year = models.IntegerField(blank=True, null=True)
+    overview = models.TextField(blank=True, null=True)
     release_date = models.DateField(blank=True, null=True)
     avg_rating = models.FloatField(default=0.0, blank=True, null=True)
     
@@ -30,8 +32,6 @@ class Movie(models.Model):
 
     # Letterboxd URI
     letterboxd_uri = models.CharField(max_length=500, unique=True, null=True, blank=True)
-    # TMDb id
-    tmdb_id = models.IntegerField(unique=True, null = True, blank = True)
 
     def __str__(self):
         return self.title
@@ -75,24 +75,26 @@ class ImportBatch(models.Model):
     def __str__(self):
         return f"ImportBatch<{self.user_id}:{self.source}:{self.created_at}>"
 
-# --- Actor Model ---
-class Actor(models.Model):
+# --- Person Model ---
+# joins Actor & Director model
+class Person(models.Model):
+    tmdb_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     name = models.CharField(max_length=255)
     birth_date = models.DateField(blank=True, null=True)
     profile_url = models.URLField(max_length=500, blank=True, null=True)
     biography = models.TextField(blank=True, null=True)
 
-# --- Director Model ---
-class Director(models.Model):
-    name = models.CharField(max_length=255)
-    birth_date = models.DateField(blank=True, null=True)
-    profile_url = models.URLField(max_length=500, blank=True, null=True)
-    biography = models.TextField(blank=True, null=True)
+    def __str__(self):
+        return self.name
+    
 
 # --- Genre Model ---
 class Genre(models.Model):
+    tmdb_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     name = models.CharField(max_length=100, unique=True)
 
+    def __str__(self):
+        return self.name
 
 """
 Relationships:
@@ -119,20 +121,38 @@ class MovieUser(models.Model):
         ]
         
 # --- Movie-Director Relationship ---
-class MovieDirector(models.Model):
+class MovieCrew(models.Model):
+    # Crew Roles: TMDB credits.crew
+    # Director is just job = "Director"
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    director = models.ForeignKey(Director, on_delete=models.CASCADE)
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
 
+    job = models.CharField(max_length=64,blank=True, null = True)       # Director
+    department = models.CharField(max_length=64, blank=True, null=True) # Directing
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['movie', 'director'], name='uniq_movie_director'
+                fields=['movie', 'person'], name='uniq_movie_director'
                 )
         ]
 
+# --- Movie-Actor Relationship ---
+class MovieCast(models.Model):
+    # Cast = actors -> TMDB credits.cast
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+
+    character = models.CharField(max_length=64,blank=True, null = True)
+    order = models.IntegerField(blank=True, null=True)            
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['movie', 'person'], name='uniq_movie_cast'
+                )
+        ]
 # --- Movie-Genre Relationship ---
 class MovieGenre(models.Model):
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
+    movie = models.ForeignKey("Movie", on_delete=models.CASCADE)
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE)
 
     class Meta:
@@ -142,17 +162,23 @@ class MovieGenre(models.Model):
                 )
         ]
 
-# --- Movie-Actor Relationship ---
-class MovieActor(models.Model):
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    actor = models.ForeignKey(Actor, on_delete=models.CASCADE)
-    character_name = models.CharField(max_length=255, blank=True, null=True)       # Name of the character played by the actor
-    casting_order = models.IntegerField(blank=True,null=True)                   # Order of the actor in the credits
+
+
+# --- Film Bank for Recommended Films ---
+class FilmBank(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="film_bank")
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="recommended_to")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # tiny audit trail
+    query_text = models.TextField(blank=True, null=True)
+    reason = models.TextField(blank=True, null=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                fields=['movie', 'actor'], name='uniq_movie_actor'
-                 )
+            models.UniqueConstraint(fields=["user", "movie"], name="uniq+reco_user_movie")
         ]
+
+
+
 # --- Tables ---

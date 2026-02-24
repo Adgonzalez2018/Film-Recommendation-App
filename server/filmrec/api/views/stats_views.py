@@ -6,7 +6,14 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import MovieUser, Director, Actor, Genre
+from ..models import (
+    MovieUser, 
+    Genre,
+    Person,
+    MovieCrew,
+    MovieCast,
+    MovieGenre,
+    )
 from ..utils.dates import week_window_sunday_anchor  # you already created this
 
 
@@ -77,13 +84,13 @@ def stats_payload(request):
     lastWeekArr = calculatePerDay(lastWeekMovies, lastWeekStart)
 
     topDirectors = (
-        Director.objects.filter(moviedirector__movie__movieuser__in=thisWeekMovies)
+        Person.objects.filter(moviecrew__movie__movieuser__in=thisWeekMovies)
         .annotate(count=models.Count("moviedirector__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )
 
     topActors = (
-        Actor.objects.filter(movieactor__movie__movieuser__in=thisWeekMovies)
+        Person.objects.filter(movieactor__movie__movieuser__in=thisWeekMovies)
         .annotate(count=models.Count("movieactor__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )
@@ -125,19 +132,23 @@ def stats_all_time(request):
     allMovies = loadAllTime(request.user)
 
     topDirectors = {
-        Director.objects.filter(moviedirector__movie__movieuser__in=allMovies)
-        .annotate(count=models.Count("moviedirector__movie__movieuser",distinct=True))
+        Person.objects.filter(
+            moviecrew__movie__movieuser__in=allMovies,
+            moviecrew__job="Director",
+        ).annotate(count=models.Count("moviecrew__movie__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
     }
 
     topActors = {
-        Actor.objects.filter(movieactor__movie__movieuser__in=allMovies)
-        .annotate(count=models.Count("movieactor__movie__movieuser",distinct=True))
+        Person.objects.filter(
+            moviecast__movie__movieuser__in=allMovies,
+            moviecrew__job="Director",
+        ).annotate(count=models.Count("moviecast__movie__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
     }
 
     topGenres = {
-        Actor.objects.filter(moviegenre__movie__movieuser__in=allMovies)
+        Genre.objects.filter(moviegenre__movie__movieuser__in=allMovies)
         .annotate(count=models.Count("moviegenre__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
     }

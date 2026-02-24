@@ -24,6 +24,8 @@ from api.views.auth_views import (
 from api.views.stats_views import stats_payload, stats_all_time
 from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
 from api.views.profile_views import *
+from api.views.tmdb_views import tmdb_search, tmdb_ensure
+
 urlpatterns = [
     path("admin/", admin.site.urls),
 
@@ -45,4 +47,8 @@ urlpatterns = [
 
     path("api/letterboxd/import/", letterboxd_import, name="letterboxd-import"),
     path("api/letterboxd/rss/", letterboxd_rss, name="letterboxd-rss"),
+
+    # Chat Related endpoints
+    path("api/tmdb/search/", tmdb_search),
+    path("api/tmdb/ensure/", tmdb_ensure)
 ]

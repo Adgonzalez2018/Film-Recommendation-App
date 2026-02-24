@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Movie, User, Actor, Director, Genre, MovieUser, MovieDirector, MovieGenre, MovieActor
+from .models import Movie, User, Genre, MovieUser, MovieGenre, Person
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -44,7 +44,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
-        email = validated_data["email"],
+        email = validated_data["email"]
         user = User.objects.create_user(
             username=email,
             first_name=validated_data["first_name"],
@@ -88,6 +88,9 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def get_has_imports(self, obj):
         return MovieUser.objects.filter(user=obj).exists()
+    
+    def get_has_letterboxd_link(self, obj):
+        return bool(getattr(obj, "letterboxd_username", None))
 
     def get_manual_import_count(self, obj):
         return obj.manual_import_count
@@ -105,17 +108,13 @@ class MovieSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     
-# --- Actor Serializer ---
+# --- Person Serializer ---
 class ActorSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Actor
+        model = Person
         fields = '__all__'
 
-# --- Director Serializer ---
-class DirectorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Director
-        fields = '__all__'
+
 
 # --- Genre Serializer ---
 class GenreSerializer(serializers.ModelSerializer):
@@ -123,3 +122,13 @@ class GenreSerializer(serializers.ModelSerializer):
         model = Genre
         fields = '__all__'
 
+# --- Chat Serializers ---
+class ChatRequestSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+class ChatMovieCardSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    poster_url = serializers.CharField(allow_null=True, required=False)
+    tmdb_id = serializers.IntegerField(allow_null=True, required=False)
+    
