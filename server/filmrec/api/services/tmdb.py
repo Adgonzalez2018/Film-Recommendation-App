@@ -36,7 +36,7 @@ def search_movie(query):
     return tmdb_get("/search/movie", {"query":query})
 
 def get_movie_details(tmdb_id):
-    return tmdb_get(f"/movie/{tmdb_id}")
+    return tmdb_get(f"/movie/{tmdb_id}", {"append_to_response":"credits"})
 
 # ------------------------
 # Inject Movies, Actors, Directors, Genre

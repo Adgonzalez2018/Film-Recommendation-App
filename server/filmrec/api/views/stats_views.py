@@ -90,7 +90,7 @@ def stats_payload(request):
     )
 
     topActors = (
-        Person.objects.filter(movieactor__movie__movieuser__in=thisWeekMovies)
+        Person.objects.filter(moviecast__movie__movieuser__in=thisWeekMovies)
         .annotate(count=models.Count("movieactor__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )

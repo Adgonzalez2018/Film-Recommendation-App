@@ -25,6 +25,7 @@ from api.views.stats_views import stats_payload, stats_all_time
 from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
 from api.views.profile_views import *
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
+from api.views.chat_views import chat_recommend
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -50,5 +51,6 @@ urlpatterns = [
 
     # Chat Related endpoints
     path("api/tmdb/search/", tmdb_search),
-    path("api/tmdb/ensure/", tmdb_ensure)
+    path("api/tmdb/ensure/", tmdb_ensure),
+    path("api/chat/recommend/", chat_recommend),
 ]

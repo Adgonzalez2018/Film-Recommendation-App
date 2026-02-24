@@ -5,6 +5,9 @@ from rest_framework import status
 
 from ..services.tmdb import search_movie, upsert_tmdb_movie
 
+def get_movie_details(tmdb_id):
+    return tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits"})
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def tmdb_search(request):
