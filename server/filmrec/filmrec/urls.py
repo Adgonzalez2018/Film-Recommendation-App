@@ -43,7 +43,7 @@ urlpatterns = [
     # for authentication anything passing the login/registration
     path("api/ping/", ping, name="ping"),
     path("api/stats/", stats_payload, name="stats-payload"),
-    path("api/stats/all-time", stats_all_time, name="stats-all-time"),
+    path("api/stats/all-time/", stats_all_time, name="stats-all-time"),
 
 
     path("api/letterboxd/import/", letterboxd_import, name="letterboxd-import"),

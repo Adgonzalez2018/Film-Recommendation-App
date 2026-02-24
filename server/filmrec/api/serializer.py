@@ -27,7 +27,7 @@ class LoginSerializer(serializers.Serializer):
     )
 
 class RegistrationSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=True, allow_blank=False)
+    first_name = serializers.CharField(required=False, allow_blank=False)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(
         style = {'input_type': 'password'},
@@ -45,10 +45,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         email = validated_data["email"]
+        first_name = validated_data.get("first_name", "") 
+
         user = User.objects.create_user(
             username=email,
-            first_name=validated_data["first_name"],
-            email=validated_data["email"],
+            first_name=first_name,
+            email=email,
             password=validated_data["password"],
         )
         return user
