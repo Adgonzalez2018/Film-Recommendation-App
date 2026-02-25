@@ -3,7 +3,7 @@ from .models import Movie, User, Genre, MovieUser, MovieGenre, Person
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from ..api.utils.letterboxd import extract_letterboxd_username
+from api.utils.letterboxd import extract_letterboxd_username
 
 User = get_user_model()
 
@@ -57,7 +57,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     
 class ProfileSerializer(serializers.ModelSerializer):
     letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
-    birthday = serializers.DateTimeField(required=False, allow_blank=True)
+    birthday = serializers.DateTimeField(required=False, allow_null=True)
     rss = serializers.CharField(required=False, allow_blank=True, write_only=True)
     has_letterboxd_link = serializers.SerializerMethodField()
     has_imports = serializers.SerializerMethodField()
@@ -70,7 +70,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ["id", 
                   "first_name", 
                   "email",
-                  "letterboxd_username"
+                  "letterboxd_username",
                   "birthday",
                   "rss",
                   "has_letterboxd_link",

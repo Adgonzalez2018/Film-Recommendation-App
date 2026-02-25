@@ -1,3 +1,9 @@
+"""
+Endpoints:
+- sends stats payloads for:
+    - all time stats report
+    - weekly stats report
+"""
 from collections import Counter
 
 from django.db import models

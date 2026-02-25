@@ -1,3 +1,38 @@
+"""
+Models for Database:
+User - base user
+Attr:
+    - first_name
+    - email
+    - password
+    - birthday
+    - last sync (for letterboxd data)
+    - letterboxd username
+    - rss/manual import count
+    
+Movie - Attr:
+    - id
+    - title
+    - year
+    - overview
+    - language
+    - budget
+    - runtime
+    - revenue
+    - country
+    - poster/letterboxd url
+
+Person - Director/Actor
+    - id
+    - name 
+    - birth_date
+    - profile url
+    - biography
+
+Genre 
+    - name/id
+"""
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
@@ -19,7 +54,6 @@ class Movie(models.Model):
     tmdb_id = models.IntegerField(blank=True, null=True, unique=True, db_index=True)
     year = models.IntegerField(blank=True, null=True)
     overview = models.TextField(blank=True, null=True)
-    release_date = models.DateField(blank=True, null=True)
     avg_rating = models.FloatField(default=0.0, blank=True, null=True)
     
     budget = models.BigIntegerField(blank=True, null=True)
@@ -39,7 +73,7 @@ class Movie(models.Model):
 # --- User Model ---
 class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
-    birthday = models.DateTimeField(required=False)
+    birthday = models.DateTimeField(blank=True,null=True)
     
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)

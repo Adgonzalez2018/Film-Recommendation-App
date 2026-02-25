@@ -1,4 +1,9 @@
 # api/views/profile_views.py
+"""
+Endpoints for Profile.js
+Loads Profile Info
+Allows user to set letterboxd rss link
+"""
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

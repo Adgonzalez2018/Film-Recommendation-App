@@ -1,3 +1,9 @@
+"""
+Endpoints that allow user:
+- authenticate and allow user to traverse through app
+- allow reset password
+- set new password
+"""
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode

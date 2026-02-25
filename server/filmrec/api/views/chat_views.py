@@ -1,3 +1,7 @@
+"""
+Endpoints for Chat.js
+
+"""
 import re
 from functools import lru_cache
 

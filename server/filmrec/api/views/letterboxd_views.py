@@ -1,4 +1,15 @@
 # api/views/letterboxd_views.py
+"""
+Endpoints for Profile.js, LetterboxdConnect.js
+Allows:
+- User to manually import letterboxd data
+    - 3 files: reviews, films, watchlist (.csv)
+- User to connect their RSS 
+    - (letterboxd/username)
+    - for weekly stat reports
+    - Also saves their username to model
+"""
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
