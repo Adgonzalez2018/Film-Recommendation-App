@@ -39,6 +39,7 @@ class Movie(models.Model):
 # --- User Model ---
 class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
+    birthday = models.DateTimeField(required=False)
     
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
@@ -177,7 +178,7 @@ class FilmBank(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["user", "movie"], name="uniq+reco_user_movie")
+            models.UniqueConstraint(fields=["user", "movie"], name="uniq_reco_user_movie")
         ]
 
 # --- Tables ---

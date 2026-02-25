@@ -57,8 +57,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
     
 class ProfileSerializer(serializers.ModelSerializer):
     letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
-
-    rss = serializers.CharField(required=False, allow_bank=True, write_only=True)
+    birthday = serializers.DateTimeField(required=False, allow_blank=True)
+    rss = serializers.CharField(required=False, allow_blank=True, write_only=True)
     has_letterboxd_link = serializers.SerializerMethodField()
     has_imports = serializers.SerializerMethodField()
     manual_import_count = serializers.SerializerMethodField()
@@ -70,7 +70,8 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ["id", 
                   "first_name", 
                   "email",
-                  "letterboxd_username",
+                  "letterboxd_username"
+                  "birthday",
                   "rss",
                   "has_letterboxd_link",
                   "has_imports",

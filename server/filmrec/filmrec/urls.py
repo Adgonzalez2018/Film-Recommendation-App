@@ -45,10 +45,6 @@ urlpatterns = [
     path("api/stats/", stats_payload, name="stats-payload"),
     path("api/stats/all-time/", stats_all_time, name="stats-all-time"),
 
-
-    path("api/letterboxd/import/", letterboxd_import, name="letterboxd-import"),
-    path("api/letterboxd/rss/", letterboxd_rss, name="letterboxd-rss"),
-
     # Chat Related endpoints
     path("api/tmdb/search/", tmdb_search),
     path("api/tmdb/ensure/", tmdb_ensure),

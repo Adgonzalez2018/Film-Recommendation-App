@@ -3,8 +3,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+
 from ..models import ImportBatch
 from ..utils.letterboxd import extract_letterboxd_username
+
 from django.utils import timezone
 
 from ..services.letterboxd_import import (
@@ -59,12 +61,13 @@ def letterboxd_import(request):
     return Response({"status": "ok", **counters}, status=status.HTTP_200_OK)
 
 # --- RSS Import Endpoint ---
-@api_view(['POST'])
+@api_view(['POST', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def letterboxd_rss(request):
     """
     POST {rss : "<username OR profile url OR rss url>"}
     syncs recent watches from public Letterboxd RSS.
+    
     """
     rss_input = (request.data.get("rss") or "").strip()
     rss_url = _build_letterboxd_rss_url(rss_input)

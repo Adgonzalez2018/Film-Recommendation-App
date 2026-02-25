@@ -1,6 +1,8 @@
 import re
+from functools import lru_cache
 
 from django.db.models import Q
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -15,12 +17,12 @@ from ..models import (
 from ..services.tmdb import search_movie, tmdb_get, upsert_tmdb_movie  # <-- uses your existing file
 from ..serializer import ChatRequestSerializer  # must exist
 
-
-GENRES = {
-    "horror", "comedy", "drama", "thriller", "action", "romance",
-    "sci-fi", "scifi", "animation", "crime", "mystery", "fantasy",
-    "family", "war", "western", "music", "history", "documentary",
-}
+@lru_cache(maxsize=1)
+def _genre_vocab():
+    # normalized set of genre names in DB
+    return set(
+        Genre.objects.values_list("name", flat=True)
+    )
 
 
 def _clarify(msg: str) -> str | None:
@@ -37,7 +39,8 @@ def _parse_intent(msg: str) -> dict:
     m = text.lower()
 
     want_terrible = any(k in m for k in ["terrible", "bad", "worst", "so bad"])
-    genre = next((g for g in GENRES if re.search(rf"\b{re.escape(g)}\b", m)), None)
+    vocab = {g.lower(): g for g in _genre_vocab()}
+    genre = next((g for g in vocab if re.search(rf"\b{re.escape(g)}\b", m)), None)
 
     # like <title>
     like_title = None

@@ -52,10 +52,10 @@ export default function Profile() {
 
     fetchProfile(accessToken)
       .then((data) => {
-        setName(data.name          ?? "");
+        setName(data.first_name          ?? "");
         setEmail(data.email        ?? "");
         setBirthday(data.birthday  ?? "");
-        setRssInput(data.letterboxd_url ?? "");
+        setRssInput(data.letterboxd_username ?? "");
       })
       .catch((err) => setProfileError(err.message))
       .finally(() => setProfileLoading(false));
@@ -80,7 +80,7 @@ export default function Profile() {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const payload = { name: cleanName };
+      const payload = { first_name: cleanName };
 
       // Only send birthday if the user actually set one
       if (birthday) payload.birthday = birthday;
