@@ -1,0 +1,120 @@
+import json
+from pathlib import Path
+
+from django.core.management.base import BaseCommand
+from django.utils import timezone
+from django.db.models import Prefetch
+
+from api.models import (
+    Movie,
+    MovieGenre,
+    MovieCrew,
+    MovieCast,
+) # adjust import if needed
+
+def build_movie_text(movie, genres, directors, cast_names):
+    title = movie.title or "Unknown"
+    year = movie.year or (movie.release_date.year if movie.release_date else None)
+    year_str = f" ({year})" if year else ""
+
+    parts = [
+        "MOVIE",
+        f"Title: {title}{year_str}", 
+    ]
+
+    if genres:
+        parts.append(f"Genres: {', '.join(genres)}")
+    if directors:
+        parts.append(f"Director : {', '.join(directors)}")
+    if cast_names:
+        parts.append(f"Cast: {', '.join(cast_names)}")
+    if movie.runtime:
+        parts.append(f"Runtime: {movie.runtime} min")
+    if movie.language:
+        parts.append(f"Language: {movie.language}")
+    if movie.country:
+        parts.append(f"Country: {movie.country}")
+    if movie.overview:
+        # keep overview short
+        ov = movie.overview.strip()
+        if len(ov) > 800:
+            ov = ov[:800].rsplit(" ", 1)[0] + "..."
+        parts.append(f"Overview: {ov}")
+    
+    return "\n".join(parts)
+
+class Command(BaseCommand):
+    help = "Build global movies JSONL for vector indexing."
+
+    def add_args(self,parser):
+        parser.add_argument("--out", type=str, default="movies_out")
+        parser.add_argument("--filename", type=str, default="movies.jsonl")
+        parser.add_argument("--limit", type=int, default=0)
+        parser.add_argument("--cast-n", type=int, default=5)
+
+    def handle(self, *args, **opts):
+        out_dir = Path(opts["out"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / opts["filename"]
+        limit = opts["limit"]
+        cast_n = opts["cast_n"]
+
+        # prefetch related rows efficiently
+        qs = Movie.objects.all().order_by("id").prefetch_related(
+            Prefetch(
+                "moviegenre_set",
+                queryset=MovieGenre.objects.select_related("genre"),
+            ),
+            Prefetch(
+                "moviecrew_set",
+                queryset=MovieCrew.objects.select_related("person"),
+            ),
+            Prefetch(
+                "moviecast_set",
+                queryset=MovieCast.objects.select_related("person").order_by("order", "id"),
+            ),
+        )
+    
+        if limit and limit > 0:
+            qs = qs[:limit]
+
+        count = 0
+        with out_path.open("w", encoding="utf-8") as f:
+            for m in qs:
+                genres = [mg.genre.name for mg in getattr(m, "moviegenre_set").all() if mg.genre_id]
+                directors = [
+                    mc.person.name
+                    for mc in getattr(m, "moviecrew_set").all()
+                    if (mc.job or"").lower() == "director" and mc.person_id
+                ]
+
+                cast = []
+                for c in getattr(m, "moviecast_set").all():
+                    if c.person_id and c.person and c.person.name:
+                        cast.append(c.person.name)
+                    if len(cast) >= cast_n:
+                        break
+
+                text = build_movie_text(m, genres, directors, cast)
+
+                doc = {
+                    "id": f"movie: {m.id}",
+                    "movie_id": m.id,
+                    "tmdb_id": m.tmdb_id,
+                    "title": m.title,
+                    "year": m.year or (m.release_date.year if m.release_date else None),
+                    "genres": genres,
+                    "director": directors,
+                    "cast": cast,
+                    "runtime": m.runtime,
+                    "language": m.language,
+                    "country": m.country,
+                    "poster_url": m.poster_url,
+                    "letterboxd_uri": m.letterboxd_uri,
+                    "text": text,
+                }
+
+                f.write(json.dumps(doc, ensure_ascii=False) + "\n")
+                count += 1
+
+        self.stdout.write(self.style.SUCCESS(f"Wrote {count} movies to {out_path}"))
