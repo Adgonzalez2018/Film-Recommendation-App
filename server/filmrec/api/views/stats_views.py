@@ -7,6 +7,9 @@ Endpoints:
 from collections import Counter
 
 from django.db import models
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -164,9 +167,25 @@ def stats_all_time(request):
 
     totalCount = allMovies.count()
     decadeCounts = byDecadePayload(allMovies)
+
+    # New stat - total lifetime watch time (minutes)
+    agg = allMovies.aggregate(
+        total_minutes=Coalesce(Sum("movie__runtime"),0)
+    )
+    total_minutes = int(agg["total_minutes"] or 0)
+    total_hours = total_minutes // 60
+    days = total_hours // 24
+    hours = total_hours % 24
+
     return Response(
         {
             "totalWatches": totalCount,
+            "totalMinutesWatched": total_minutes,
+            "TotalHoursWatched": total_hours,
+            "totalTimeWatched": {
+                "days": days,
+                "hours": hours,
+            }
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
             "genres": [{"name": g.name, "count": g.count} for g in topGenres],
