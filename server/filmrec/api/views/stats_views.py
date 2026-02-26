@@ -185,7 +185,7 @@ def stats_all_time(request):
             "totalTimeWatched": {
                 "days": days,
                 "hours": hours,
-            }
+            },
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
             "genres": [{"name": g.name, "count": g.count} for g in topGenres],
