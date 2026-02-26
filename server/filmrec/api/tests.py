@@ -120,14 +120,15 @@ class StatsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["totalWatches"], 2)
 
-        lifetime = response.data["totalWatches"]
+
+        lifetime = response.data["totalTimeWatched"]
         self.assertEqual(lifetime["days"], 0)
         self.assertEqual(lifetime["hours"], 5)
 
     def test_rss_import_endpoint(self):
-        url = reverse("rss_import")
 
-        response = self.client.post(url, {
+
+        response = self.client.post("api/import/letterboxd/rss/", {
             "rss": "https://letterboxd.com/test/rss"
         }, format="json"
         )
