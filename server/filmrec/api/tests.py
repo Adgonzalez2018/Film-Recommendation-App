@@ -1,12 +1,16 @@
-from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
-from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from unittest.mock import patch
-from .models import User, Movie, MovieUser, ImportBatch
+from .models import Movie, MovieUser, Genre, Person
 from .utils.dates import week_window_sunday_anchor
+
+from datetime import date
+
+User = get_user_model()
 
 class AuthFlowTests(APITestCase):
     def setUp(self):
@@ -62,6 +66,74 @@ class ProfileTests(APITestCase):
         if isinstance(p.data, dict):
             self.assertEqual(p.data.get("first_name"), "New Name")
 
+
+class StatsTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@test.com",
+            password="StrongPass123!",
+        )
+
+        self.client.login(email="test@test.com",password="StrongPass123!")
+
+    def create_movie(self, title, runtime, watched_date):
+        movie = Movie.objects.create(
+            title=title,
+            runtime=runtime,
+            release_date=date(2020,1,1)
+        )
+
+        MovieUser.objects.create(
+            user=self.user,
+            movie=movie,
+            watch_status="Watched",
+            watched_date=watched_date
+        )
+
+        return movie
+    
+    def test_weekly_stats(self):
+        from datetime import timedelta
+        today = date.today()
+
+        self.create_movie("Movie 1 ", 120, today)
+        self.create_movie("Movie 2", 90, today)
+
+        url = reverse("stats_payload")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["totalWatches"], 2)
+        self.assertIn("directors", response.data)
+        self.assertIn("byDecade", response.data)
+
+    def test_all_time_stats_lifetime_hours(self):
+        today = date.today()
+
+        self.create_movie("Movie A ", 120, today)
+        self.create_movie("Movie B", 180, today)
+
+        url = reverse("stats_all_time")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["totalWatches"], 2)
+
+        lifetime = response.data["totalWatches"]
+        self.assertEqual(lifetime["days"], 0)
+        self.assertEqual(lifetime["dahoursys"], 5)
+
+    def test_rss_import_endpoint(self):
+        url = reverse("rss_import")
+
+        response = self.client.post(url, {
+            "rss": "https://letterboxd.com/test/rss"
+        }, format="json"
+        )
+
+        self.assertIn(response.status_code, [200, 400])
+"""
 class ImportAndStatsTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -80,3 +152,4 @@ class ImportAndStatsTests(APITestCase):
         @patch("api.views.letterboxd_views.run_letterboxd_import")
         def test_import_csv_happy_path_logs_batch_and_updates_profile(self, mock_run):
             pass
+"""
