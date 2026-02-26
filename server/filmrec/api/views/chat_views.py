@@ -4,8 +4,6 @@ RAG-based recommender using OpenAI API + File search
 """
 import os
 import json
-import re
-from functools import lru_cache
 
 from django.db.models import Q
 
@@ -17,22 +15,13 @@ from rest_framework.response import Response
 from openai import OpenAI
 
 from ..models import (
-    Movie,
     FilmBank,
-    Genre,
-    Person,
     MovieUser,
 )
 
 from ..services.tmdb import search_movie, tmdb_get, upsert_tmdb_movie  # <-- uses your existing file
 from ..serializer import ChatRequestSerializer  # must exist
 
-@lru_cache(maxsize=1)
-def _genre_vocab():
-    # normalized set of genre names in DB
-    return set(
-        Genre.objects.values_list("name", flat=True)
-    )
 
 def _get_excluded_tmdb_ids(user) -> list[int]:
     """
@@ -44,13 +33,13 @@ def _get_excluded_tmdb_ids(user) -> list[int]:
     # Filmbank -> Movie
     bank_ids = (
         FilmBank.objects.filter(user=user, movie__tmdb_id__isnull=False)
-        .values_list("movies__tmdb_id", flat=True)
+        .values_list("movie__tmdb_id", flat=True)
     )
 
     # MovieUser -> Movie
     watched_ids = (
         MovieUser.objects.filter(user=user, movie__tmdb_id__isnull=False)
-        .values_list("movies__tmdb_id", flat=True)
+        .values_list("movie__tmdb_id", flat=True)
     )
 
     # unique + ints
@@ -62,7 +51,7 @@ def _get_excluded_tmdb_ids(user) -> list[int]:
             continue
     return sorted(s)
 
-def _movie_payload(mv:Movie) -> dict:
+def _movie_payload(mv) -> dict:
     # model uses overview in tmdb.py; keep safe fallback
     description = getattr(mv, "description", None) or getattr(mv, "overview", None)
     return {
@@ -102,6 +91,7 @@ def chat_recommend(request):
     taste_store_id = getattr(request.user, "taste_vector_store_id", None)
     
     excluded_tmdb_ids = _get_excluded_tmdb_ids(request.user)
+    excluded_set = set(excluded_tmdb_ids)
     excluded_str = ", ".join(map(str, excluded_tmdb_ids[:400])) # cap prompt size
 
     # pick cheap model by default (override via env)
@@ -179,7 +169,7 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
         )
     
     recs = data.get("recommendations") or []
-    if len(recs) == 0:
+    if not recs:
         return Response(
             {"type":"clarify","assistant": "Tell me a genre or a movie you liked, and I'll recommend 3 similar films."},
             status=status.HTTP_200_OK,
@@ -193,20 +183,23 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
             continue
 
         # hard exclude safety check
-        if int(tmdb_id) in set(excluded_tmdb_ids):
+        try:
+            tmdb_id_int = int(tmdb_id)
+        except Exception:
             continue
         # ensure movie exists in DB
+        if tmdb_id_int in excluded_set:
+            continue
         try:
-            mv = upsert_tmdb_movie(int(tmdb_id))
+            mv = upsert_tmdb_movie(tmdb_id_int)
         except Exception:
-            # if tmdb fetch fails, skip
             continue
 
         # persist recommendation in filmbank
         FilmBank.objects.get_or_create(
             user = request.user,
             movie=mv,
-            default={
+            defaults={
                 "query_text":msg,
                 "reason": r.get("why", ""),
             },
