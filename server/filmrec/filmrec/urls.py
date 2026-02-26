@@ -51,7 +51,7 @@ urlpatterns = [
     path("api/ping/", ping, name="ping"),
 
     # Stats related endpoints
-    path("api/stats/", stats_payload, name="stats-payload"),
+    path("api/stats/weekly", stats_payload, name="stats-payload"),
     path("api/stats/all-time/", stats_all_time, name="stats-all-time"),
 
     # Chat Related endpoints

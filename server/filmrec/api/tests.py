@@ -85,7 +85,7 @@ class StatsTests(APITestCase):
         movie = Movie.objects.create(
             title=title,
             runtime=runtime,
-            release_date=date(2020,1,1)
+            year= 2020,
         )
 
         MovieUser.objects.create(
@@ -94,18 +94,15 @@ class StatsTests(APITestCase):
             watch_status="Watched",
             watched_date=watched_date
         )
-
         return movie
     
     def test_weekly_stats(self):
-        from datetime import timedelta
         today = date.today()
 
         self.create_movie("Movie 1 ", 120, today)
         self.create_movie("Movie 2", 90, today)
 
-        url = reverse("stats_payload")
-        response = self.client.get(url)
+        response = self.client.get("/api/stats/weekly/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["totalWatches"], 2)
@@ -118,15 +115,14 @@ class StatsTests(APITestCase):
         self.create_movie("Movie A ", 120, today)
         self.create_movie("Movie B", 180, today)
 
-        url = reverse("stats_all_time")
-        response = self.client.get(url)
+        response = self.client.get("/api/stats/all-time/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["totalWatches"], 2)
 
         lifetime = response.data["totalWatches"]
         self.assertEqual(lifetime["days"], 0)
-        self.assertEqual(lifetime["dahoursys"], 5)
+        self.assertEqual(lifetime["hours"], 5)
 
     def test_rss_import_endpoint(self):
         url = reverse("rss_import")
