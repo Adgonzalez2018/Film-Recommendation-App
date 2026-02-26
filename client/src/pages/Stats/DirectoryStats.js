@@ -52,18 +52,14 @@ export default function DirectoryStats() {
             className={`dir-box${showWeekly ? " dir-vis" : ""}`}
             onClick={() => navigate("/stats/weekly")}
           >
-            <span className="dir-box-eyebrow">Weekly</span>
-            <span className="dir-box-label">This Week</span>
-            <span className="dir-box-sub">day-by-day watches, trends &amp; top picks</span>
+            <span className="dir-box-label">This Week's Report</span>
           </button>
 
           <button
             className={`dir-box${showAllTime ? " dir-vis" : ""}`}
             onClick={() => navigate("/stats/alltime")}
           >
-            <span className="dir-box-eyebrow">All Time</span>
-            <span className="dir-box-label">Lifetime</span>
-            <span className="dir-box-sub">your complete film history &amp; all-time stats</span>
+            <span className="dir-box-label">Lifetime Report</span>
           </button>
 
         </div>
