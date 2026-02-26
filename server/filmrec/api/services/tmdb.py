@@ -47,12 +47,10 @@ def upsert_tmdb_movie(tmdb_id, cast_limit=12):
     data = get_movie_details(tmdb_id)
 
     release_date = data.get("release_date")
-    parsed_date = None
     year = None
     if release_date:
         try:
-            parsed_date = datetime.strptime(release_date, "%Y-%m-%d").date()
-            year = parsed_date.year
+            year = datetime.strptime(release_date, "%Y-%m-%d").date().year
         except Exception:
             pass
 

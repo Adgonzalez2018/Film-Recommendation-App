@@ -1,5 +1,5 @@
-# Service Py File for 
-# Import Page (LetterboxdConnect) (letterboxd_views)
+# Service Py File for (letterboxd_views)
+# Import Page (LetterboxdConnect) 
 # & Profile Page
 import csv
 import io
