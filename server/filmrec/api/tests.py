@@ -69,13 +69,17 @@ class ProfileTests(APITestCase):
 
 class StatsTests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser",
-            email="test@test.com",
-            password="StrongPass123!",
-        )
+        r = self.client.post("/api/register/", {
+            "email": "statstest@example.com",
+            "password": "TestPass123!",
+            "first_name": "Stats",
+        }, format="json")
 
-        self.client.login(email="test@test.com",password="StrongPass123!")
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
+        self.token = r.data["access_token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+        self.user = User.objects.get(email="statstest@example.com")
 
     def create_movie(self, title, runtime, watched_date):
         movie = Movie.objects.create(
