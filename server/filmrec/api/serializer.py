@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Movie, User, Genre, MovieUser, MovieGenre, Person
+from .models import Movie, User, Genre, MovieUser, MovieGenre, Person, FilmBank
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -131,8 +131,6 @@ class ActorSerializer(serializers.ModelSerializer):
         model = Person
         fields = '__all__'
 
-
-
 # --- Genre Serializer ---
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -149,3 +147,24 @@ class ChatMovieCardSerializer(serializers.Serializer):
     poster_url = serializers.CharField(allow_null=True, required=False)
     tmdb_id = serializers.IntegerField(allow_null=True, required=False)
     
+# --- FilmBank Serializer ---
+class FilmBankSerializer(serializers.ModelSerializer):
+    movie = MovieSerializer(read_only=True)
+    class Meta:
+        model = FilmBank
+        fields = [
+            "id",
+            "movie",
+            "query_text",
+            "reason",
+            "status",
+            "created_at",
+            "dismissed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "movie",
+            "reason",
+            "status",
+            "created_at",
+        ]
