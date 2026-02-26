@@ -430,3 +430,235 @@
 .profile-section:hover {
   opacity: 0.9;
 }
+
+/* ═══════════════════════════════════════════════════
+   FILM BANK MODAL
+═══════════════════════════════════════════════════ */
+
+/* Dim overlay — click outside to close */
+.film-bank-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+/* Modal window */
+.film-bank-modal {
+  position: relative;
+  width: 620px;
+  max-width: 92vw;
+  max-height: 80vh;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(0, 255, 120, 0.28);
+  box-shadow: 0 0 48px rgba(0, 255, 120, 0.1), 0 24px 60px rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header bar */
+.film-bank-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(0, 255, 120, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.film-bank-title {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #77ffad;
+  text-shadow: 0 0 10px rgba(0, 255, 120, 0.25);
+}
+
+.film-bank-count {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+}
+
+/* Close button — top right of modal */
+.film-bank-close {
+  background: none;
+  border: 1px solid rgba(0, 255, 120, 0.25);
+  color: #77ffad;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 2px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.film-bank-close:hover {
+  background: rgba(255, 60, 60, 0.15);
+  border-color: rgba(255, 80, 80, 0.5);
+  color: #ff8888;
+}
+
+/* Empty state */
+.film-bank-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.film-bank-empty-icon {
+  font-size: 2.5rem;
+  opacity: 0.18;
+  color: #77ffad;
+}
+
+.film-bank-empty p {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  letter-spacing: 0.04em;
+}
+
+/* Poster grid — 5 per row */
+.film-bank-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  align-content: start;
+}
+
+.film-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.film-card-poster {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 255, 120, 0.04);
+  border: 1px solid rgba(0, 255, 120, 0.14);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.film-card-poster:hover {
+  border-color: rgba(0, 255, 120, 0.5);
+  box-shadow: 0 0 12px rgba(0, 255, 120, 0.15);
+}
+
+.film-card-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.film-card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.film-card-placeholder span {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(119, 255, 173, 0.25);
+  text-transform: uppercase;
+}
+
+/* Remove ×  — appears on hover */
+.film-card-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0, 255, 120, 0.3);
+  border-radius: 2px;
+  color: #77ffad;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 0;
+}
+
+.film-card-poster:hover .film-card-remove { opacity: 1; }
+.film-card-remove:hover {
+  background: rgba(255, 50, 50, 0.55);
+  border-color: rgba(255, 80, 80, 0.6);
+  color: #fff;
+}
+
+.film-card-info { text-align: center; }
+
+.film-card-title {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.55rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
+.film-card-year {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.5rem;
+  color: rgba(119, 255, 173, 0.3);
+  letter-spacing: 0.06em;
+}
+
+/* Count badge on the header button */
+.bank-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  background: rgba(0, 255, 120, 0.18);
+  border-radius: 8px;
+  font-size: 0.6rem;
+  margin-left: 6px;
+  color: #77ffad;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* Scrollbar */
+.film-bank-grid::-webkit-scrollbar { width: 5px; }
+.film-bank-grid::-webkit-scrollbar-thumb { background: rgba(0, 255, 120, 0.14); border-radius: 2px; }
+.film-bank-grid::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 120, 0.28); }

@@ -24,7 +24,7 @@ FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
 SECRET_KEY = 'django-insecure-_dps2^c2mi&$=)3l$+=9#%t)qr56xc481*yp6+%sddl3wd=5z6'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 AUTH_USER_MODEL = 'api.User'  

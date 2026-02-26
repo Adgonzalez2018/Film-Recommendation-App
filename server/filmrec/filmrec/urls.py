@@ -22,18 +22,25 @@ from api.views.auth_views import (
     loginView, registerView, ping, 
     password_reset_confirm, password_reset_request)
 from api.views.stats_views import stats_payload, stats_all_time
+
 from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
 from api.views.profile_views import *
+
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
+
 from api.views.chat_views import chat_recommend
+from api.views.filmbank_views import film_bank_delete, film_bank_list
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
+    # User account related endppints
     path("api/login/", loginView, name="login"),
     path("api/register/", registerView, name="register"),
 
     path("api/profile/", profileView, name="profile"),
+    
+    # Data ingestion endpoints
     path("api/import/letterboxd/csv/", letterboxd_import, name="letterboxd-import-csv"),
     path("api/import/letterboxd/rss/", letterboxd_rss, name="letterboxd-import-rss"),
     
@@ -42,6 +49,8 @@ urlpatterns = [
 
     # for authentication anything passing the login/registration
     path("api/ping/", ping, name="ping"),
+
+    # Stats related endpoints
     path("api/stats/", stats_payload, name="stats-payload"),
     path("api/stats/all-time/", stats_all_time, name="stats-all-time"),
 
@@ -49,4 +58,9 @@ urlpatterns = [
     path("api/tmdb/search/", tmdb_search),
     path("api/tmdb/ensure/", tmdb_ensure),
     path("api/chat/recommend/", chat_recommend),
+
+    # Film Bank related endpoints
+    path("api/film-bank/", film_bank_list, name="film-bank-list"),
+    path("api/film-bank/", film_bank_delete,name="film_bank_delete"),
+
 ]

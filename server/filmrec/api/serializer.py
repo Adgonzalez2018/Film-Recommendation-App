@@ -18,7 +18,7 @@ class UserSerializer(serializers.ModelSerializer):
                   'email', 
                   'password']
 
-    
+# --- Login ---
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()
     password = serializers.CharField(
@@ -26,6 +26,7 @@ class LoginSerializer(serializers.Serializer):
         write_only=True
     )
 
+# --- Register --
 class RegistrationSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=False, allow_blank=False)
     email = serializers.EmailField(required=True)
@@ -55,6 +56,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         )
         return user
     
+# --- Profile Page ---
 class ProfileSerializer(serializers.ModelSerializer):
     letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
     birthday = serializers.DateTimeField(required=False, allow_null=True)
@@ -118,6 +120,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     def get_last_sync(self, obj):
         return obj.last_sync.isoformat() if obj.last_sync else None
 
+
+# --- MOVIE CORPUUS --- 
 # --- Movie Serializer ---
 class MovieSerializer(serializers.ModelSerializer):
     class Meta:
@@ -137,6 +141,8 @@ class GenreSerializer(serializers.ModelSerializer):
         model = Genre
         fields = '__all__'
 
+
+# --- CHAT RELATED SERIALIZERS ---
 # --- Chat Serializers ---
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
@@ -147,6 +153,7 @@ class ChatMovieCardSerializer(serializers.Serializer):
     poster_url = serializers.CharField(allow_null=True, required=False)
     tmdb_id = serializers.IntegerField(allow_null=True, required=False)
     
+
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
     movie = MovieSerializer(read_only=True)
@@ -167,4 +174,16 @@ class FilmBankSerializer(serializers.ModelSerializer):
             "reason",
             "status",
             "created_at",
+        ]
+
+class MovieCardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Movie
+        fields = [
+            "id",
+            "title",
+            "year",
+            "poster_url",
+            "tmdb_id",
+            "avg_rating",
         ]
