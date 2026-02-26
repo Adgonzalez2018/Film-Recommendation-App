@@ -10,18 +10,6 @@ function maxOf(arr) {
   return arr.reduce((m, v) => (v > m ? v : m), 0);
 }
 
-function formatLifetimeTime(report){
-  const t = report?.totalTimeWatched;
-  if (!t) return null;
-
-  const d = Number(t.days ?? 0);
-  const h = Number(t.hours??0);
-
-  const dayLabel = d === 1 ? "day": "days";
-  const hourLabel = h === 1 ? "hour": "hours";
-
-  return `${d} ${dayLabel} ${h} ${hourlabel}`;
-}
 
 /* ─── Intersection-aware fade-in wrapper ──────────────── */
 function Credited({ children }) {

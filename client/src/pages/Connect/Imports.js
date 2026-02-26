@@ -1,4 +1,4 @@
-import "./LetterboxdConnect.css";
+import "./Imports.css";
 import "../Auth/Auth.css";
 
 import React, { useState, useRef } from "react";
