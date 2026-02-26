@@ -53,14 +53,13 @@ def _get_excluded_tmdb_ids(user) -> list[int]:
 
 def _movie_payload(mv) -> dict:
     # model uses overview in tmdb.py; keep safe fallback
-    description = getattr(mv, "description", None) or getattr(mv, "overview", None)
     return {
         "id": mv.id,
         "title": mv.title,
         "tmdb_id": mv.tmdb_id,
         "poster_url": getattr(mv, "poster_url", None),
         # change description
-        "description": description,
+        "description": mv.overview,
         "avg_rating": getattr(mv, "avg_rating", None),
         "year": getattr(mv, "year", None),
     }

@@ -8,6 +8,8 @@ Allows:
     - (letterboxd/username)
     - for weekly stat reports
     - Also saves their username to model
+
+Dependencies: letterboxd_import.py
 """
 
 from rest_framework.decorators import api_view, permission_classes

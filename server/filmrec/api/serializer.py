@@ -177,6 +177,7 @@ class FilmBankSerializer(serializers.ModelSerializer):
         ]
 
 class MovieCardSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(source="overview", allow_null=True, required=False)
     class Meta:
         model = Movie
         fields = [
@@ -186,4 +187,6 @@ class MovieCardSerializer(serializers.ModelSerializer):
             "poster_url",
             "tmdb_id",
             "avg_rating",
+            "description",
         ]
+
