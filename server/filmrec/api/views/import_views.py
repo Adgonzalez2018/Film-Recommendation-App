@@ -1,4 +1,4 @@
-# api/views/letterboxd_views.py
+# api/views/import_views.py
 """
 Endpoints for Profile.js, Imports.js
 Allows:
@@ -33,7 +33,7 @@ import feedparser
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def letterboxd_import(request):
+def manual_import(request):
     reviews_file = request.FILES.get("reviews")
     watchlist_file = request.FILES.get("watchlist")
     films_file = request.FILES.get("films") or request.FILES.get("likes")
@@ -76,7 +76,7 @@ def letterboxd_import(request):
 # --- RSS Import Endpoint ---
 @api_view(['POST', 'PATCH'])
 @permission_classes([IsAuthenticated])
-def letterboxd_rss(request):
+def import_rss(request):
     """
     POST {rss : "<username OR profile url OR rss url>"}
     syncs recent watches from public Letterboxd RSS.

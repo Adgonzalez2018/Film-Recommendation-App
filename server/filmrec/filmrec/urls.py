@@ -24,7 +24,7 @@ from api.views.auth_views import (
 
 from api.views.stats_views import stats_payload, stats_all_time
 
-from api.views.letterboxd_views import letterboxd_import, letterboxd_rss
+from server.filmrec.api.views.import_views import manual_import, import_rss
 from api.views.profile_views import *
 
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
@@ -42,8 +42,8 @@ urlpatterns = [
     path("api/profile/", profileView, name="profile"),
     
     # Data ingestion endpoints
-    path("api/import/letterboxd/csv/", letterboxd_import, name="letterboxd-import-csv"),
-    path("api/import/letterboxd/rss/", letterboxd_rss, name="letterboxd-import-rss"),
+    path("api/import/csv/", manual_import, name="import-csv"),
+    path("api/import/rss/", import_rss, name="import-rss"),
     
     path("api/password-reset/", password_reset_request, name="password_reset"),
     path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
