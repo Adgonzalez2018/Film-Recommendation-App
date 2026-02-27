@@ -4,10 +4,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 
 from unittest.mock import patch
-from .models import Movie, MovieUser, ImportBatch
-
+from .models import Movie, MovieUser, ImportBatch, FilmBank
 
 from datetime import date
+import os
+import json
+from types import SimpleNamespace
+
+
 
 User = get_user_model()
 
@@ -64,7 +68,6 @@ class ProfileTests(APITestCase):
         # serializer prob?
         if isinstance(p.data, dict):
             self.assertEqual(p.data.get("first_name"), "New Name")
-
 
 class StatsTests(APITestCase):
     def setUp(self):
@@ -240,3 +243,110 @@ class ImportTests(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r.data.get("status"), "ok")
         self._assert_csv_flags(had_reviews=True, had_watchlist=True, had_films=True)
+
+
+class ChatRecommendTests(APITestCase):
+    def setUp(self):
+        r = self.client.post(
+            "/api/register/",
+            {
+                "email": "chattest@example.com",
+                "password": "TestPass123!",
+                "first_name": "Import",
+            },
+            format="json",
+        )
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
+        token = r.data["access_token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.user = User.objects.get(email="chattest@example.com")
+
+    def test_chat_recommend_short_message_returns_clarify(self):
+        # msg len < 3 -> 200 clarify
+        r = self.client.post("/api/chat/recomend/", {"message": "hi"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("type"), "clarify")
+
+    def test_chat_recommend_missing_vector_store_env_returns_500(self):
+        with patch.dict(os.environ, {}, clear=True):
+            r = self.client.post("/api/chat/recomend/", {"message": "hi"}, format="json")
+            self.assertEqual(r.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            self.assertIn("error", r.data)
+
+    @patch("api.views.chat_views.upsert_tmdb_movie")
+    @patch("api.views.chat_views.OpenAI")
+    def test_chat_recommend_happy_path_creates_filmbank(self, mock_openai_cls, mock_upsert):
+        # ensure env var exits
+        with patch.dict(os.environ, {}, clear=True):
+            # create 3 movies to return from upsert tmdb movie
+            m1 = Movie.objects.create(title="Movie One", tmdb_id=101, year=2001)
+            m2 = Movie.objects.create(title="Movie Two", tmdb_id=102, year=2002)
+            m3 = Movie.objects.create(title="Movie Three", tmdb_id=103, year=2003)
+
+            # upsert called 3 times -> return
+            mock_upsert.side_effect = [m1,m2,m3]
+
+            # Mock OpenAI response payload (must be JSON)
+            llm_payload = {
+                "type":"recommendations",
+                "assistant": "Here are 3 picks.",
+                "recommendations": [
+                    {"tmdb_id":101,"title":"Movie One", "year": 2001, "why": "Because..."},
+                    {"tmdb_id":102,"title":"Movie Two", "year": 2002, "why": "Because..."},
+                    {"tmdb_id":103,"title":"Movie Three", "year": 2003, "why": "Because..."},
+                ]
+            }
+
+            fake_resp = SimpleNamespace(output_text=json.dumps(llm_payload))
+            fake_client=SimpleNamespace(
+                responses=SimpleNamespace(create=lambda **kwargs: fake_resp)
+            )
+
+            mock_openai_cls.return_value = fake_client
+
+            r = self.client.post("/api/chat/recomend/", {"message": "something like heat but moodier"}, format="json")
+
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            self.assertEqual(r.data.get("type"), "recommendations")
+            self.assertIn("movies", r.data)
+            self.assertEqual(len(r.data["movies"]), 3)
+
+            # FilmBank rows created for the user
+            self.assertEqual(FilmBank.objects.filter(user=self.user).count(), 3)
+
+
+    @patch("api.views.chat_views.upsert_tmdb_movie")
+    @patch("api.views.chat_views.OpenAI")
+    def test_chat_recommend_happy_path_creates_filmbank(self, mock_openai_cls, mock_upsert):
+        with patch.dict(os.environ, {"OPENAI_MOVIES_VECTOR_STORE_ID": "vs_123"}):
+            watched = Movie.objects.create(title="Watched", tmdb_id=777,overview="W", year=1999)
+            MovieUser.objects.create(
+                user=self.user,
+                movie=watched,
+                watch_status="Watched",
+            )
+
+            # LLM recommends only the excluded movie
+            llm_payload = {
+                "type": "recommendations",
+                "assistant": "Try this.",
+                "recommendations":[
+                    {"tmdb_id":777,"title": "Watched", "year":1999, "why": "Because..."},
+                ]
+            }
+            fake_resp = SimpleNamespace(output_text=json.dumps(llm_payload))
+            fake_client = SimpleNamespace(
+                responses=SimpleNamespace(create=lambda **kwargs: fake_resp)
+
+            )
+
+            mock_openai_cls.return_value = fake_client
+            r = self.client.post(
+                "/api/chat/recommend/",
+                {"message":"recommend me something"},
+                format="json"
+            )
+
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            self.assertEqual(r.data.get("type"), "clarify")
+            mock_upsert.assert_not_called()
