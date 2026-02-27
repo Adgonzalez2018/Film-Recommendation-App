@@ -48,10 +48,19 @@ def calc_percentChange(old, new):
 
 def calculatePerDay(entries, start_date):
     weekData = [0] * 7
+    start = start_date.date() if hasattr(start_date, "date") else start_date
+
     for entry in entries:
-        delta = (entry.watched_date.date() - start_date.date()).days
+        wd = entry.watched_date
+        if wd is None:
+            continue
+
+        wd = wd.date() if hasattr(wd, "date") else wd
+        delta = (wd - start).days
+
         if 0 <= delta < 7:
             weekData[delta] += 1
+    
     return weekData
 
 def getDecadeLabel(year: int) -> str:
@@ -62,7 +71,7 @@ def getDecadeLabel(year: int) -> str:
     return f"{two:02d}s"
 
 def byDecadePayload(movieuser_qs):
-    years = movieuser_qs.values_list("movie__release_date__year", flat=True)
+    years = movieuser_qs.values_list("movie__year", flat=True)
 
     counts = Counter()
     for y in years:
@@ -91,25 +100,26 @@ def stats_payload(request):
             moviecrew__movie__movieuser__in = thisWeekMovies,
             moviecrew__job="Director",
         )
-        .annotate(count=models.Count("moviecrew__movie", distinct=True))
+        .annotate(count=models.Count("moviecrew__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )
 
     # Top 5 Actors Watched
     topActors = (
         Person.objects.filter(
-            moviecast__movie_movieuser__in = thisWeekMovies
+            moviecast__movie__movieuser__in = thisWeekMovies
         )
-        .annotate(count=models.Count("moviecast__movie", distinct=True))
+        .annotate(count=models.Count("moviecast__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )
 
     # Top 5 Genres (weekly) - distinct
     topGenres = (
         Genre.objects.filter(moviegenre__movie__movieuser__in=thisWeekMovies)
-        .annotate(count=models.Count("moviegenre__movie", distinct=True))
+        .annotate(count=models.Count("moviegenre__movie__movieuser", distinct=True))
         .order_by("-count")[:5]
     )
+
 
     recentEntries = thisWeekMovies.select_related("movie").order_by("-watched_date")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
@@ -141,26 +151,26 @@ def stats_payload(request):
 def stats_all_time(request):
     allMovies = loadAllTime(request.user)
 
-    topDirectors = {
+    topDirectors = (
         Person.objects.filter(
             moviecrew__movie__movieuser__in=allMovies,
             moviecrew__job="Director",
-        ).annotate(count=models.Count("moviecrew__movie",distinct=True))
+        ).annotate(count=models.Count("moviecrew__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
-    }
+    )
 
-    topActors = {
+    topActors = (
         Person.objects.filter(
             moviecast__movie__movieuser__in=allMovies,
-        ).annotate(count=models.Count("moviecast__movie",distinct=True))
+        ).annotate(count=models.Count("moviecast__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
-    }
+    )
 
-    topGenres = {
+    topGenres = (
         Genre.objects.filter(moviegenre__movie__movieuser__in=allMovies)
-        .annotate(count=models.Count("moviegenre__movie",distinct=True))
+        .annotate(count=models.Count("moviegenre__movie__movieuser",distinct=True))
         .order_by("-count")[:5]
-    }
+    )
 
     recentEntries = allMovies.select_related("movie").order_by("-watched_date")[:5]
     recentMovies = [entry.movie for entry in recentEntries]

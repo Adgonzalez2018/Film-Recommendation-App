@@ -306,6 +306,112 @@ body {
   text-align: left;
 }
 
+/* ── SELECTOR SCREEN ─────────────────────────────────── */
+.selector {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 52px;
+  background: #000;
+  z-index: 10;
+  padding: 2rem;
+}
+
+.sel-prompt {
+  font-family: "EB Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  letter-spacing: 0.08em;
+  color: rgba(226, 221, 212, 0.5);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+}
+
+.sel-prompt.sel-vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sel-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  max-width: 340px;
+}
+
+/* thin rule between the two choices */
+.sel-rule {
+  width: 1px;
+  height: 36px;
+  background: rgba(226, 221, 212, 0.15);
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.sel-rule.sel-vis {
+  opacity: 1;
+}
+
+.sel-choice {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 32px;
+  width: 100%;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.9s ease, transform 0.9s ease, background 0.2s ease;
+  border-radius: 2px;
+}
+
+.sel-choice.sel-vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sel-choice:hover {
+  background: rgba(226, 221, 212, 0.04);
+}
+
+.sel-choice:hover .sel-choice-title {
+  color: #e2ddd4;
+  letter-spacing: 0.38em;
+}
+
+.sel-choice-title {
+  font-family: "Cinzel", serif;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.75);
+  transition: color 0.3s ease, letter-spacing 0.4s ease;
+}
+
+.sel-choice-sub {
+  font-family: "EB Garamond", serif;
+  font-style: italic;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: rgba(226, 221, 212, 0.28);
+  transition: color 0.3s ease;
+}
+
+.sel-choice:hover .sel-choice-sub {
+  color: rgba(226, 221, 212, 0.5);
+}
+
 /* ── FIN ── */
 .fin {
   padding: 60px 0 20px;
@@ -329,9 +435,9 @@ body {
   background: transparent;
   border: 1px solid rgba(226, 221, 212, 0.2);
   color: #e2ddd4;
-  padding: 8px 14px;
+  padding: 10px 14px;
   font-family: "Cinzel", serif;
-  font-size: 0.55rem;
+  font-size: 1rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   cursor: pointer;
@@ -340,4 +446,118 @@ body {
 .ctrl-btn:hover {
   border-color: rgba(226, 221, 212, 0.6);
   background: rgba(226, 221, 212, 0.05);
+}
+
+/* ════════════════════════════════════════════════════════
+   DIRECTORY PAGE (directoryStats.js)
+════════════════════════════════════════════════════════ */
+
+/* Full-screen centered stage */
+.dir-stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 64px;
+  z-index: 10;
+  padding: 2rem;
+}
+
+/* Fade-in helper — elements start invisible, .dir-vis triggers the transition */
+.dir-title,
+.dir-box {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+.dir-title.dir-vis,
+.dir-box.dir-vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Centre title ── */
+.dir-title {
+  font-family: "Cinzel", serif;
+  font-size: clamp(2.2rem, 8vw, 4rem);
+  font-weight: 400;
+  letter-spacing: 0.35em;
+  color: #e2ddd4;
+  text-align: center;
+  line-height: 1;
+}
+
+/* ── Two choice boxes side by side ── */
+.dir-choices {
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dir-box {
+  background: transparent;
+  border: 1px solid rgba(226, 221, 212, 0.18);
+  cursor: pointer;
+  padding: 2.2rem 2.8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+  text-align: center;
+  transition: opacity 1s ease, transform 1s ease, border-color 0.3s ease, background 0.3s ease;
+}
+
+.dir-box:hover {
+  border-color: rgba(226, 221, 212, 0.55);
+  background: rgba(226, 221, 212, 0.04);
+}
+
+.dir-box:hover .dir-box-label {
+  letter-spacing: 0.38em;
+}
+
+/* Eyebrow — small category label */
+.dir-box-eyebrow {
+  font-family: "Cinzel", serif;
+  font-size: 0.52rem;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.3);
+}
+
+/* Main label */
+.dir-box-label {
+  font-family: "Cinzel", serif;
+  font-size: clamp(1rem, 3.5vw, 1.4rem);
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.8);
+  transition: letter-spacing 0.4s ease, color 0.3s ease;
+}
+
+.dir-box:hover .dir-box-label {
+  color: #e2ddd4;
+}
+
+/* Sub description */
+.dir-box-sub {
+  font-family: "EB Garamond", serif;
+  font-style: italic;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: rgba(226, 221, 212, 0.28);
+  max-width: 180px;
+  line-height: 1.5;
+  transition: color 0.3s ease;
+}
+
+.dir-box:hover .dir-box-sub {
+  color: rgba(226, 221, 212, 0.45);
 }
