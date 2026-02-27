@@ -2,11 +2,10 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
-from django.urls import reverse
 
 from unittest.mock import patch
-from .models import Movie, MovieUser, Genre, Person
-from .utils.dates import week_window_sunday_anchor
+from .models import Movie, MovieUser, ImportBatch
+
 
 from datetime import date
 
@@ -128,29 +127,116 @@ class StatsTests(APITestCase):
     def test_rss_import_endpoint(self):
 
 
-        response = self.client.post("api/import/letterboxd/rss/", {
+        response = self.client.post("/api/import/letterboxd/rss/", {
             "rss": "https://letterboxd.com/test/rss"
         }, format="json"
         )
 
         self.assertIn(response.status_code, [200, 400])
-"""
-class ImportAndStatsTests(APITestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="test@example.com",
-            email="test@example.com",
-            password="TestPass123!",
-        )
-        self.client.force_authenticate(user=self.user)
 
-    def test_import_csv_requires_file(self):
-        # No Files -> should 400
+class ImportTests(APITestCase):
+    def setUp(self):
+        r = self.client.post(
+            "/api/register/",
+            {
+                "email": "importtest@example.com",
+                "password": "TestPass123!",
+                "first_name": "Import",
+            },
+            format="json",
+        )
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
+        token = r.data["access_token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.user = User.objects.get(email="importtest@example.com")
+
+    # ---------- helpers ----------
+    def _csv_file(self, name="file.csv"):
+        return SimpleUploadedFile(
+            name,
+            b"Name,Year,Letterboxd URI\nTest,2020,https://letterboxd.com/film/test/\n",
+            content_type="text/csv",
+        )
+
+    def _post_csv_import(self, *, reviews=False, watchlist=False, likes=False, films=False):
+        payload = {}
+        if reviews:
+            payload["reviews"] = self._csv_file("reviews.csv")
+        if watchlist:
+            payload["watchlist"] = self._csv_file("watchlist.csv")
+        if likes:
+            payload["likes"] = self._csv_file("likes.csv")
+        if films:
+            payload["films"] = self._csv_file("films.csv")
+
+        return self.client.post("/api/import/letterboxd/csv/", payload, format="multipart")
+
+    def _latest_csv_batch(self):
+        return ImportBatch.objects.filter(user=self.user, source="csv").latest("created_at")
+
+    def _assert_csv_flags(self, *, had_reviews, had_watchlist, had_films):
+        batch = self._latest_csv_batch()
+        self.assertEqual(batch.had_reviews, had_reviews)
+        self.assertEqual(batch.had_watchlist, had_watchlist)
+        self.assertEqual(batch.had_films, had_films)
+
+    # ---------- tests ----------
+    def test_csv_import_requires_file(self):
         r = self.client.post("/api/import/letterboxd/csv/", {}, format="multipart")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertin("error", r.data)
+        self.assertIn("error", r.data)
 
-        @patch("api.views.letterboxd_views.run_letterboxd_import")
-        def test_import_csv_happy_path_logs_batch_and_updates_profile(self, mock_run):
-            pass
-"""
+    @patch("api.views.letterboxd_views.run_letterboxd_import")
+    def test_csv_import_watchlist_only(self, mock_run):
+        mock_run.return_value = {"movies_created": 0, "movies_matched": 0, "rel_created": 0, "rel_updated": 0}
+
+        before = self.user.manual_import_count
+        r = self._post_csv_import(watchlist=True)
+
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "ok")
+        self._assert_csv_flags(had_reviews=False, had_watchlist=True, had_films=False)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.manual_import_count, before + 1)
+        self.assertIsNotNone(self.user.last_sync)
+
+    @patch("api.views.letterboxd_views.run_letterboxd_import")
+    def test_csv_import_likes_only_maps_to_films(self, mock_run):
+        mock_run.return_value = {"movies_created": 0, "movies_matched": 0, "rel_created": 0, "rel_updated": 0}
+
+        r = self._post_csv_import(likes=True)
+
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "ok")
+        self._assert_csv_flags(had_reviews=False, had_watchlist=False, had_films=True)
+
+    @patch("api.views.letterboxd_views.run_letterboxd_import")
+    def test_csv_import_films_only(self, mock_run):
+        mock_run.return_value = {"movies_created": 0, "movies_matched": 0, "rel_created": 0, "rel_updated": 0}
+
+        r = self._post_csv_import(films=True)
+
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "ok")
+        self._assert_csv_flags(had_reviews=False, had_watchlist=False, had_films=True)
+
+    @patch("api.views.letterboxd_views.run_letterboxd_import")
+    def test_csv_import_watchlist_and_likes_together(self, mock_run):
+        mock_run.return_value = {"movies_created": 0, "movies_matched": 0, "rel_created": 0, "rel_updated": 0}
+
+        r = self._post_csv_import(watchlist=True, likes=True)
+
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "ok")
+        self._assert_csv_flags(had_reviews=False, had_watchlist=True, had_films=True)
+
+    @patch("api.views.letterboxd_views.run_letterboxd_import")
+    def test_csv_import_all_three_together(self, mock_run):
+        mock_run.return_value = {"movies_created": 0, "movies_matched": 0, "rel_created": 0, "rel_updated": 0}
+
+        r = self._post_csv_import(reviews=True, watchlist=True, likes=True)
+
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "ok")
+        self._assert_csv_flags(had_reviews=True, had_watchlist=True, had_films=True)
