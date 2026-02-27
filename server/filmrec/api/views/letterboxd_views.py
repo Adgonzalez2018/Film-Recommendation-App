@@ -1,6 +1,6 @@
 # api/views/letterboxd_views.py
 """
-Endpoints for Profile.js, LetterboxdConnect.js
+Endpoints for Profile.js, Imports.js
 Allows:
 - User to manually import letterboxd data
     - 3 files: reviews, films, watchlist (.csv)
