@@ -62,6 +62,6 @@ urlpatterns = [
 
     # Film Bank related endpoints
     path("api/film-bank/", film_bank_list, name="film-bank-list"),
-    path("api/film-bank/", film_bank_delete,name="film_bank_delete"),
+    path("api/film-bank/<int:pk>/", film_bank_delete,name="film_bank_delete"),
 
 ]

@@ -350,3 +350,76 @@ class ChatRecommendTests(APITestCase):
             self.assertEqual(r.status_code, status.HTTP_200_OK)
             self.assertEqual(r.data.get("type"), "clarify")
             mock_upsert.assert_not_called()
+
+
+class FilmBankTests(APITestCase):
+    def setUp(self):
+        r = self.client.post(
+            "/api/register/",
+            {
+                "email": "chattest@example.com",
+                "password": "TestPass123!",
+                "first_name": "Import",
+            },
+            format="json",
+        )
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
+        token = r.data["access_token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.user = User.objects.get(email="chattest@example.com")
+
+    def test_film_bank_list_empty(self):
+        r = self.client.get("/api/film-bank/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data, []) 
+
+    def test_film_bank_list_only_current_user(self):
+        # create movies
+        # create 3 movies to return from upsert tmdb movie
+        m1 = Movie.objects.create(title="Movie One", year=2001)
+        m2 = Movie.objects.create(title="Movie Two", year=2002)
+        m3 = Movie.objects.create(title="Movie Three", year=2003)
+
+        # add 2 to current user's bank
+        FilmBank.objects.create(user=self.user, movie=m1)
+        FilmBank.objects.create(user=self.user, movie=m2)
+
+        # add 1 to another user's bank
+        other = User.objects.create_user(username="other", email="other@xample", password="TestPass123!")
+        FilmBank.objects.create(user=other, movie=m3)
+
+        r = self.client.get("/api/film-bank/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+        # should only return 2 entries for current user
+        self.assertEqual(len(r.data),2)
+        returned_movie_ids = {item["movie"]["id"] for item in r.data}
+        self.assertEqual(returned_movie_ids, {m1.id, m2.id})
+
+    def test_film_bank_delete_happy_path(self):
+        m = Movie.objects.create(title="Delete Me", year=2000)
+        fb = FilmBank.objects.create(user=self.user, movie=m)
+
+        r = self.client.delete(f"/api/film-bank/{fb.pk}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("status"), "deleted")
+
+        self.assertFalse(FilmBank.objects.filter(pk=fb.pk).exists())
+
+    def test_film_bank_delete_not_found(self):
+        r = self.client.delete("/api/film-bank/99999/")
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("error", r.data)
+
+    def test_film_bank_delete_cannot_delete_other_users(self):
+        other = User.objects.create_user(username="other2", email="other2@example.com", password="TestPass123!")
+        m = Movie.objects.create(title="Other User Movie", year=2005)
+        fb = FilmBank.objects.create(user=other, movie=m)
+
+        r = self.client.delete(f"/api/film-bank/{fb.pk}/")
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(FilmBank.objects.filter(pk=fb.pk).exists())
+
+
+
+    

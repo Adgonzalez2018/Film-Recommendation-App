@@ -164,7 +164,6 @@ class FilmBankSerializer(serializers.ModelSerializer):
             "movie",
             "query_text",
             "reason",
-            "status",
             "created_at",
             "dismissed_at",
         ]
@@ -172,7 +171,6 @@ class FilmBankSerializer(serializers.ModelSerializer):
             "id",
             "movie",
             "reason",
-            "status",
             "created_at",
         ]
 

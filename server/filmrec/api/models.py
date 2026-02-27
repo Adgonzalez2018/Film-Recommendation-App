@@ -210,7 +210,8 @@ class FilmBank(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="film_bank")
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="recommended_to")
     created_at = models.DateTimeField(auto_now_add=True)
-
+    status = models.CharField(max_length=20, default="active")
+    dismissed_at = models.DateTimeField(null=True, blank=True)
     # tiny audit trail
     query_text = models.TextField(blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
