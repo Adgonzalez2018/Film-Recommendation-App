@@ -74,7 +74,7 @@ def manual_import(request):
     return Response({"status": "ok", **counters}, status=status.HTTP_200_OK)
 
 # --- RSS Import Endpoint ---
-@api_view(['POST', 'PATCH'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def import_rss(request):
     """
@@ -106,20 +106,28 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     user = request.user
-    synced, created_movies, created_links, updated_links = 0, 0, 0, 0
+    entries_processed, movies_created, rel_created, rel_updated = 0,0,0,0
+    stopped_early = False
+    
     # Typical entries ~20
     for entry in feed.entries:
         link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
         if not link:
             continue
+
+        # STOP EARLY: If this user has alr added this letterboxd_uri imported
+        if MovieUser.objects.filter(user=user, movie__letterboxd_uri=link):
+            stopped_early = True
+            break
+        
         # use the entry link as our letterboxd_uri key
         movie, movie_created = Movie.objects.get_or_create(
             letterboxd_uri=link,
             defaults={"title": title[:255] if title else None}
         )
         if movie_created:
-            created_movies += 1
+            movies_created += 1
 
         # Create or update relationship for this user and movie
         mu, created = MovieUser.objects.get_or_create(
@@ -127,7 +135,7 @@ def import_rss(request):
             movie=movie,
         )
         if created:
-            created_links += 1
+            rel_created += 1
         
         # Mark watched + set watched_date from RSS publish date if present
         pub_dt = _parse_published_date(entry)
@@ -147,15 +155,15 @@ def import_rss(request):
             if not created:
                 updated_links += 1
 
-        synced += 1
+        entries_processed += 1
 
     # log batch
     ImportBatch.objects.create(
         user=user,
         source="rss",
-        movies_created=created_movies,
-        rel_created=created_links,
-        rel_updated=updated_links,
+        movies_created=movies_created,
+        rel_created=rel_created,
+        rel_updated=rel_updated,
     )
 
     prof = user
@@ -167,9 +175,12 @@ def import_rss(request):
     return Response({
         "status": "ok",
         "rss_url": rss_url,
-        "entries_processed": synced,
-        "movies_created": created_movies,
-        "movieuser_created": created_links,
-        "movieuser_updated": updated_links,
-    })
+        "entries_processed": entries_processed,
+        "movies_created": movies_created,
+        "rel_created": rel_created,
+        "rel_updated": rel_updated,
+        "stopped_early": stopped_early,
+    },
+    status=status.HTTP_200_OK,
+    )
         

@@ -37,6 +37,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
+import hashlib
+
 WATCH_STATUS_CHOICES = [
     ("Watched", "Watched"),
     ("Want to Watch", "Want to Watch"),
@@ -68,7 +70,7 @@ class Movie(models.Model):
     letterboxd_uri = models.CharField(max_length=500, unique=True, null=True, blank=True)
 
     # For RAG - Global movie output jsonl
-    movie_vector_store_id = models.IntegerField(null=True, unique=True, db_index=True)
+    movie_vector_store_id = models.CharField(null=True, unique=True, db_index=True)
 
     def __str__(self):
         return self.title
@@ -86,7 +88,7 @@ class User(AbstractUser):
     rss_import_count = models.PositiveIntegerField(default=0)
 
     # RAG - store id for vector store -> goes to LM (for taste summary)
-    taste_vector_store_id = models.IntegerField(null=True, unique=True, db_index=True)
+    taste_vector_store_id = models.CharField(null=True, unique=True, db_index=True)
 
     def __str__(self):
         return self.username
@@ -136,13 +138,39 @@ class Genre(models.Model):
     def __str__(self):
         return self.name
 
+
+# --- Watch Event Model ---
+class WatchEvent(models.Model):
+    SOURCE_CHOICES = [("rss","RSS"),("csv","CSV"), ("manual","MANUAL")]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
+
+    watched_date = models.DateField(null=True, blank=True, db_index = True)
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default="rss")
+    posted_date = models.DateField(db_index=True)
+    entry_url = models.URLField(max_length=500, null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    event_key = models.CharField(max_length=40, db_index=True)
+    rewatch = models.BooleanField(default=False)
+    # best dedupde key if you can get it
+
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=[
+                "user", "event_key"
+            ], name="unique_watch_event_user_event_key")
+        ]
+
+
 """
 Relationships:
 """
 # --- Movie-User Relationship ---
 class MovieUser(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     rating = models.FloatField(blank=True, null=True)       # User's rating for the movie
     review = models.TextField(blank=True, null=True)        # User's review for the movie
     watch_status = models.CharField(max_length=50, 
@@ -220,5 +248,3 @@ class FilmBank(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["user", "movie"], name="uniq_reco_user_movie")
         ]
-
-# --- Tables ---
