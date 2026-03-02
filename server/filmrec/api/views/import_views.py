@@ -233,12 +233,9 @@ def import_rss(request):
 @permission_classes([IsAuthenticated])
 def onboarding_status(request):
     user = request.user
-
+    has_watch_data = WatchEvent.objectsfilter(user=user).exists()
     return Response({
         "has_manual_import": user.manual_import_count > 0,
         "has_rss_import": user.rss_import_count > 0,
-        "is_onboarded": (
-            user.manual_import_count > 0 or
-            user.rss_import_count > 0
-        )
+        "is_onboarded": has_watch_data
     })
