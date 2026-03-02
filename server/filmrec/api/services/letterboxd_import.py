@@ -6,13 +6,18 @@ import io
 import re
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
+import hashlib
 
 from django.db import transaction
 
-from ..models import Movie, MovieUser
+from ..models import Movie, MovieUser, WatchEvent
 from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
 
+def make_eventkey(user_id:int, uri: str, posted_date: date) -> str:
+    return hashlib.sha1(
+        f"{user_id}|{uri}|{posted_date.isoformat()}".encode("utf-8")
+    ).hexdigest()
 
 def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films_file=None):
     """
@@ -20,6 +25,7 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
 
     Returns counters dict.
     """
+    events_created = 0 # go to watchEvent 
     movies_created = 0
     movies_matched = 0
     rel_created = 0
@@ -95,6 +101,8 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
 
     # ---------- per-csv handlers ----------
     def import_reviews_csv(file_obj):
+        nonlocal events_created
+
         for row in iter_csv(file_obj):
             name = row.get("Name")
             year = row.get("Year")
@@ -106,13 +114,42 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
 
             mu = get_or_create_mu(movie)
 
+            posted_date = parse_iso_date(row.get("Date")) # CSV "Date" col
             watched_date = parse_iso_date(row.get("Watched Date"))
             rating = parse_float(row.get("Rating"))
             review_text = (row.get("Review") or "").strip()
 
+            # Create WatchEvent 
+            event_posted = posted_date or watched_date
+            if event_posted:
+                rewatch_flag = ((row.get("Rewatch") or "").strip().lower() == "yes")
+                event_key = make_eventkey(user.id, movie.letterboxd_uri, event_posted)
+
+                _, created = WatchEvent.objects.get_or_create(
+                    user=user,
+                    event_key=event_key,
+                    defaults={
+                        "movie": movie,
+                        "posted_date": event_posted,
+                        "watched_date": watched_date,
+                        "rewatch": rewatch_flag,
+                        "source": "csv",
+                        "entry_url": movie.letterboxd_uri,
+                    },
+                )
+                if created:
+                    events_created += 1
+
+            
             updates = {"watch_status": "Watched"}
-            if watched_date:
-                updates["watched_date"] = watched_date
+            
+            # keep latest watched date on snapshot
+            snap_date = watched_date or posted_date
+            if snap_date:
+                if mu.watched_date is None or snap_date > mu.watch_date:
+                    mu.rewatch = True
+                updates["watched_date"] = snap_date
+
             if rating is not None:
                 updates["rating"] = rating
             if review_text:
@@ -165,6 +202,7 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
     return {
         "movies_created": movies_created,
         "movies_matched": movies_matched,
+        "events_created": events_created,
         "rel_created": rel_created,
         "rel_updated": rel_updated,
     }

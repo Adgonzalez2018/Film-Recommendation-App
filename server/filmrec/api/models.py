@@ -114,6 +114,8 @@ class ImportBatch(models.Model):
     had_watchlist = models.BooleanField(default=False)
     had_films = models.BooleanField(default=False)
 
+    # add to event
+    events_created = models.IntegerField(default=0)
     def __str__(self):
         return f"ImportBatch<{self.user_id}:{self.source}:{self.created_at}>"
 

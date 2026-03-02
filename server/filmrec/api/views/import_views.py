@@ -38,8 +38,11 @@ import hashlib
 def manual_import(request):
     reviews_file = request.FILES.get("reviews")
     watchlist_file = request.FILES.get("watchlist")
-    films_file = request.FILES.get("films") or request.FILES.get("likes")
 
+    films_upload = request.FILES.get("films")
+    likes_upload = request.FILES.get("likes")
+    films_file = films_upload or likes_upload
+    
     if not reviews_file and not watchlist_file and not films_file:
         return Response(
             {"error": "No files provided. Upload at least one of: reviews, watchlist, films."},
@@ -61,14 +64,15 @@ def manual_import(request):
         movies_matched=counters.get("movies_matched", 0),
         rel_created=counters.get("rel_created", 0),
         rel_updated=counters.get("rel_updated", 0),
+        events_created=counters.get("events_created",0),
         had_reviews=bool(reviews_file),
         had_watchlist=bool(watchlist_file),
-        had_films=bool(films_file),
+        had_films=bool(films_upload),
     )
 
     # update profile summary (fast reads for profile page)
     prof = request.user
-    prof.manual_import_count = prof.manual_import_count + 1
+    prof.manual_import_count = (prof.manual_import_count or 0) + 1
     prof.last_sync = timezone.now()
     prof.save(update_fields=["manual_import_count", "last_sync"])
 
