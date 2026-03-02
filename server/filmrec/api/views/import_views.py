@@ -112,6 +112,7 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     user = request.user
+    
     # cut off for incremental sync (1-day buffer for timezone / ordering quirks)
     cutoff_date = None
     if user.last_sync:

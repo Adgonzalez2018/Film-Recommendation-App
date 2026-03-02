@@ -29,6 +29,7 @@ export default function Profile() {
   const [profileError,   setProfileError]   = useState(null);
   const [profileSuccess, setProfileSuccess] = useState(null);
   const [saveLoading,    setSaveLoading]    = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   // ── CSV state ──────────────────────────────────────────
   const [files, setFiles] = useState({ reviews: null, watchlist: null, likes: null });
@@ -60,6 +61,20 @@ export default function Profile() {
       .catch((err) => setProfileError(err.message))
       .finally(() => setProfileLoading(false));
   }, [accessToken]);
+
+  // ──  Resync handler ───────────────────────────────────────
+  const handleResync = async () => {
+    if (!rssInput.trim() || !accessToken) return;
+    setSyncLoading(true); setRssError(null); setRssSuccess(null);
+    try {
+      await submitRSSSync(rssInput, accessToken)
+      setRssSuccess("Sync complete - your data is up to date.");
+    } catch (err) {
+    setRssError(err.message);
+  } finally {
+    setSyncLoading(false);
+  }
+};
 
   // ── Save profile ───────────────────────────────────────
   const handleSaveProfile = async (e) => {
@@ -342,8 +357,12 @@ export default function Profile() {
 
               <form onSubmit={handleRSSSubmit}>
                 <div className="profile-group">
-                  <label className="profile-label" htmlFor="rss-profile-input">
-                    Letterboxd URL or Username
+                <label className="profile-label" htmlFor="rss-profile-input">
+                  Letterboxd URL or Username
+                  {rssInput.trim() && (
+                    <span style={{ fontWeight: 300, opacity: 0.6, marginLeft: "0.6em", textTransform: "none", letterSpacing: "0.04em" }}>
+                      — {rssInput.trim().replace(/^https?:\/\/(www\.)?letterboxd\.com\//i, "").replace(/\/$/, "")}
+                    </span>)}
                   </label>
                   <input
                     id="rss-profile-input"
@@ -363,6 +382,17 @@ export default function Profile() {
                 <button type="submit" className="profile-save-btn" disabled={rssLoading}>
                   {rssLoading ? "LINKING…" : "LINK FOR WEEKLY REPORTS"}
                 </button>
+                {rssInput.trim() && (
+                <button
+                  type="button"
+                  className="profile-save-btn"
+                  style={{ marginTop: "0.6rem", opacity: syncLoading ? 0.55 : 1 }}
+                  onClick={handleResync}
+                  disabled={syncLoading}
+                >
+                  {syncLoading ? "SYNCING…" : "SYNC NOW"}
+                </button>
+              )}
               </form>
             </div>
 

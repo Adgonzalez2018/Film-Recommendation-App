@@ -62,6 +62,7 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         if movie:
             movies_matched += 1
             updates = {}
+            # updates movie title if possible
             if (movie.title == "Unknown") and name:
                updates["title"] = (name or "").strip()[:255]
             y = parse_year(year)
@@ -242,7 +243,7 @@ def _parse_published_date(entry) -> date | None:
     prefer parsed structs if available; fall back to parsing string
     """
 
-    tp = getattr(entry, "published_parsed", None) or getattr(entry, "update_parsed", None)
+    tp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     if tp:
         try:
             return date(tp.tm_year, tp.tm_mon, tp.tm_mday)
