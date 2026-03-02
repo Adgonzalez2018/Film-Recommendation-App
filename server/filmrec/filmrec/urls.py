@@ -24,7 +24,7 @@ from api.views.auth_views import (
 
 from api.views.stats_views import stats_payload, stats_all_time
 
-from api.views.import_views import manual_import, import_rss
+from api.views.import_views import manual_import, import_rss, onboarding_status
 from api.views.profile_views import *
 
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
@@ -40,6 +40,9 @@ urlpatterns = [
     path("api/register/", registerView, name="register"),
 
     path("api/profile/", profileView, name="profile"),
+    
+    # Check if User is onboarded 
+    path("api/onboarding-status/", onboarding_status, name="onboarding-status"),\
     
     # Data ingestion endpoints
     path("api/import/csv/", manual_import, name="import-csv"),

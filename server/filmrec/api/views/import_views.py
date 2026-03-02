@@ -225,3 +225,20 @@ def import_rss(request):
     status=status.HTTP_200_OK,
     )
         
+
+# Check if user has data
+# if yes direct to Chat page
+# else continue with Import page
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def onboarding_status(request):
+    user = request.user
+
+    return Response({
+        "has_manual_import": user.manual_import_count > 0,
+        "has_rss_import": user.rss_import_count > 0,
+        "is_onboarded": (
+            user.manual_import_count > 0 or
+            user.rss_import_count > 0
+        )
+    })
