@@ -46,7 +46,7 @@ def build_movie_text(movie, genres, directors, cast_names):
 class Command(BaseCommand):
     help = "Build global movies JSONL for vector indexing."
 
-    def add_args(self,parser):
+    def add_arguments(self,parser):
         parser.add_argument("--out", type=str, default="movies_out")
         parser.add_argument("--filename", type=str, default="movies.jsonl")
         parser.add_argument("--limit", type=int, default=0)

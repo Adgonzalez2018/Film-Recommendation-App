@@ -85,7 +85,7 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
 class Command(BaseCommand):
     help = "Build a capped taste JSONL file for a user."
 
-    def add_args(self,parser):
+    def add_arguments(self,parser):
         parser.add_argument("--user-id", type=int, required=True)
         parser.add_argument("--out", type=str, default="taste_out")
 
