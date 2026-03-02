@@ -27,9 +27,11 @@ from ..services.letterboxd_import import (
     _build_letterboxd_rss_url,
     _parse_published_date)
 
-from ..models import Movie, MovieUser
+from ..models import Movie, MovieUser, WatchEvent
 
+from datetime import timedelta
 import feedparser
+import hashlib
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -106,7 +108,13 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     user = request.user
+    # cut off for incremental sync (1-day buffer for timezone / ordering quirks)
+    cutoff_date = None
+    if user.last_sync:
+        cutoff_date = (user.last_sync.date()) - timedelta(days=1)
+    
     entries_processed, movies_created, rel_created, rel_updated = 0,0,0,0
+    events_created = 0
     stopped_early = False
     
     # Typical entries ~20
@@ -115,13 +123,25 @@ def import_rss(request):
         title = (getattr(entry, "title", "") or "").strip()
         if not link:
             continue
+        
+        posted_date = _parse_published_date(entry) # should return a date
 
-        # STOP EARLY: If this user has alr added this letterboxd_uri imported
-        if MovieUser.objects.filter(user=user, movie__letterboxd_uri=link):
+        # CHECKS
+        # if we have a cutoff and this entry is older than it, we can stop
+        if cutoff_date and posted_date and posted_date <= cutoff_date:
             stopped_early = True
             break
         
-        # use the entry link as our letterboxd_uri key
+        # event_key: uesr + letterboxd_uri + posted_date (or "nodate" fallback)
+        date_part = posted_date.isoformat() if posted_date else "nodate"
+        event_key = hashlib.sha1(f"{user.id}|{link}|{date_part}".encode("utf-8"))
+
+        # stop early if we've alr imported this exact event (fast path)
+        if WatchEvent.objects.filter(user=user, event_key=event_key).exists():
+            stopped_early = True
+            break
+
+        # upsert Movie
         movie, movie_created = Movie.objects.get_or_create(
             letterboxd_uri=link,
             defaults={"title": title[:255] if title else None}
@@ -129,7 +149,22 @@ def import_rss(request):
         if movie_created:
             movies_created += 1
 
-        # Create or update relationship for this user and movie
+        # create watch event (event log)
+        we, we_created = WatchEvent.objects.get_or_create(
+            user=user,
+            event_key=event_key,
+            defaults={
+                "movie":movie,
+                "posted_date":posted_date or timezone.now().date(),
+                "watched_date":posted_date,
+                "source":"rss",
+                "entry_url": link,
+            }
+        )
+        if we_created:
+            events_created += 1
+
+        # Create or update relationship for this MovieUser
         mu, created = MovieUser.objects.get_or_create(
             user=user,
             movie=movie,
@@ -153,7 +188,7 @@ def import_rss(request):
         if changed:
             mu.save()
             if not created:
-                updated_links += 1
+                rel_updated += 1
 
         entries_processed += 1
 
@@ -177,6 +212,7 @@ def import_rss(request):
         "rss_url": rss_url,
         "entries_processed": entries_processed,
         "movies_created": movies_created,
+        "events_created": events_created,
         "rel_created": rel_created,
         "rel_updated": rel_updated,
         "stopped_early": stopped_early,

@@ -5,6 +5,7 @@ import csv
 import io
 import re
 from datetime import date, datetime
+from email.utils import parsedate_to_datetime
 
 from django.db import transaction
 
@@ -28,13 +29,13 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         text = io.TextIOWrapper(file_obj.file, encoding="utf-8-sig")
         return csv.DictReader(text)
 
-    def year_to_date(year_str):
+    def parse_year(year_str):
         try:
-            y = int(year_str) if year_str else None
-            return date(y, 1, 1) if y else None
+            y = int((year_str or "").strip())
+            return y
         except Exception:
             return None
-
+        
     def parse_float(s):
         s = (s or "").strip()
         if not s:
@@ -54,14 +55,21 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         movie = Movie.objects.filter(letterboxd_uri=uri).first()
         if movie:
             movies_matched += 1
-            if (not movie.title) and name:
-                movie.title = (name or "").strip()[:255]
-                movie.save(update_fields=["title"])
+            updates = {}
+            if (movie.title == "Unknown") and name:
+               updates["title"] = (name or "").strip()[:255]
+            y = parse_year(year)
+            if movie.year is None and y is not None:
+                updates["year"] = y
+            if updates:
+                for k, v in updates.items():
+                    setattr(movie, k,v)
+                movie.save(update_fields=list(updates.keys()))
             return movie
 
         movie = Movie.objects.create(
             title=((name or "").strip()[:255] or "Unknown"),
-            release_date=year_to_date(year),
+            year=parse_year(year),
             letterboxd_uri=uri,
         )
         movies_created += 1
@@ -157,8 +165,8 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
     return {
         "movies_created": movies_created,
         "movies_matched": movies_matched,
-        "relationships_created": rel_created,
-        "relationships_updated": rel_updated,
+        "rel_created": rel_created,
+        "rel_updated": rel_updated,
     }
 
 # RSS Helper Function
@@ -190,21 +198,33 @@ def _build_letterboxd_rss_url(raw: str) -> str:
         return ""
     return f"https://letterboxd.com/{username}/rss/"
 
-def _parse_published_date(entry) -> datetime | None:
-    # feedparser gives published_parsed as a time.struct_time sometimes
-    tp = getattr(entry, "published_parsed", None)
+def _parse_published_date(entry) -> date | None:
+    """
+    Returns a *date* for when the RSS entry was published/updated.
+    prefer parsed structs if available; fall back to parsing string
+    """
+
+    tp = getattr(entry, "published_parsed", None) or getattr(entry, "update_parsed", None)
     if tp:
         try:
-            return datetime(tp.tm_year, tp.tm_mon, tp.tm_mday, tp.tm_hour, tp.tm_min, tp.tm_sec)
+            return date(tp.tm_year, tp.tm_mon, tp.tm_mday)
         except Exception:
             return None
         
     # fallback: try published string
-    pub = getattr(entry, "published", None)
-    if pub:
-        try:
-            # very lose fallback; tighten later
-            return datetime.fromisoformat(pub)
-        except Exception:
-            return None
+    s = getattr(entry, "published", None) or getattr(entry, "updated", None)
+    if not s:
+        return None
+    
+    # RSS commonly uses RFC822
+    try:
+        return parsedate_to_datetime(s).date()
+    except Exception:
+        pass
+
+    # last-ditch: iso like str
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
         
