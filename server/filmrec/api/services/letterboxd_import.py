@@ -6,19 +6,14 @@ import io
 import re
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
-import hashlib
+
 
 from django.db import transaction
 
 from ..models import Movie, MovieUser, WatchEvent
 from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
-
-def make_eventkey(user_id:int, uri: str, posted_date: date) -> str:
-    date_part = posted_date.isoformat() if posted_date else "nodate"
-    return hashlib.sha1(
-        f"{user_id}|{uri}|{date_part}".encode("utf-8")
-    ).hexdigest()
+from ..utils.rss import make_eventkey
 
 def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films_file=None):
     """
@@ -148,8 +143,8 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
             # keep latest watched date on snapshot
             snap_date = watched_date or posted_date
             if snap_date:
-                if mu.watched_date is None or snap_date > mu.watch_date:
-                    mu.rewatch = True
+                if mu.watched_date is not None and snap_date > mu.watched_date:
+                    updates["rewatch"] = True
                 updates["watched_date"] = snap_date
 
             if rating is not None:
@@ -208,35 +203,6 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         "rel_created": rel_created,
         "rel_updated": rel_updated,
     }
-
-# RSS Helper Function
-def _build_letterboxd_rss_url(raw: str) -> str:
-    s = (raw or "").strip()
-    if not s:
-        return ""
-    
-    # if they paste "letterboxd.com/username" without scheme
-    if s.startswith("letterboxd.com/"):
-        s = "https://" + s
-    
-    # Full URL with scheme
-    if s.startswith("http://") or s.startswith("https://"):
-        # if it's already an rss URL, keep it
-        if s.rstrip("/").endswith("/rss/"):
-            return s.rstrip("/") + "/"
-        # if it's a profile URL like httsp://letterboxd.com/<user>/
-        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s.rstrip("/"))
-        if m:
-            username = m.group(1)
-            return f"https://letterboxd.com/{username}/rss/"
-        # unnknown URL Format
-        return ""
-    
-    # otherwise treat as username
-    username = s.strip("/").replace(" ", "")
-    if not username:
-        return ""
-    return f"https://letterboxd.com/{username}/rss/"
 
 def _parse_published_date(entry) -> date | None:
     """

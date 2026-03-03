@@ -12,12 +12,13 @@ from django.utils import timezone
 from api.models import User, Movie, MovieUser, WatchEvent, ImportBatch
 from api.services.letterboxd_import import (
     _parse_published_date,
-    make_eventkey,
 )
 from api.utils.letterboxd import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
     )
+
+from api.utils.rss import make_eventkey
 
 
 @dataclass
