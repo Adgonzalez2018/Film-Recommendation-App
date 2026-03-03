@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from django.db.models import Prefetch
 
 from api.models import (
@@ -14,7 +13,7 @@ from api.models import (
 
 def build_movie_text(movie, genres, directors, cast_names):
     title = movie.title or "Unknown"
-    year = movie.year or (movie.release_date.year if movie.release_date else None)
+    year = movie.year           # No release date
     year_str = f" ({year})" if year else ""
 
     parts = [
@@ -81,15 +80,15 @@ class Command(BaseCommand):
         count = 0
         with out_path.open("w", encoding="utf-8") as f:
             for m in qs:
-                genres = [mg.genre.name for mg in getattr(m, "moviegenre_set").all() if mg.genre_id]
+                genres = [mg.genre.name for mg in m.moviegenre_set.all() if mg.genre_id and mg.genre]
                 directors = [
                     mc.person.name
-                    for mc in getattr(m, "moviecrew_set").all()
-                    if (mc.job or"").lower() == "director" and mc.person_id
+                    for mc in m.moviecrew_set.all()
+                    if mc.person_id and mc.person and (mc.job or "").strip().lower() == "director"
                 ]
 
                 cast = []
-                for c in getattr(m, "moviecast_set").all():
+                for c in m.moviecast_set.all():
                     if c.person_id and c.person and c.person.name:
                         cast.append(c.person.name)
                     if len(cast) >= cast_n:
@@ -102,7 +101,7 @@ class Command(BaseCommand):
                     "movie_id": m.id,
                     "tmdb_id": m.tmdb_id,
                     "title": m.title,
-                    "year": m.year or (m.release_date.year if m.release_date else None),
+                    "year": m.year,
                     "genres": genres,
                     "director": directors,
                     "cast": cast,
