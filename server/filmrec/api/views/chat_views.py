@@ -5,8 +5,6 @@ RAG-based recommender using OpenAI API + File search
 import os
 import json
 
-from django.db.models import Q
-
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -18,8 +16,7 @@ from ..models import (
     FilmBank,
     MovieUser,
 )
-
-from ..services.tmdb import search_movie, tmdb_get, upsert_tmdb_movie  # <-- uses your existing file
+from ..services.tmdb import upsert_tmdb_movie  # <-- uses your existing file
 from ..serializer import ChatRequestSerializer  # must exist
 
 
@@ -59,11 +56,12 @@ def _movie_payload(mv) -> dict:
         "tmdb_id": mv.tmdb_id,
         "poster_url": getattr(mv, "poster_url", None),
         # change description
-        "description": mv.overview,
+        "description": getattr(mv,"overview", None),
         "avg_rating": getattr(mv, "avg_rating", None),
         "year": getattr(mv, "year", None),
     }
 
+# MAIN ENDPOINT:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def chat_recommend(request):
@@ -79,7 +77,6 @@ def chat_recommend(request):
     
     # Tentative where the movie store id is located
     movies_store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
-
     if not movies_store_id:
         return Response(
             {"error": "Missing OPENAI_MOVIES_VECTOR_STORE_ID env var (global movies vector store not configured)."},
@@ -161,19 +158,31 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
     
+    if data.get("type") not in ("recommendations","clarify"):
+        return Response({
+                        "type": "clarify",
+            "assistant": "Tell me a bit more about what you want."
+        },
+        status=status.HTTP_200_OK,
+        )
+    
     if data.get("type") == "clarify":
         return Response(
             {"type":"clarify","assistant": data.get("assistant","Tell me a bit more about what you want.")},
             status=status.HTTP_200_OK,
         )
     
-    recs = data.get("recommendations") or []
-    if not recs:
+    recs = data.get("recommendations")
+    if not isinstance(recs, list) or not recs:
         return Response(
-            {"type":"clarify","assistant": "Tell me a genre or a movie you liked, and I'll recommend 3 similar films."},
+            {
+            "type": "clarify",
+            "assistant": "Tell me a bit more about what you want."
+            },
             status=status.HTTP_200_OK,
         )
     
+    # Persist + Build Response
     # now we create the payload 
     movies_payload = []
     for r in recs[:3]:
@@ -195,7 +204,7 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
             continue
 
         # persist recommendation in filmbank
-        FilmBank.objects.get_or_create(
+        FilmBank.objects.update_or_create(
             user = request.user,
             movie=mv,
             defaults={
@@ -216,7 +225,7 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
         {
             "type": "recommendations",
             "assistant": data.get("assistant", "Here are a few picks:"),
-            "movies": movies_payload,
+            "recommendations": movies_payload,
         },
         status=status.HTTP_200_OK,
     )
