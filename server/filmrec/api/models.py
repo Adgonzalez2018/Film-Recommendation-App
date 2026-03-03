@@ -37,8 +37,6 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
-import hashlib
-
 WATCH_STATUS_CHOICES = [
     ("Watched", "Watched"),
     ("Want to Watch", "Want to Watch"),

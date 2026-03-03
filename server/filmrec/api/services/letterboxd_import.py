@@ -3,7 +3,6 @@
 # & Profile Page
 import csv
 import io
-import re
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 
