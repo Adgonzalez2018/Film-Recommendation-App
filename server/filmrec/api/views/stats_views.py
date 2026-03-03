@@ -81,6 +81,14 @@ def byDecadePayload(movieuser_qs):
 
     return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
 
+def _movie_card(m):
+    return {
+        "id": m.id,
+        "title": m.title,
+        "year": getattr(m, "year", None),
+        "poster_url": getattr(m, "poster_url", None),
+        "tmdb_id": getattr(m, "tmdb_id", None),
+    }
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -94,29 +102,29 @@ def stats_payload(request):
     thisWeekArr = calculatePerDay(thisWeekMovies, thisWeekStart)
     lastWeekArr = calculatePerDay(lastWeekMovies, lastWeekStart)
 
-    # Top 5 Directors Watched
+    # Top 5 Directors Watched - Distinct
     topDirectors = (
         Person.objects.filter(
             moviecrew__movie__movieuser__in = thisWeekMovies,
             moviecrew__job="Director",
         )
-        .annotate(count=models.Count("moviecrew__movie__movieuser", distinct=True))
+        .annotate(count=models.Count("moviecrew__movie", distinct=True))
         .order_by("-count")[:5]
     )
 
-    # Top 5 Actors Watched
+    # Top 5 Actors Watched - Distinct
     topActors = (
         Person.objects.filter(
             moviecast__movie__movieuser__in = thisWeekMovies
         )
-        .annotate(count=models.Count("moviecast__movie__movieuser", distinct=True))
+        .annotate(count=models.Count("moviecast__movie", distinct=True))
         .order_by("-count")[:5]
     )
 
-    # Top 5 Genres (weekly) - distinct
+    # Top 5 Genres (weekly) - Distinct
     topGenres = (
         Genre.objects.filter(moviegenre__movie__movieuser__in=thisWeekMovies)
-        .annotate(count=models.Count("moviegenre__movie__movieuser", distinct=True))
+        .annotate(count=models.Count("moviegenre__movie", distinct=True))
         .order_by("-count")[:5]
     )
 
@@ -140,7 +148,7 @@ def stats_payload(request):
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
             "genres": [{"name": g.name, "count": g.count} for g in topGenres],
-            "recentFilms": [{"name": m.title} for m in recentMovies],
+            "recentFilms": [_movie_card(m) for m in recentMovies],
             "byDecade": decadeCounts,
         },
         status=status.HTTP_200_OK,
@@ -151,24 +159,25 @@ def stats_payload(request):
 def stats_all_time(request):
     allMovies = loadAllTime(request.user)
 
+
     topDirectors = (
         Person.objects.filter(
             moviecrew__movie__movieuser__in=allMovies,
             moviecrew__job="Director",
-        ).annotate(count=models.Count("moviecrew__movie__movieuser",distinct=True))
+        ).annotate(count=models.Count("moviecrew__movie",distinct=True))
         .order_by("-count")[:5]
     )
 
     topActors = (
         Person.objects.filter(
             moviecast__movie__movieuser__in=allMovies,
-        ).annotate(count=models.Count("moviecast__movie__movieuser",distinct=True))
+        ).annotate(count=models.Count("moviecast__movie",distinct=True))
         .order_by("-count")[:5]
     )
 
     topGenres = (
         Genre.objects.filter(moviegenre__movie__movieuser__in=allMovies)
-        .annotate(count=models.Count("moviegenre__movie__movieuser",distinct=True))
+        .annotate(count=models.Count("moviegenre__movie",distinct=True))
         .order_by("-count")[:5]
     )
 
@@ -191,7 +200,7 @@ def stats_all_time(request):
         {
             "totalWatches": totalCount,
             "totalMinutesWatched": total_minutes,
-            "TotalHoursWatched": total_hours,
+            "totalHoursWatched": total_hours,
             "totalTimeWatched": {
                 "days": days,
                 "hours": hours,
@@ -199,7 +208,7 @@ def stats_all_time(request):
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
             "genres": [{"name": g.name, "count": g.count} for g in topGenres],
-            "recentFilms": [{"name": m.title} for m in recentMovies],
+            "recentFilms": [_movie_card(m) for m in recentMovies],
             "byDecade": decadeCounts,
         },
         status=status.HTTP_200_OK,
