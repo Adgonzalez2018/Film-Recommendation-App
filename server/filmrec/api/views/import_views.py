@@ -139,7 +139,7 @@ def import_rss(request):
         
         # event_key: uesr + letterboxd_uri + posted_date (or "nodate" fallback)
         date_part = posted_date.isoformat() if posted_date else "nodate"
-        event_key = hashlib.sha1(f"{user.id}|{link}|{date_part}".encode("utf-8"))
+        event_key = hashlib.sha1(f"{user.id}|{link}|{date_part}".encode("utf-8")).hexdigest()
 
         # stop early if we've alr imported this exact event (fast path)
         if WatchEvent.objects.filter(user=user, event_key=event_key).exists():
