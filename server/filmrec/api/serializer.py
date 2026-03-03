@@ -28,7 +28,7 @@ class LoginSerializer(serializers.Serializer):
 
 # --- Register --
 class RegistrationSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=False, allow_blank=False)
+    first_name = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(
         style = {'input_type': 'password'},
@@ -102,26 +102,24 @@ class ProfileSerializer(serializers.ModelSerializer):
         # normal updates (first_name, letterboxd_username, etc)
         return super().update(instance, validated_data)
     
-    def get_letterboxd_username(self, obj):
-        return getattr(obj, "letterboxd_username", None)
 
     def get_has_imports(self, obj):
-        return MovieUser.objects.filter(user=obj).exists()
+        return (obj.manual_import_count or 0) > 0 or (obj.rss_import_count or 0) > 0
     
     def get_has_letterboxd_link(self, obj):
         return bool(getattr(obj, "letterboxd_username", None))
 
     def get_manual_import_count(self, obj):
-        return obj.manual_import_count
+        return obj.manual_import_count or 0
     
     def get_rss_import_count(self, obj):
-        return obj.rss_import_count
+        return obj.rss_import_count or 0
     
     def get_last_sync(self, obj):
         return obj.last_sync.isoformat() if obj.last_sync else None
 
 
-# --- MOVIE CORPUUS --- 
+# --- MOVIE CORPUS --- 
 # --- Movie Serializer ---
 class MovieSerializer(serializers.ModelSerializer):
     class Meta:

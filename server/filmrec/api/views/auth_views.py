@@ -8,7 +8,6 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -20,7 +19,6 @@ from rest_framework.response import Response
 from rest_framework_simplejwt import tokens
 
 from ..serializer import LoginSerializer, RegistrationSerializer, ProfileSerializer
-from ..utils.letterboxd import extract_letterboxd_username
 
 User = get_user_model()
 token_generator = PasswordResetTokenGenerator()
@@ -29,7 +27,7 @@ token_generator = PasswordResetTokenGenerator()
 # create a user token once logged in, store in local storage (frontend)
 def get_user_tokens(user):
     refresh = tokens.RefreshToken.for_user(user)
-    return {"access_token": str(refresh.access_token)}
+    return {"access_token": str(refresh.access_token), "refresh": str(refresh)}
 
 # Log in
 @api_view(["POST"])
@@ -65,7 +63,7 @@ def ping(request):
     return Response({
         "email": user.email, 
         "first_name": user.first_name,
-        "username": user.first_name or user.email,
+        "display_name": user.first_name or user.email,
         "id": user.id,
         }, 
         status=status.HTTP_200_OK)

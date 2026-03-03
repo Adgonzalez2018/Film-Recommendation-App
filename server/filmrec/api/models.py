@@ -68,7 +68,7 @@ class Movie(models.Model):
     letterboxd_uri = models.CharField(max_length=500, unique=True, null=True, blank=True)
 
     # For RAG - Global movie output jsonl
-    movie_vector_store_id = models.CharField(null=True, unique=True, db_index=True)
+    movie_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 
     def __str__(self):
         return self.title
@@ -81,12 +81,8 @@ class User(AbstractUser):
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
 
-    # import tracking
-    manual_import_count = models.PositiveIntegerField(default=0)
-    rss_import_count = models.PositiveIntegerField(default=0)
-
     # RAG - store id for vector store -> goes to LM (for taste summary)
-    taste_vector_store_id = models.CharField(null=True, unique=True, db_index=True)
+    taste_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 
     def __str__(self):
         return self.username
