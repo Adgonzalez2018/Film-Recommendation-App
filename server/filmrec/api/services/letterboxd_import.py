@@ -15,8 +15,9 @@ from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
 
 def make_eventkey(user_id:int, uri: str, posted_date: date) -> str:
+    date_part = posted_date.isoformat() if posted_date else "nodate"
     return hashlib.sha1(
-        f"{user_id}|{uri}|{posted_date.isoformat()}".encode("utf-8")
+        f"{user_id}|{uri}|{date_part}".encode("utf-8")
     ).hexdigest()
 
 def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films_file=None):
