@@ -19,14 +19,14 @@ from rest_framework import status
 
 from ..utils.letterboxd import extract_letterboxd_username
 from api.services.letterboxd_import import _build_letterboxd_rss_url
-from api.services.rss_sync import _sync_user_rss_watches
+from api.services.rss_sync import sync_user_rss_watches
 
 from django.utils import timezone
 
 from ..services.letterboxd_import import (
     run_letterboxd_import, 
     _build_letterboxd_rss_url,
-    _parse_published_date)
+    )
 
 from ..models import Movie, MovieUser, WatchEvent, ImportBatch
 
@@ -106,7 +106,7 @@ def import_rss(request):
             prof.save(update_fields=["letterboxd_username"])
     
     # run sync using the shared service (single source of truth)
-    res = _sync_user_rss_watches(request.user, rss_input=rss_input)
+    res = sync_user_rss_watches(request.user, rss_input=rss_input)
 
     if res.error:
         # keep the endpoint error message user-friendly

@@ -11,8 +11,6 @@ from api.models import User
 
 from api.services.rss_sync import sync_user_rss_watches
 
-from api.utils.letterboxd import normalize_letterboxd_uri
-
 class Command(BaseCommand):
     help = "Sync Letterboxd RSS watches for users who have letterboxd username"
 
