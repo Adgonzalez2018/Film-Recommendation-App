@@ -18,7 +18,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt import tokens
 
-from ..serializer import LoginSerializer, RegistrationSerializer, ProfileSerializer
+from ..serializer import LoginSerializer, RegistrationSerializer
 
 User = get_user_model()
 token_generator = PasswordResetTokenGenerator()
@@ -35,9 +35,9 @@ def get_user_tokens(user):
 def loginView(request):
     serializer = LoginSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    email = serializer.validated_data["email"]
+    email = (serializer.validated_data["email"] or "").strip().lower()
     password = serializer.validated_data["password"]
-    user = authenticate(username=email, password=password)
+    user = authenticate(request, username=email, password=password)
 
     if user is None:
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -72,7 +72,8 @@ def ping(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def password_reset_request(request):
-    email = (request.data.get("email") or "").strip()
+    serializer = LoginSerializer(data=request.data)
+    email = (serializer.validated_data["email"] or "").strip().lower()
 
     if not email:
         return Response(
@@ -93,7 +94,9 @@ def password_reset_request(request):
 
     reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password/{uid}/{token}/"  
     # DEV: print link instead of emailing
-    print("PASSWORD RESET LINK:", reset_link)
+    if settings.DEBUG:
+
+        print("PASSWORD RESET LINK:", reset_link)
 
     # If you want real email sending:
     # send_mail(
