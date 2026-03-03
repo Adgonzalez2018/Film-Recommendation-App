@@ -11,11 +11,13 @@ from django.utils import timezone
 
 from api.models import User, Movie, MovieUser, WatchEvent, ImportBatch
 from api.services.letterboxd_import import (
-    _build_letterboxd_rss_url,
     _parse_published_date,
     make_eventkey,
 )
-from api.utils.letterboxd import normalize_letterboxd_uri
+from api.utils.letterboxd import (
+    normalize_letterboxd_uri,
+    build_letterboxd_rss_url,
+    )
 
 
 @dataclass
@@ -46,7 +48,7 @@ def sync_user_rss_watches(
 
     raw = (rss_input if rss_input is not None else user.letterboxd_username) or ""
     raw = raw.strip()
-    rss_url = _build_letterboxd_rss_url(raw)
+    rss_url = build_letterboxd_rss_url(raw)
 
     if not rss_url:
         return RSSSyncResult(user_id=user.id, rss_url="", error="No valid letterboxd username/RSS input.")

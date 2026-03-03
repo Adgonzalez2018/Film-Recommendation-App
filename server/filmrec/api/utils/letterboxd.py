@@ -83,3 +83,26 @@ def extract_letterboxd_username(input_str: str) -> str | None:
         return None
     return username
 
+# RSS Helper Function
+def build_letterboxd_rss_url(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    
+    # if they paste "letterboxd.com/username" without scheme
+    if s.startswith("letterboxd.com/"):
+        s = "https://" + s
+    
+    # Full URL with scheme
+    if s.startswith("http://") or s.startswith("https://"):
+        # if it's already an rss URL, keep it
+        if s.rstrip("/").endswith("/rss/"):
+            return s.rstrip("/") + "/"
+        # if it's a profile URL like httsp://letterboxd.com/<user>/
+        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s.rstrip("/"))
+        if m:
+            username = m.group(1)
+            return f"https://letterboxd.com/{username}/rss/"
+        # unnknown URL Format
+        return ""
+    

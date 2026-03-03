@@ -17,16 +17,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from ..utils.letterboxd import extract_letterboxd_username
-from api.services.letterboxd_import import _build_letterboxd_rss_url
+from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss_url
 from api.services.rss_sync import sync_user_rss_watches
 
 from django.utils import timezone
 
-from ..services.letterboxd_import import (
-    run_letterboxd_import, 
-    _build_letterboxd_rss_url,
-    )
+from ..services.letterboxd_import import run_letterboxd_import
 
 from ..models import Movie, MovieUser, WatchEvent, ImportBatch
 
@@ -90,7 +86,7 @@ def import_rss(request):
     
     """
     rss_input = (request.data.get("rss") or "").strip()
-    rss_url = _build_letterboxd_rss_url(rss_input)
+    rss_url = build_letterboxd_rss_url(rss_input)
     if not rss_url:
         return Response(
             {"error": "Invalid RSS input"}, 
