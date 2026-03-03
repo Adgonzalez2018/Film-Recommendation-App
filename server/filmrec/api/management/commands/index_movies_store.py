@@ -28,17 +28,20 @@ class Command(BaseCommand):
             store_id = vs.id
             self.stdout.write(self.style.SUCCESS(f"Created movies vector store: {store_id}"))
             self.stdout.write(self.style.WARNING(
-                "Set OPENAI_MOVIES_CECTOR_STORE_ID to this valuse so you reuse it."
+                "Set OPENAI_MOVIES_CECTOR_STORE_ID to this value so you reuse it."
             ))
         else:
             self.stdout.write(self.style.SUCCESS(f"Using movies vector store: {store_id}"))
 
         # upload + poll until indexed
-        with jsonl_path.open("rb") as f:
-            client.vector_stores.files.upload_and_poll(
-                vector_store_id=store_id,
-                file=f,
-            )
+        try:
+            with jsonl_path.open("rb") as f:
+                client.vector_stores.files.upload_and_poll(
+                    vector_store_id=store_id,
+                    file=f,
+                )
+        except Exception as e:
+            raise RuntimeError(f"Upload Failed: {e}")
 
         self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {jsonl_path}"))
-        self.stdout.write(self.style.SUCCESS(f"movies_Store_id =  {store_id}"))
+        self.stdout.write(self.style.SUCCESS(f"Movies Store ID: {store_id}"))
