@@ -19,9 +19,15 @@ def tmdb_search(request):
     if not query:
         return Response({"error": "Missing query"}, status=status.HTTP_400_BAD_REQUEST)
     
-    data = search_movie(query)
+    try:
+        data = search_movie(query)
+    except Exception as e:
+        return Response(
+            {"error": f"TMDB search failed: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    
     results = []
-
     for r in data.get("results",[])[:5]:
         results.append({
             "tmdb_id": r["id"],
@@ -35,10 +41,24 @@ def tmdb_search(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def tmdb_ensure(request):
-    tmdb_id = request.data.get("tmdb_id")
-    movie_id = request.data.get("movie_id") # optional
-    if not tmdb_id:
+    raw_tmdb_id = request.data.get("tmdb_id")
+    raw_movie_id = request.data.get("movie_id") # optional
+    if not raw_tmdb_id:
         return Response({"error": "Missing tmdb_id"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # validate ints safely
+    try:
+        tmdb_id = int(raw_tmdb_id)
+    except (TypeError, ValueError):
+        return Response({"error": "Invalid tmdb_id"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    movie_id = None
+    if raw_movie_id:
+        try:
+            movie_id = int(raw_movie_id)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid movie_id"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:         
         if movie_id:
             movie = attach_tmdb_to_movie(movie_id=int(movie_id), tmdb_id=int(tmdb_id))
