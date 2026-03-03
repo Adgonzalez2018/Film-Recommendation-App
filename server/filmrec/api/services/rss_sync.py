@@ -1,92 +1,147 @@
+# api/services/rss_sync.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Optional
 
 import feedparser
 
-from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.db import transaction
 
-from api.models import (
-    User, Movie, MovieUser, ImportBatch
+from api.models import User, Movie, MovieUser, WatchEvent, ImportBatch
+from api.services.letterboxd_import import (
+    _build_letterboxd_rss_url,
+    _parse_published_date,
+    make_eventkey,
 )
-from api.services.letterboxd_import import _build_letterboxd_rss_url, _parse_published_date
+from api.utils.letterboxd import normalize_letterboxd_uri
+
 
 @dataclass
-class SyncResult:
+class RSSSyncResult:
     user_id: int
-    rss_url:str
+    rss_url: str
     entries_seen: int = 0
     movies_created: int = 0
-    links_created: int = 0
-    links_updated: int = 0
+    events_created: int = 0
+    rel_created: int = 0
+    rel_updated: int = 0
     stopped_early: bool = False
     error: Optional[str] = None
 
-def _sync_user_rss_watches(user: User) -> SyncResult:
+
+def sync_user_rss_watches(
+    user: User,
+    *,
+    rss_input: Optional[str] = None,
+    cutoff_buffer_days: int = 1,
+) -> RSSSyncResult:
     """
-    RSS = watches-only incremental sync
-    stops early if it hits a movieuser alr linked
+    Incremental RSS sync (newest first).
+    Stop when:
+      - entry date <= (user.last_sync.date - buffer_days), OR
+      - exact WatchEvent already exists (event_key)
     """
-    rss_input = (user.letterboxd_username or "").strip()
-    rss_url = _build_letterboxd_rss_url(rss_input)
+
+    raw = (rss_input if rss_input is not None else user.letterboxd_username) or ""
+    raw = raw.strip()
+    rss_url = _build_letterboxd_rss_url(raw)
 
     if not rss_url:
-        return SyncResult(user_id = user.id, rss_url = "", error="User has no valid letterboxd username")
+        return RSSSyncResult(user_id=user.id, rss_url="", error="No valid letterboxd username/RSS input.")
 
     feed = feedparser.parse(rss_url)
     if getattr(feed, "bozo", False):
-        return SyncResult(user_id=user.id, rss_url = rss_url, error="feedparser bozo=True (cannot parse feed)")
-    
-    res = SyncResult(user_id = user.id, rss_url = rss_url)
+        return RSSSyncResult(user_id=user.id, rss_url=rss_url, error="Could not parse RSS feed (bozo=True).")
 
-    # entries are newest first
+    res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
+
+    cutoff_date = None
+    if user.last_sync:
+        cutoff_date = user.last_sync.date() - timedelta(days=cutoff_buffer_days)
+
     for entry in getattr(feed, "entries", []) or []:
-        link = (getattr(entry, "link","") or "").strip()
-        title = (getattr(entry, "title","") or "").strip()
-
+        link = (getattr(entry, "link", "") or "").strip()
+        title = (getattr(entry, "title", "") or "").strip()
         if not link:
             continue
 
+        link = normalize_letterboxd_uri(link) or link
         res.entries_seen += 1
 
-        # if we've imported this letterboxd uri for this user stop
-        if MovieUser.objects.filter(user=user, movie__letterboxd_uri=link).exists():
+        posted_date = _parse_published_date(entry)  # date | None
+
+        # stop on cutoff (entries are newest first)
+        if cutoff_date and posted_date and posted_date <= cutoff_date:
             res.stopped_early = True
             break
 
+        # event key + stop if already imported
+        if posted_date:
+            event_key = make_eventkey(user.id, link, posted_date)
+        else:
+            # consistent fallback if date is missing
+            event_key = make_eventkey(user.id, link, timezone.now().date())
+
+        if WatchEvent.objects.filter(user=user, event_key=event_key).exists():
+            res.stopped_early = True
+            break
+
+        # upsert movie by letterboxd_uri
         movie, movie_created = Movie.objects.get_or_create(
             letterboxd_uri=link,
-            defaults={"title":title[:255] if title else "Untitled"},
+            defaults={"title": title[:255] if title else "Untitled"},
         )
-
         if movie_created:
             res.movies_created += 1
 
-
-        mu, created = MovieUser.objects.get_or_create(
+        # create WatchEvent
+        we, we_created = WatchEvent.objects.get_or_create(
             user=user,
-            movie=movie,
+            event_key=event_key,
+            defaults={
+                "movie": movie,
+                "posted_date": posted_date or timezone.now().date(),
+                "watched_date": posted_date,
+                "source": "rss",
+                "entry_url": link,
+            },
         )
+        if we_created:
+            res.events_created += 1
+
+        # MovieUser snapshot
+        mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
         if created:
-            res.links_created += 1
+            res.rel_created += 1
 
-        pub_dt = _parse_published_date(entry)
-        watched_date = pub_dt if pub_dt else None
+        changed = False
+        if mu.watch_status != "Watched":
+            mu.watch_status = "Watched"
+            changed = True
 
-        # Log a batch even if nothing new (helpful for audit)
-        ImportBatch.objects.create(
-            user=user,
-            source="rss",
-            movies_created=res.movies_created,
-            rel_created=res.links_created,
-            rel_updated=res.links_updated,
-        )
+        if posted_date and mu.watched_date != posted_date:
+            mu.watched_date = posted_date
+            changed = True
 
-        user.rss_import_count = (user.rss_import_count or 0 ) + 1
-        user.last_sync = timezone.now()
-        user.save(update_fields=["rss_import_count", "last_sync"])
+        if changed:
+            mu.save()
+            if not created:
+                res.rel_updated += 1
+
+    # log once
+    ImportBatch.objects.create(
+        user=user,
+        source="rss",
+        movies_created=res.movies_created,
+        rel_created=res.rel_created,
+        rel_updated=res.rel_updated,
+        events_created=res.events_created,
+    )
+
+    user.rss_import_count = (user.rss_import_count or 0) + 1
+    user.last_sync = timezone.now()
+    user.save(update_fields=["rss_import_count", "last_sync"])
 
     return res
