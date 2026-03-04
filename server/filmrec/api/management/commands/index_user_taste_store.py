@@ -1,6 +1,4 @@
 # Vector store per Movie
-
-import os
 from pathlib import Path
 from openai import OpenAI
 

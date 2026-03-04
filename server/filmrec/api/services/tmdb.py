@@ -17,7 +17,7 @@ Notes:
 from __future__ import annotations
 import os
 import requests
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 from requests.adapters import HTTPAdapter

@@ -11,7 +11,6 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from ..serializer import ProfileSerializer
-from ..utils.letterboxd import extract_letterboxd_username
 
 # Read Profile
 @api_view(["GET","PATCH"])
