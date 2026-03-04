@@ -5,7 +5,7 @@ import "../Auth/Auth.css";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
-import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/letterboxd";
+import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
 import { fetchProfile, saveProfile } from "../../api/profile";
 
 import heroImg from "../../assets/images/la-haine-1.png";
@@ -113,18 +113,15 @@ export default function Profile() {
 
   // ── RSS link handler ───────────────────────────────────
   const handleRSSSubmit = async (e) => {
-    const u = cleanUsername(rssInput);
-    await submitRSSSync(u, accessToken);
-    setSavedRssUsername(u);
-    setRssInput(u);
     e.preventDefault();
     if (!rssInput.trim()) { setRssError("Enter your Letterboxd username or URL."); return; }
     if (!accessToken)     { setRssError("Not authenticated."); return; }
     setRssLoading(true); setRssError(null); setRssSuccess(null);
     try {
-      await submitRSSSync(rssInput, accessToken);
-      setRssSuccess("RSS linked — weekly reports will sync automatically.");
-      setSavedRssUsername(rssInput.trim());
+      const u = cleanUsername(rssInput);
+      await submitRSSSync(u, accessToken);
+      setSavedRssUsername(u);
+      setRssInput(u);
     } catch (err) {
       setRssError(err.message);
     } finally {
