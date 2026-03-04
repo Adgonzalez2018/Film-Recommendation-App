@@ -43,7 +43,19 @@ export default function WeeklyStats() {
   }, [isAuthenticating, authError, accessToken]);
 
   const tick = () => {
-    if (portRef.current) portRef.current.scrollTop += speed;
+    const el = portRef.current;
+    if (!el) return;
+
+    const maxScroll = el.scrollHeigh - el.clientHeight;
+    const next = Math.min(el.scrollTop + speed, maxScroll);
+    el.scrollTop = next;
+
+    if (next >= maxScroll - 1){
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      setPlaying(false);
+      return;
+    }
     rafRef.current = requestAnimationFrame(tick);
   };
 
@@ -70,7 +82,9 @@ export default function WeeklyStats() {
             <div className="s-watches-label">Films Watched</div>
             <div className="s-watches-num">{report.totalWatches}</div>
             <div className="s-watches-unit">watches this week</div>
-            <div className="s-watches-change">↑ {report.percentChange}% vs last week</div>
+            <div className="s-watches-change">
+              {report.percentChange == null ? "- new week" : `↑ ${Math.round(reportpercentChange)}% vs last week`}
+              </div>
           </div>
 
           <div className="rule" />

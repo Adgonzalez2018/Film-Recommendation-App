@@ -1,27 +1,25 @@
 import { apiFetch } from "./client";
 
+function extractErrorMessage(defaultMsg, data) {
+  return data?.error || data?.detail || defaultMsg;
+}
+
 export async function fetchWeeklyStats(token) {
   const res = await apiFetch("/api/stats/", {
     token,
     method: "GET",
   });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch stats");
-  }
-
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMessage("Failed to fetch weekly stats.", data));
+  return;
 }
 
 export async function fetchAllTimeStats(token) {
-  const res = await apiFetch("/api/stats/all-time", {
+  const res = await apiFetch("/api/stats/all-time/", {
     token,
     method: "GET",
   });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch stats");
-  }
-
-  return res.json();
+  data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMessage("Failed to fetch all-time stats.", data));
+  return;
 }
