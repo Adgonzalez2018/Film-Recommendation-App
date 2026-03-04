@@ -17,18 +17,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss_url
-from api.services.rss_sync import sync_user_rss_watches
-
 from django.utils import timezone
 
 from ..services.letterboxd_import import run_letterboxd_import
+from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss_url
+from api.services.rss_sync import sync_user_rss_watches
 
-from ..models import Movie, MovieUser, WatchEvent, ImportBatch
+from ..models import WatchEvent, ImportBatch
 
-from datetime import timedelta
-import feedparser
-import hashlib
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -73,7 +69,6 @@ def manual_import(request):
     prof.last_sync = timezone.now()
     prof.save(update_fields=["manual_import_count", "last_sync"])
 
-
     return Response({"status": "ok", **counters}, status=status.HTTP_200_OK)
 
 # --- RSS Import Endpoint ---
@@ -83,9 +78,9 @@ def import_rss(request):
     """
     POST {rss : "<username OR profile url OR rss url>"}
     syncs recent watches from public Letterboxd RSS.
-    
     """
     rss_input = (request.data.get("rss") or "").strip()
+
     rss_url = build_letterboxd_rss_url(rss_input)
     if not rss_url:
         return Response(
@@ -132,9 +127,9 @@ def import_rss(request):
 @permission_classes([IsAuthenticated])
 def onboarding_status(request):
     user = request.user
-    has_watch_data = WatchEvent.objectsfilter(user=user).exists()
+    has_watch_data = WatchEvent.objects.filter(user=user).exists()
     return Response({
-        "has_manual_import": user.manual_import_count > 0,
-        "has_rss_import": user.rss_import_count > 0,
-        "is_onboarded": has_watch_data
+        "has_manual_import": (user.manual_import_count or 0)> 0,
+        "has_rss_import": (user.rss_import_count or 0) > 0,
+        "is_onboarded": has_watch_data,
     })
