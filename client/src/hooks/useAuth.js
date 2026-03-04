@@ -11,6 +11,7 @@ export const useAuth = () => {
   const location = useLocation();
 
   const PUBLIC_ROUTES = ["/signin", "/signup", "/connect"];
+  
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [authError, setAuthError] = useState(null);
 
@@ -24,13 +25,15 @@ export const useAuth = () => {
       setAuthError(null);
 
       if (DEV_BYPASS_AUTH) {
-        if (!canceleld) setIsAuthenticating(false);
+        if (!cancelled) setIsAuthenticating(false);
         return;
         }
+
       if (!accessToken) {
         if (!cancelled) setIsAuthenticating(false);
+
         if (!PUBLIC_ROUTES.includes(location.pathname)) {
-          navigate("/signin"), {replace: true};
+          navigate("/signin", {replace: true});
         }
         return;
       }
@@ -64,9 +67,12 @@ export const useAuth = () => {
         }
       } catch (err) {
         console.error("Authentication failed:", err);
-        // Network error - server unavailable
-        setAuthError("Server unavailable. Please try again later.");
-        setIsAuthenticating(false);
+        if (!cancelled){
+          // Network error - server unavailable
+          setAuthError("Server unavailable. Please try again later.");
+          setIsAuthenticating(false);
+        }
+
       }
     };
 
