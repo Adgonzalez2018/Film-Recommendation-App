@@ -11,18 +11,20 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false); 
 
   const handleSignIn = async ({ email, password }) => {
+    const cleanEmail = (email || "").trim().toLowerCase();
+
     setLoading(true);
     setError(null);
 
     try{
-      const data = await loginAction(email, password, navigate);
-      // store token
-      localStorage.setItem("access_token", data.access_token);
-      
-      // nav
+      const data = await loginAction({email: cleanEmail, password, navigate});
+      // store token & refresh
+      if (data?.access_token) localStorage.setItem("access_token", data.access_token);
+      if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
+      // navigate
       navigate("/chat");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Sign in failed.");
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-const DEV_BYPASS_AUTH = true; // <- set to false later
+import { ping } from "../api/auth";
+
+const DEV_BYPASS_AUTH = 
+  import.meta?.env?.VITE_BYPASS_AUTH === "true" ||
+  process.env?.REACT_APP_BYPASS_AUTH === "true";
 
 export const useAuth = () => {
   const navigate = useNavigate();
@@ -13,40 +17,48 @@ export const useAuth = () => {
   const accessToken = localStorage.getItem("access_token");
 
   useEffect(() => {
+    let cancelled = false;
+
     const authenticateUser = async () => {
       setIsAuthenticating(true);
       setAuthError(null);
 
       if (DEV_BYPASS_AUTH) {
-        setIsAuthenticating(false);
-          return;
-      
+        if (!canceleld) setIsAuthenticating(false);
+        return;
         }
       if (!accessToken) {
-        setIsAuthenticating(false);
+        if (!cancelled) setIsAuthenticating(false);
         if (!PUBLIC_ROUTES.includes(location.pathname)) {
-          navigate("/signin");
+          navigate("/signin"), {replace: true};
         }
         return;
       }
 
       try {
         const response = await ping(accessToken);
+
         if (response.status === 200) {
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
           // User is authenticated, update username if needed
-          localStorage.setItem("username", data.username);
-          localStorage.setItem("userId", data.id);
-          setIsAuthenticating(false);
-        } else if (response.status === 401 || response.status === 403) {
+
+          if (data?.username) localStorage.setItem("username", data.username);
+          if (data?.id) localStorage.setItem("userId", String(data.id));
+
+          if (!cancelled) setIsAuthenticating(false);
+          return;
+        }  
+        if (response.status === 401 || response.status === 403) {
           // Unauthorized or Forbidden - invalid token, logout and redirect
           localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
           localStorage.removeItem("username");
           localStorage.removeItem("userId");
-          setIsAuthenticating(false);
-          navigate("/signin");
-        } else {
-          // Other error (4xx, 5xx) - server unavailable
+          if (!cancelled) setIsAuthenticating(false);
+          navigate("/signin", {replace:true});
+          return;
+        } 
+        if (!cancelled) {
           setAuthError("Server unavailable. Please try again later.");
           setIsAuthenticating(false);
         }
@@ -59,7 +71,10 @@ export const useAuth = () => {
     };
 
     authenticateUser();
-  }, [accessToken, navigate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, location.pathname, navigate]);
 
   return {
     isAuthenticating,

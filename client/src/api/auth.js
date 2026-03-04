@@ -21,11 +21,11 @@ export async function loginAction({ email, password }) {
   return data; // expect { access_token, ... }
 }
 
-export async function registerAction({ first_name, email, password }) {
+export async function registerAction({ email, password }) {
   const res = await apiFetch("/api/register/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ first_name, email, password }),
+    body: JSON.stringify({email, password }),
   });
 
   const data = await res.json().catch(() => ({}));
