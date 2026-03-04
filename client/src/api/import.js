@@ -26,7 +26,7 @@ export async function importLetterboxd({ token, reviews, watchlist, likes }) {
     let msg = "Import failed.";
     try {
       const data = await res.json();
-      msg = data?.error || msg;
+      msg = extractErrorMessage(msg,data);
     } catch {}
     throw new Error(msg);
   }
@@ -63,4 +63,10 @@ export async function submitRSSSync(rssInput, accessToken){
   }
 
   return res.json();
+}
+
+export async function getOnboardingStatus(){
+  return apiFetch("/api/onboarding-status/",{
+    method: "GET",
+  });
 }

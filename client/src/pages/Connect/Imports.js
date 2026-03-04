@@ -1,9 +1,10 @@
 import "./Imports.css";
 import "../Auth/Auth.css";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+
 // Assets
 import personImg from "../../assets/images/Fargo_person.png";
 import carImg from "../../assets/images/Fargo_car.png";
@@ -12,24 +13,8 @@ import carImg from "../../assets/images/Fargo_car.png";
 import PageFrame from "../../components/layout/PageFrame";
 
 // Save csv/rss to server
-import { submitCSVImport, submitRSSSync } from "../../api/letterboxd";
-useEffect(() => {
-  const checkOnboarding = async () => {
-    const res = await fetch("/api/onboarding-status/", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!res.ok) return;
-
-    const data = await res.json();
-
-    if (data.is_onboarded) {
-      navigate("/chat");
-    }
-  };
-
-  if (accessToken) checkOnboarding();
-}, [accessToken]);
+import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
+import { apiFetch } from "../../api/client";
 
 // ─── CSV file definitions ─────────────────────────────────
 
