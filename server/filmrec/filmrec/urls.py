@@ -52,18 +52,18 @@ urlpatterns = [
     path("api/import/csv/", manual_import, name="import-csv"),
     path("api/import/rss/", import_rss, name="import-rss"),
     
-    path("api/password-reset/", password_reset_request, name="password_reset"),
+    path("api/password-reset/", password_reset_request, name="password-reset"),
     path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
     
     # --- TMDB ---
-    path("api/tmdb/search/", name=tmdb_search),
-    path("api/tmdb/ensure/",name= tmdb_ensure),
+    path("api/tmdb/search/",tmdb_search, name="tmdb-search"),
+    path("api/tmdb/ensure/",tmdb_ensure, name="tmdb-ensure"),
     # --- Chat ---
-    path("api/chat/recommend/", name=chat_recommend),
+    path("api/chat/recommend/",chat_recommend, name="chat-recommend"),
 
     # --- Film Bank ---
     path("api/film-bank/", film_bank_list, name="film-bank-list"),
-    path("api/film-bank/<int:movie_id>/", film_bank_delete,name="film_bank_delete"),
+    path("api/film-bank/<int:movie_id>/", film_bank_delete,name="film-bank-delete"),
 
     # --- Statistics ---
     path("api/stats/weekly/", stats_payload, name="stats-payload"),
