@@ -1,29 +1,37 @@
 from rest_framework import serializers
 from .models import Movie, User, Genre, MovieUser, MovieGenre, Person, FilmBank
 from django.contrib.auth import get_user_model
-from django.conf import settings
-from django.contrib.auth.hashers import make_password
 from api.utils.letterboxd import extract_letterboxd_username
 
 User = get_user_model()
 
 # --- User Serializer ---
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)  # Ensure password is write-only
+    password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = ['id', 
                   'first_name',
                   'email', 
-                  'password']
+                  'password',
+                  ]
+
+    def create(self,validated_data):
+        user = User.objects.create_user(
+            username=validated_data["email"],
+            email=validated_data["email"],
+            first_name=validated_data.get("first_name", ""),
+            password=validated_data["password"],
+        )
+        return user
 
 # --- Login ---
 class LoginSerializer(serializers.Serializer):
-    email = serializers.CharField()
+    email = serializers.EmailField()
     password = serializers.CharField(
         style={'input_type': 'password'},
-        write_only=True
+        write_only=True,
     )
 
 # --- Register --
@@ -46,8 +54,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         email = validated_data["email"]
-        
-
         user = User.objects.create_user(
             username=email,
             first_name=validated_data.get("first_name", ""),
@@ -56,11 +62,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
         )
         return user
     
-# --- Profile Page ---
+# --- Profile Serializer ---
 class ProfileSerializer(serializers.ModelSerializer):
-    letterboxd_username = serializers.CharField(required=False,allow_blank=True, allow_null=True)
-    birthday = serializers.DateTimeField(required=False, allow_null=True)
+    letterboxd_username = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    birthday = serializers.DateField(required=False, allow_null=True)
     rss = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    
     has_letterboxd_link = serializers.SerializerMethodField()
     has_imports = serializers.SerializerMethodField()
     manual_import_count = serializers.SerializerMethodField()
@@ -98,11 +105,9 @@ class ProfileSerializer(serializers.ModelSerializer):
             if not username:
                 raise serializers.ValidationError({"rss": "Invalid Letterboxd RSS/profile input."})
             instance.letterboxd_username = username
-
         # normal updates (first_name, letterboxd_username, etc)
         return super().update(instance, validated_data)
     
-
     def get_has_imports(self, obj):
         return (obj.manual_import_count or 0) > 0 or (obj.rss_import_count or 0) > 0
     
@@ -126,9 +131,24 @@ class MovieSerializer(serializers.ModelSerializer):
         model = Movie
         fields = '__all__'
 
-    
-# --- Person Serializer ---
-class ActorSerializer(serializers.ModelSerializer):
+# --- Movie Serializer for Film Bank ---
+# Only gives necessary data for user
+class MovieCardSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(source="overview", allow_null=True, required=False)
+    class Meta:
+        model = Movie
+        fields = [
+            "id",
+            "title",
+            "year",
+            "poster_url",
+            "tmdb_id",
+            "avg_rating",
+            "description",
+        ]
+
+# --- Person Serializer (Crew/Cast) ---
+class Person(serializers.ModelSerializer):
     class Meta:
         model = Person
         fields = '__all__'
@@ -145,16 +165,15 @@ class GenreSerializer(serializers.ModelSerializer):
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
 
-class ChatMovieCardSerializer(serializers.Serializer):
+class ChatMovieCardSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField()
     title = serializers.CharField()
     poster_url = serializers.CharField(allow_null=True, required=False)
     tmdb_id = serializers.IntegerField(allow_null=True, required=False)
     
-
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
-    movie = MovieSerializer(read_only=True)
+    movie = MovieCardSerializer(read_only=True)
     class Meta:
         model = FilmBank
         fields = [
@@ -171,18 +190,3 @@ class FilmBankSerializer(serializers.ModelSerializer):
             "reason",
             "created_at",
         ]
-
-class MovieCardSerializer(serializers.ModelSerializer):
-    description = serializers.CharField(source="overview", allow_null=True, required=False)
-    class Meta:
-        model = Movie
-        fields = [
-            "id",
-            "title",
-            "year",
-            "poster_url",
-            "tmdb_id",
-            "avg_rating",
-            "description",
-        ]
-

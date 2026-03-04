@@ -210,12 +210,14 @@ def upsert_tmdb_movie(movie_id: int, tmdb_id, cast_limit: int = 12) -> Movie:
         raise ValidationError("tmdb_id and  must be integers")
     
     data = get_movie_details(tmdb_id_int)
-    fields = _upsert_movie_fields_from_tmdb(tmdb_id=tmdb_id_int, data=data)
+    defaults = _upsert_movie_fields_from_tmdb(tmdb_id=tmdb_id_int, data=data)
 
     movie, _ = Movie.objects.update_or_create(
         tmdb_id=tmdb_id_int,
         defaults=defaults,
     )
+    _enrich_movie_relations_from_tmdb(movie=movie, data=data, cast_limit=cast_limit)
+    return movie
 
 @transaction.atomic
 def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> Movie:
