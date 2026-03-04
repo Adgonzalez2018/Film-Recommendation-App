@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function AuthForm({
@@ -17,6 +17,14 @@ export default function AuthForm({
     confirmPassword: "",
   });
 
+  const [formError, setFormError] = useState(null);
+
+  const canSubmit = useMemo(() => {
+    const emailOk = (formData.email || "").trim().length > 0;
+    const passOk = (formData.password || "").length >0;
+    return confirmOk && passOk && confirmOk && !loading;
+  }, [formData, isSignIn, loading]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -24,9 +32,12 @@ export default function AuthForm({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    const { email, password, confirmPassword } = formData;
-
+    setFormError(null);
+    
+    const email = (formData.email || "").trim();
+    const password = formData.password || "";
+    const confirmPassword = formData.confirmPassword || "";
+    
     if (!email || !password) {
       alert("Please fill in all fields!");
       return;
