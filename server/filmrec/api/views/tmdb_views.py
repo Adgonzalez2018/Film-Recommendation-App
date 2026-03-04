@@ -16,8 +16,12 @@ from ..services.tmdb import search_movie, upsert_tmdb_movie, attach_tmdb_to_movi
 @permission_classes([IsAuthenticated])
 def tmdb_search(request):
     query = request.GET.get("q")
+
     if not query:
-        return Response({"error": "Missing query"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Missing query"}, 
+            status=status.HTTP_400_BAD_REQUEST,
+            )
     
     try:
         data = search_movie(query)
@@ -29,10 +33,14 @@ def tmdb_search(request):
     
     results = []
     for r in data.get("results",[])[:5]:
+        # added catch if no release date
+        release_date = r.get("release_date")
+        year = release_date[:4] if release_date else None
+
         results.append({
             "tmdb_id": r["id"],
             "title": r["title"],
-            "year": r.get("release_date", "")[:4],
+            "year": year,
             "poster_url": f"https://image.tmdb.org/t/p/w200{r['poster_path']}" if r.get("poster_path") else None,
         })
 
@@ -49,6 +57,7 @@ def tmdb_ensure(request):
     # validate ints safely
     try:
         tmdb_id = int(raw_tmdb_id)
+
     except (TypeError, ValueError):
         return Response({"error": "Invalid tmdb_id"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -61,9 +70,9 @@ def tmdb_ensure(request):
 
     try:         
         if movie_id:
-            movie = attach_tmdb_to_movie(movie_id=int(movie_id), tmdb_id=int(tmdb_id))
+            movie = attach_tmdb_to_movie(movie_id=movie_id, tmdb_id=tmdb_id)
         else:
-            movie = upsert_tmdb_movie(int(tmdb_id))
+            movie = upsert_tmdb_movie(tmdb_id)
     except ValidationError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     

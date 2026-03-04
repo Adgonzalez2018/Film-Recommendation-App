@@ -58,7 +58,7 @@ class Movie(models.Model):
     
     budget = models.BigIntegerField(blank=True, null=True)
     revenue = models.BigIntegerField(blank=True, null=True)
-    runtime = models.BigIntegerField(blank=True, null=True)
+    runtime = models.IntegerField(blank=True, null=True)
 
     language = models.CharField(max_length=50, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
@@ -78,9 +78,11 @@ class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
     birthday = models.DateTimeField(blank=True,null=True)
     
+
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
-
+    manual_import_count = models.PositiveIntegerField(default=0)
+    rss_import_count = models.PositiveIntegerField(default=0)
     # RAG - store id for vector store -> goes to LM (for taste summary)
     taste_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 
@@ -165,12 +167,13 @@ Relationships:
 """
 # --- Movie-User Relationship ---
 class MovieUser(models.Model):
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="user_links")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="movie_links")
     rating = models.FloatField(blank=True, null=True)       # User's rating for the movie
     review = models.TextField(blank=True, null=True)        # User's review for the movie
     watch_status = models.CharField(max_length=50, 
-                                    choices=WATCH_STATUS_CHOICES)      # e.g., "Watched", "Want to Watch", "Not Interested"
+                                    choices=WATCH_STATUS_CHOICES, 
+                                    default="Watched")      # e.g., "Watched", "Want to Watch", "Not Interested"
     watched_date = models.DateField(blank=True, null=True)  # Date when the user watched the movie
     liked = models.BooleanField(default=False)              # Whether the user liked the movie or not
     in_watchlist = models.BooleanField(default=False)       # Whether the movie is in the user's watchlist
@@ -182,6 +185,9 @@ class MovieUser(models.Model):
                 fields=['movie', 'user'],
                 name='uniq_user_movie',
             )
+        ]
+        indexes = [
+            models.Index(fields=["user","watch_status","watched_date"]),
         ]
         
 # --- Movie-Director Relationship ---
