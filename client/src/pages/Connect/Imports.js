@@ -4,6 +4,7 @@ import "../Auth/Auth.css";
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { useRequest } from "../../hooks/useRequest";
 
 // Assets
 import personImg from "../../assets/images/Fargo_person.png";
@@ -28,8 +29,7 @@ export default function LetterboxdConnect() {
     watchlist: useRef(),
     likes: useRef(),
   };
-  const [csvLoading, setCsvLoading] = useState(false);
-  const [csvError, setCsvError] = useState(null);
+
   const [csvSuccess, setCsvSuccess] = useState(null);
 
   // RSS state
@@ -40,6 +40,7 @@ export default function LetterboxdConnect() {
 
   // ── Handlers ──────────────────────────────────────────
 
+
   const handleFileChange = (key, e) => {
     const file = e.target.files?.[0] ?? null;
     setFiles((prev) => ({ ...prev, [key]: file }));
@@ -47,35 +48,29 @@ export default function LetterboxdConnect() {
     setCsvSuccess(null);
   };
 
-  const handleCSVSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!Object.values(files).some(Boolean)) {
-      setCsvError("Please upload at least one CSV file.");
-      return;
+  const {
+    run: runCsvImport,
+    loading: csvLoading,
+    error: csvError,
+  } = useRequest(async () => {
+    if (!Object.values(files).some(Boolean)){
+      throw new Error("Please upload at least one csv file.");
     }
     if (!accessToken) {
-      setCsvError("Not authenticated. Please sign in again.");
-      return;
+      throw new Error("Not authenticated. Please sign in again.");
     }
 
-    setCsvLoading(true);
-    setCsvError(null);
+    await submitCSVImport(files, accessToken);
+
+    setCsvSuccess("Data imported! your all-time stats and inital weekly report is ready!");
+    navigate("/chat");
+  })
+
+  const handleCSVSubmit = (e) => {
+    e.preventDefault();
     setCsvSuccess(null);
-
-    try {
-      await submitCSVImport(files, accessToken);
-      setCsvSuccess("Data imported! Your all-time stats and initial weekly report are ready.");
-
-      // Most users will want to jump into the app immediately.
-      // If your centralized useAuth re-checks onboarding, it will allow chat or bounce back here.
-      navigate("/chat");
-    } catch (err) {
-      setCsvError(err?.message || "Import failed.");
-    } finally {
-      setCsvLoading(false);
-    }
-  };
+    runCsvImport();
+  }
 
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
