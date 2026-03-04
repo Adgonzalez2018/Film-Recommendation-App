@@ -1,14 +1,31 @@
-# Service Py File for TMDB Views
+"""
+TMDB Service Layer
+
+Responsibilites:
+    - TMDB API wrapper (w/ retries)
+    - Search movies
+    - fetch movie details (with credits)
+    - upsert a movie by tmdb_id 
+        create/update movie + enrich genres/cast/crew
+    - attach TMDB metadata to an existing movie
+        - e.g. a movie created by letterboxd data
+    
+Notes:
+    - This service should not import DRF.
+    - Views should call these functions and handle errors.
+"""
+from __future__ import annotations
 import os
 import requests
+from typing import Any, Dict, Optional, Tuple
+from datetime import datetime
+
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from datetime import datetime
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from .tmdb import get_movie_details, IMG_BASE_W500, IMG_PROFILE_W185
 
 from ..models import (
     Movie,
@@ -22,74 +39,157 @@ from ..models import (
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 BASE_URL = "https://api.themoviedb.org/3"
 
-session = requests.session()
+IMG_BASE_W500 = "https://image.tmdb.org/t/p/w500"
+IMG_PROFILE_W185 = "https://image.tmdb.org/t/p/w185"
+
+DEFAULT_TIMEOUT_S = 15
+
+# private
+_session = requests.session()
 
 retries = Retry(
     total = 3,
+    connect = 3,
     backoff_factor=0.5,
     status_forcelist=[429,500,502,503,504],
     allowed_methods=["GET"],
+    raise_on_status=False,
 )
-adapter = HTTPAdapter(max_retries=retries)
-session.mount("https://",adapter)
-session.mount("http://",adapter)
 
-def tmdb_get(path, params=None):
+# Make private
+_adapter = HTTPAdapter(max_retries=retries)
+_session.mount("https://",_adapter)
+_session.mount("http://",_adapter)
+
+def tmdb_get(path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not TMDB_API_KEY:
         raise RuntimeError("TMDB_API_KEY not set")
-    params = params or {}
+    
+    params = dict(params or {})
     params["api_key"] = TMDB_API_KEY
 
+    url = f"{BASE_URL}{path}"
+    r = _session.get(url, params=params, timeout=DEFAULT_TIMEOUT_S)
+
+    # If retry exhausted and still 4xx/5xx/ raise with context
     try:
-        r = session.get(f"{BASE_URL}{path}", params=params,timeout=10)
         r.raise_for_status()
-        return r.json()
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(
-            f"TMDB HTTP error {r.status_code}: {r.text[:300]}"
+            f"TMDB HTTP error {r.status_code}: {url}"
         ) from e
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"TMDB request failed: {str(e)}") from e
     
-
-
-
-def tmdb_get(path, params=None):
-    if not TMDB_API_KEY:
-        raise RuntimeError("API Key not set")
-    
-    params = params or {}
-    params["api_key"] = TMDB_API_KEY
-
-    r = requests.get(f"{BASE_URL}{path}", params=params, timeout=15)
-    r.raise_for_status()
     return r.json()
 
-def search_movie(query):
-    return tmdb_get("/search/movie", {"query":query})
+def search_movie(query: str) -> Dict[str, Any]:
+    q = (query or "").strip()
+    if not q:
+        return {"results": []}
+    return tmdb_get("/search/movie", {"query":q})
 
-def get_movie_details(tmdb_id):
+def get_movie_details(tmdb_id: int) -> Dict[str, Any]:
     return tmdb_get(f"/movie/{tmdb_id}", {"append_to_response":"credits"})
 
-# ------------------------
-# Inject Movies, Actors, Directors, Genre
+# HELPER FUNCTIONS
+def _parse_year_from_release_date(release_date: Optional[str]) -> Optional[int]:
+    if not release_date:
+        return None
+    try:
+        return datetime.strptime(release_date, "%-%m-%d").date().year
+    except Exception:
+        return None
+    
+def _safe_country_name(data: Dict[str, Any]) -> Optional[str]:
+    countries = data.get("produciton_countries") or []
+    if not countries:
+        return None
+    first = countries[0] or {}
+    return first.get("name") or None
 
-@transaction.atomic
-def upsert_tmdb_movie(tmdb_id, cast_limit=12):
-    data = get_movie_details(tmdb_id)
+def _enrich_movie_relations_from_tmdb(*, movie: Movie, data: Dict[str, Any], cast_limit: int = 12 ) -> None:
+    # Refactored version of the previous injection functions down below
+    # enriches movie relations with genre, cast, crew links
+    # uses a delete and recreate approach for simplicity adn correctness.
 
+    # --- Genres ---
+    # simple + idempotent: wipe & re-add links for this movie
+    MovieGenre.objects.filter(movie=movie).delete()
+    for g in data.get("genres") or []:
+        tmdb_gid = g.get("id")
+        name = (g.get("name") or "").strip()
+        if not tmdb_gid or not name:
+            continue
+
+        genre_obj, _ = Genre.objects.update_or_create(
+            tmdb_id=tmdb_gid,
+            defaults={"name": name},
+        )
+        MovieGenre.objects.create(movie=movie,genre=genre_obj)
+
+    credits = data.get("credits") or {}
+
+    # --- Cast (Actors) ---
+    MovieCast.objects.filter(movie=movie).delete()
+    for c in (credits.get("cast") or [])[:cast_limit]:
+        tmdb_pid = c.get("id")
+        if not tmdb_pid:
+            continue
+        name = (c.get("name") or c.get("original_name") or "Unknown").strip()
+        profile_path = c.get("profile_path")
+        profile_url = (IMG_BASE_W500 + profile_path) if profile_path else None
+
+        person_obj, _ = Person.objects.update_or_create(
+            tmdb_id=tmdb_pid,
+            defaults={
+                "name": name,
+                "profile_url":(profile_url),
+            },
+        )
+        MovieCast.objects.create(
+            movie=movie,
+            person=person_obj,
+            character=c.get("character"),
+            order=c.get("order"),
+        )
+
+    # --- Crew (Directors only for now) ---
+    MovieCrew.objects.filter(movie=movie, job="Director").delete()
+
+    for cr in credits.get("crew") or []:
+        if cr.get("job") != "Director":
+            continue
+
+        tmdb_pid = cr.get("id")
+        if not tmdb_pid:
+            continue
+        name = (cr.get("name") or cr.get("original_name") or "Unknown").strip()
+        profile_path = cr.get("profile_path")
+        profile_url = (IMG_PROFILE_W185 + profile_path) if profile_path else None
+
+        person_obj, _ = Person.objects.update_or_create(
+            tmdb_id=tmdb_pid,
+            defaults={
+                "name":name,
+                "profile_url":(profile_url),
+            }
+        )
+
+        MovieCrew.objects.create(
+            movie=movie,
+            person=person_obj,
+            job="Director",
+            department=cr.get("department"),
+        )
+    
+def _upsert_movie_fields_from_tmdb(*, tmdb_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
     release_date = data.get("release_date")
-    year = None
-    if release_date:
-        try:
-            year = datetime.strptime(release_date, "%Y-%m-%d").date().year
-        except Exception:
-            pass
+    year = _parse_year_from_release_date(release_date)
+    
+    poster_path = data.get("poster_path")
+    poster_url = (IMG_BASE_W500 + poster_path) if poster_path else None
 
-    movie, _ = Movie.objects.update_or_create(
-        tmdb_id=tmdb_id,
-        defaults={
-            "title":data.get("title"),
+    return {
+            "title":data.get("title" or "").strip() or "Unknown",
             "year": year,
             "overview": data.get("overview"),
             "avg_rating": data.get("vote_average"),
@@ -97,69 +197,25 @@ def upsert_tmdb_movie(tmdb_id, cast_limit=12):
             "revenue": data.get("revenue"),
             "runtime": data.get("runtime"),
             "language": data.get("original_language"),
-            "country": (
-                data.get("production_countries")[0]["name"]
-                if data.get("production_countries")
-                else None
-            ),
-            "poster_url": IMG_BASE_W500 + data["poster_path"] if data.get("poster_path") else None,
-        },
+            "country": _safe_country_name(data),
+            "poster_url": poster_url,
+            "tmdb_id": tmdb_id,
+        }
+
+@transaction.atomic
+def upsert_tmdb_movie(movie_id: int, tmdb_id, cast_limit: int = 12) -> Movie:
+    try:
+        tmdb_id_int = int(tmdb_id)
+    except Exception:
+        raise ValidationError("tmdb_id and  must be integers")
+    
+    data = get_movie_details(tmdb_id_int)
+    fields = _upsert_movie_fields_from_tmdb(tmdb_id=tmdb_id_int, data=data)
+
+    movie, _ = Movie.objects.update_or_create(
+        tmdb_id=tmdb_id_int,
+        defaults=defaults,
     )
-
-    # --- Genres ---
-    # simple + idempotent: wipe & re-add links for this movie
-    MovieGenre.objects.filter(movie=movie).delete()
-    for g in data.get("genres") or []:
-        genre_obj, _ = Genre.objects.update_or_create(
-            tmdb_id=g["id"],
-            defaults={"name": g["name"]},
-        )
-        MovieGenre.objects.create(movie=movie,genre=genre_obj)
-
-    credits = data.get("credits") or {}
-
-    # --- Cast (Actors) ---
-    MovieCast.objects.filter(movie=movie).delete()
-
-    for c in (credits.get("cast") or [])[:cast_limit]:
-        person_obj, _ = Person.objects.update_or_create(
-            tmdb_id=c["id"],
-            defaults={
-                "name":c.get("name") or c.get("original_name") or "Unknown",
-                "profile_url":(
-                    IMG_PROFILE_W185 + c["profile_path"] if c.get("profile_path") else None
-                ),
-            },
-        )
-        MovieCast.objects.create(
-            movie=movie,
-            person=person_obj,
-            character=c.get("character"),
-            order=c.get("order"),
-        )
-
-    # --- Crew (Directors only for now) ---
-    MovieCrew.objects.filter(movie=movie, job="Director").delete()
-
-    for cr in credits.get("crew") or []:
-        if cr.get("job") != "Director":
-            continue
-        person_obj, _ = Person.objects.update_or_create(
-            tmdb_id=cr["id"],
-            defaults={
-                "name":cr.get("name") or cr.get("original_name") or "Unknown",
-                "profile_url":(
-                    IMG_PROFILE_W185 + cr["profile_path"] if cr.get("profile_path") else None
-                ),
-            }
-        )
-
-        MovieCrew.objects.create(
-            movie=movie,
-            person=person_obj,
-            job="Director",
-            department=cr.get("department"),
-        )
 
 @transaction.atomic
 def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> Movie:
@@ -167,102 +223,28 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
     Attach TMDB id to existing movie row and enrich it with TMDB fields + credits.
     """
 
-    # lock row to avoid race conditions
-    movie = Movie.objects.select_for_update().get(id=movie_id)
-
-    # if movie alr has tmdb id -> must match
-    if movie.tmdb_id and int(movie.tmdb_id) != int(tmdb_id):
-        raise ValidationError(f"tmdb_id={tmdb_id} is already attached to movie id={movie.tmdb_id}, cannot attach tmdb_id = {tmdb_id}")
-
-    # if another movie alr has this tmdb_id don't dupe
-    existing = Movie.objects.filter(tmdb_id = tmdb_id).exclude(id=movie_id).first()
+    try:
+        tmdb_id_int = int(tmdb_id)
+        movie_id_int = int(movie_id)
+    except Exception:
+        raise ValidationError("tmdb_id and movie_id must be integers")
+    
+    movie = Movie.objects.filter(id=movie_id_int).first()
+    if not movie:
+        raise ValidationError("Movie not found")
+    
+    # if another movie alr has this tmdb id, don't allow attaching
+    existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(id=movie).first()
     if existing:
-        raise ValidationError(
-            f"tmdb_id={tmdb_id} is already attached to Movie Id={existing.id}"
-            f"Decide whether to merge or pick the correct row."
-        )
-    data = get_movie_details(tmdb_id)
-    release_date = data.get("release_date")
-    year = None
-    if release_date:
-        try:
-            year = datetime.strptime(release_date, "%Y-%m-%d").date().year
-        except Exception:
-            year = None
+        raise ValidationError("That tmdb_id is already attached to another movie")
+    
+    data = get_movie_details(tmdb_id_int)
+    fields = _upsert_movie_fields_from_tmdb(tmdb_id=tmdb_id_int, data=data)
 
-    # enrich fields (don't wipe letterboxd uri; just add tmdb info)
-    movie.tmdb_id = tmdb_id
-    movie.title = data.get("title") or movie.title
-    movie.year = year or movie.year
-    movie.overview = data.get("overview") or movie.overview
-    movie.avg_rating = data.get("vote_average") if data.get("vote_average") is not None else movie.avg_rating
-    movie.budget = data.get("budget") if data.get("budget") is not None else movie.budget
-    movie.revenue = data.get("revenue") if data.get("revenue") is not None else movie.revenue
-    movie.runtime = data.get("runtime") if data.get("runtime") is not None else movie.runtime
-    movie.language = data.get("original_language") or movie.language
-
-    prod_countries = data.get("production_countries") or []
-    movie.country = (prod_countries[0].get("name") if prod_countries else movie.country)
-
-    poster_path = data.get("poster_path")
-    if poster_path:
-        movie.poster_url = IMG_BASE_W500 + poster_path
-
+    # update the existing movie (preserve letterboxd_ur)
+    for k, v in fields.items():
+        setattr(movie, k, v)
     movie.save()
 
-    # --- Genres ---
-    # simple + idempotent: wipe & re-add links for this movie
-    MovieGenre.objects.filter(movie=movie).delete()
-    for g in data.get("genres") or []:
-        genre_obj, _ = Genre.objects.update_or_create(
-            tmdb_id=g["id"],
-            defaults={"name": g["name"]},
-        )
-        MovieGenre.objects.create(movie=movie,genre=genre_obj)
-
-    credits = data.get("credits") or {}
-
-    # --- Cast (Actors) ---
-    MovieCast.objects.filter(movie=movie).delete()
-
-    for c in (credits.get("cast") or [])[:cast_limit]:
-        person_obj, _ = Person.objects.update_or_create(
-            tmdb_id=c["id"],
-            defaults={
-                "name":c.get("name") or c.get("original_name") or "Unknown",
-                "profile_url":(
-                    IMG_PROFILE_W185 + c["profile_path"] if c.get("profile_path") else None
-                ),
-            },
-        )
-        MovieCast.objects.create(
-            movie=movie,
-            person=person_obj,
-            character=c.get("character"),
-            order=c.get("order"),
-        )
-
-    # --- Crew (Directors only for now) ---
-    MovieCrew.objects.filter(movie=movie, job="Director").delete()
-
-    for cr in credits.get("crew") or []:
-        if cr.get("job") != "Director":
-            continue
-        person_obj, _ = Person.objects.update_or_create(
-            tmdb_id=cr["id"],
-            defaults={
-                "name":cr.get("name") or cr.get("original_name") or "Unknown",
-                "profile_url":(
-                    IMG_PROFILE_W185 + cr["profile_path"] if cr.get("profile_path") else None
-                ),
-            }
-        )
-
-        MovieCrew.objects.create(
-            movie=movie,
-            person=person_obj,
-            job="Director",
-            department=cr.get("department"),
-        )
-
+    _enrich_movie_relations_from_tmdb(movie=movie, data=data, cast_limit=cast_limit)
     return movie
