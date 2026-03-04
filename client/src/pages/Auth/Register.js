@@ -14,18 +14,22 @@ export default function SignUp() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSignUp = async ({ username, password }) => {
+  const handleSignUp = async ({ email, password }) => {
+    const cleanEmail = (email || "").trim().toLowerCase();
+
     setLoading(true);
     setError(null);
-    try {
-      const data = await registerAction(username, password, navigate);
-      localStorage.setItem("access_token", data.access_token);
 
+    try {
+      const data = await registerAction(cleanEmail, password, navigate);
+      
+      // backend returns access and refresh
+      if (data?.access_token) localStorage.setItem("access_token", data.access_token);
+      if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
       // navigate 
       navigate("/connect"); 
-      
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Sign up failed.");
     } finally {
       setLoading(false);
     }

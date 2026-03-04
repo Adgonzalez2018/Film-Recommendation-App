@@ -13,6 +13,24 @@ import PageFrame from "../../components/layout/PageFrame";
 
 // Save csv/rss to server
 import { submitCSVImport, submitRSSSync } from "../../api/letterboxd";
+useEffect(() => {
+  const checkOnboarding = async () => {
+    const res = await fetch("/api/onboarding-status/", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+
+    if (data.is_onboarded) {
+      navigate("/chat");
+    }
+  };
+
+  if (accessToken) checkOnboarding();
+}, [accessToken]);
+
 // ─── CSV file definitions ─────────────────────────────────
 
 const CSV_FILES = [
