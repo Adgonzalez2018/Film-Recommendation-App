@@ -22,11 +22,13 @@ export default function AuthForm({
   const canSubmit = useMemo(() => {
     const emailOk = (formData.email || "").trim().length > 0;
     const passOk = (formData.password || "").length >0;
-    return confirmOk && passOk && confirmOk && !loading;
+    const confirmOk = isSignIn ? true : (formData.confirmPassword || "").length > 0;
+    return emailOk && passOk && confirmOk && !loading;
   }, [formData, isSignIn, loading]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormError(null);
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -61,8 +63,8 @@ export default function AuthForm({
       <div className="auth-box">
         <h2 className="auth-title">{title}</h2>
 
-        {error && <div className="auth-error">{error}</div>}
-
+        {(error || formError) && ( <div className="auth-error">{error}</div>)}
+        
         <form onSubmit={handleSubmit}>
           <div className="auth-group">
             <label className="auth-label">EMAIL</label>
@@ -75,6 +77,8 @@ export default function AuthForm({
               onChange={handleChange}
               required
               disabled={loading}
+              autoComplete="email"
+              inputMode="email"
             />
           </div>
 
@@ -89,6 +93,7 @@ export default function AuthForm({
               onChange={handleChange}
               required
               disabled={loading}
+              autoComplete={isSignIn ? "current-password" : "new-password"}
             />
           </div>
 
@@ -104,11 +109,12 @@ export default function AuthForm({
                 onChange={handleChange}
                 required
                 disabled={loading}
+                autoComplete="new-password"
               />
             </div>
           )}
 
-          <button type="submit" className="auth-button" disabled={loading}>
+          <button type="submit" className="auth-button" disabled={!canSubmit}>
             {loading ? "Loading..." : isSignIn ? "ENTER" : "CREATE ACCOUNT"}
           </button>
         </form>
