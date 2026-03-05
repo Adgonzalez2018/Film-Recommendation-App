@@ -21,7 +21,7 @@ export default function SignUp() {
     setError(null);
 
     try {
-      const data = await registerAction(cleanEmail, password, navigate);
+      const data = await registerAction({email: cleanEmail, password});
       
       // backend returns access and refresh
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);

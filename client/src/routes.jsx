@@ -27,7 +27,7 @@ function RequireOnboarding({ children }){
   if (isAuthenticating) return null;
   // if auth is true but onboarding unknown, keep waiting
   if (isOnboarded == null) return null;
-  if (!isOnboarded) return <Navigte to="/import" replace/>;
+  if (!isOnboarded) return <Navigate to="/connect" replace/>;
   return children;
 }
 
@@ -41,7 +41,7 @@ export default function AppRoutes() {
       <Route path="/signin" element={<SignIn />} />
       <Route path="/profile" element={<Profile/>}/>
 
-      <Route path="/import" 
+      <Route path="/connect" 
       element={
         <RequireAuth>
           <Imports />          

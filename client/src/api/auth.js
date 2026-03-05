@@ -9,26 +9,53 @@ export async function ping(token) {
   return res;
 }
 
-export async function loginAction({ email, password }) {
-  const res = await apiFetch("/api/login/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
+export function extractErrorMessage(fallback, data) {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(extractErrorMessage("Login failed.", data));
-  return data; // expect { access_token, ... }
+  if (typeof data === "object") {
+    if (typeof data.error === "string" && data.error.trim()) return data.error.trim();
+    if (typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
+    for (const v of Object.values(data)) {
+      if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return fallback;
 }
 
-export async function registerAction({ email, password }) {
-  const res = await apiFetch("/api/register/", {
+export async function loginAction({ email, password }) {
+  let res;
+  try {
+    res = await apiFetch("/api/login/", {
+      method: "POST",
+      body: { email, password }, // <-- pass object, apiFetch will JSON stringify
+    });
+  } catch (e) {
+    throw new Error("Network error: could not reach backend (/api/login/). Check dev proxy + backend server.");
+  }
+
+  console.log("STATUS", res.status);
+
+  const data = await res.json().catch(() => ({}));
+  console.log("BODY", data);
+
+  if (!res.ok) throw new Error(extractErrorMessage("Login failed.", data));
+  return data;
+}
+
+export async function registerAction({ email, password, first_name = "" }) {
+  const res = await apiFetch("/api/register/",{
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({email, password }),
+    body: { email, password, first_name},
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(extractErrorMessage("Registration failed.", data));
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Registration failed.", data));
+  }
+
   return data;
+
 }
