@@ -102,10 +102,12 @@ def stats_payload(request):
     thisWeekArr = calculatePerDay(thisWeekMovies, thisWeekStart)
     lastWeekArr = calculatePerDay(lastWeekMovies, lastWeekStart)
 
+    week_movie_ids = thisWeekMovies.values_list("movie_id", flat=True)
+
     # Top 5 Directors Watched - Distinct
     topDirectors = (
         Person.objects.filter(
-            moviecrew__movie__movieuser__in = thisWeekMovies,
+            moviecrew__movie_id__in = week_movie_ids,
             moviecrew__job="Director",
         )
         .annotate(count=models.Count("moviecrew__movie", distinct=True))
@@ -115,7 +117,7 @@ def stats_payload(request):
     # Top 5 Actors Watched - Distinct
     topActors = (
         Person.objects.filter(
-            moviecast__movie__movieuser__in = thisWeekMovies
+            moviecast__movie_id__in = week_movie_ids
         )
         .annotate(count=models.Count("moviecast__movie", distinct=True))
         .order_by("-count")[:5]
@@ -123,7 +125,7 @@ def stats_payload(request):
 
     # Top 5 Genres (weekly) - Distinct
     topGenres = (
-        Genre.objects.filter(moviegenre__movie__movieuser__in=thisWeekMovies)
+        Genre.objects.filter(moviegenre__movie_id__in=week_movie_ids)
         .annotate(count=models.Count("moviegenre__movie", distinct=True))
         .order_by("-count")[:5]
     )
