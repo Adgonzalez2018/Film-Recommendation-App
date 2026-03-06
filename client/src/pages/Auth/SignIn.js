@@ -17,7 +17,7 @@ export default function SignIn() {
     setError(null);
 
     try{
-      const data = await loginAction({email: cleanEmail, password, navigate});
+      const data = await loginAction({email: cleanEmail, password});
       // store token & refresh
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);
       if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
