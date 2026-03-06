@@ -31,6 +31,7 @@ export default function LetterboxdConnect() {
   };
 
   const [csvSuccess, setCsvSuccess] = useState(null);
+  const [csvError, setCsvError] = useState(null);
 
   // RSS state
   const [rssInput, setRssInput] = useState("");
@@ -51,7 +52,7 @@ export default function LetterboxdConnect() {
   const {
     run: runCsvImport,
     loading: csvLoading,
-    error: csvError,
+    error: csvRequestError,
   } = useRequest(async () => {
     if (!Object.values(files).some(Boolean)){
       throw new Error("Please upload at least one csv file.");
@@ -155,7 +156,7 @@ export default function LetterboxdConnect() {
               <strong>initial weekly stats report</strong> right away.
             </p>
 
-            {csvError && <div className="connect-error">{csvError}</div>}
+            {(csvError || csvRequestError) && (<div className="connect-error">{csvError || csvRequestError}</div>)}
             {csvSuccess && <div className="connect-success">{csvSuccess}</div>}
 
             <form onSubmit={handleCSVSubmit}>
