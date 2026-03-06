@@ -106,6 +106,12 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # update profile
+    prof = request.user
+    prof.rss_import_count = (prof.rss_import_count or 0) + 1
+    prof.last_sync = timezone.now()
+    prof.save(update_fields=["rss_import_count", "last_sync"])
+    
     return Response({
         "status": "ok",
         "rss_url": res.rss_url,
@@ -128,8 +134,11 @@ def import_rss(request):
 def onboarding_status(request):
     user = request.user
     has_watch_data = WatchEvent.objects.filter(user=user).exists()
+    has_manual_import = (user.manual_import_count or 0) > 0
+    has_rss_import = (user.rss_import_count or 0) >0
+
     return Response({
-        "has_manual_import": (user.manual_import_count or 0)> 0,
-        "has_rss_import": (user.rss_import_count or 0) > 0,
-        "is_onboarded": has_watch_data,
+        "has_manual_import": has_manual_import,
+        "has_rss_import": has_rss_import,
+        "is_onboarded": has_watch_data or has_manual_import or has_rss_import
     })
