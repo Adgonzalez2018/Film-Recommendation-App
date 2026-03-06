@@ -16,7 +16,7 @@ export async function importLetterboxd({ token, reviews, watchlist, likes }) {
   if (watchlist) fd.append("watchlist", watchlist);
   if (likes) fd.append("likes", likes);
 
-  const res = await apiFetch("/api/letterboxd/import/", {
+  const res = await apiFetch("/api/import/csv/", {
     token,
     method: "POST",
     body: fd,
@@ -46,7 +46,7 @@ export async function submitCSVImport(files, accessToken){
 }
 
 export async function submitRSSSync(rssInput, accessToken){
-  const res = await apiFetch("/api/letterboxd/rss/",{
+  const res = await apiFetch("/api/import/rss",{
     token: accessToken,
     method: "POST",
     headers: {"Content-Type": "application/json"},
