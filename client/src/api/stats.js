@@ -5,7 +5,7 @@ function extractErrorMessage(defaultMsg, data) {
 }
 
 export async function fetchWeeklyStats(token) {
-  const res = await apiFetch("/api/stats/", {
+  const res = await apiFetch("/api/stats/weekly", {
     token,
     method: "GET",
   });
