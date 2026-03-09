@@ -190,7 +190,11 @@ def stats_all_time(request):
         .order_by("-count")[:5]
     )
 
-    recentEntries = allMovies.select_related("movie").order_by("-watched_date")[:5]
+    recentEntries = (
+        allMovies.select_related("movie")
+        .exclude(movie__isnull=True)
+        .order_by("-watched_date", "-id")[:5]
+    )
     recentMovies = [entry.movie for entry in recentEntries]
 
     totalCount = allMovies.count()
@@ -198,13 +202,18 @@ def stats_all_time(request):
 
     # New stat - total lifetime watch time (minutes)
     agg = allMovies.aggregate(
-        total_minutes=Coalesce(Sum("movie__runtime"),0)
+        total_minutes=Coalesce(Sum("movie__runtime"),0),
+        runtime_movies = models.Count(
+            "movie_id",
+            filter=models.Q(movie__runtime__isnull=False),
+            distinct=True,
+        ),
     )
     total_minutes = int(agg["total_minutes"] or 0)
     total_hours = total_minutes // 60
     days = total_hours // 24
     hours = total_hours % 24
-
+    runtime_movies = int(agg["runtime_movies"] or 0)
     return Response(
         {
             "totalWatches": totalCount,
@@ -213,6 +222,10 @@ def stats_all_time(request):
             "totalTimeWatched": {
                 "days": days,
                 "hours": hours,
+            },
+            "runtimeCoverage":{
+                "withRuntime": runtime_movies,
+                "withoutRuntime": max(totalCount - runtime_movies, 0),
             },
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
