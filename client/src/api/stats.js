@@ -11,7 +11,7 @@ export async function fetchWeeklyStats(token) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMessage("Failed to fetch weekly stats.", data));
-  return;
+  return data;
 }
 
 export async function fetchAllTimeStats(token) {
@@ -19,7 +19,9 @@ export async function fetchAllTimeStats(token) {
     token,
     method: "GET",
   });
-  data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(extractErrorMessage("Failed to fetch all-time stats.", data));
-  return;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Failed to fetch all-time stats.", data));
+  }
+  return data;
 }
