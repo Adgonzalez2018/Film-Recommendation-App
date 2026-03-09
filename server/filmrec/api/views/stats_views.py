@@ -165,12 +165,13 @@ def stats_payload(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
-    allMovies = loadAllTime(request.user)
+    allMovies = loadAllTime(request.user)   # Query Set -> MovieUser
+    all_movie_ids = allMovies.values_list("movie_id", flat=True)
 
 
     topDirectors = (
         Person.objects.filter(
-            moviecrew__movie__movieuser__in=allMovies,
+            moviecrew__movie_id__in=all_movie_ids,
             moviecrew__job="Director",
         ).annotate(count=models.Count("moviecrew__movie",distinct=True))
         .order_by("-count")[:5]
@@ -178,13 +179,13 @@ def stats_all_time(request):
 
     topActors = (
         Person.objects.filter(
-            moviecast__movie__movieuser__in=allMovies,
+            moviecast__movie_id__in=all_movie_ids,
         ).annotate(count=models.Count("moviecast__movie",distinct=True))
         .order_by("-count")[:5]
     )
 
     topGenres = (
-        Genre.objects.filter(moviegenre__movie__movieuser__in=allMovies)
+        Genre.objects.filter(moviegenre__movie_id__in=all_movie_ids)
         .annotate(count=models.Count("moviegenre__movie",distinct=True))
         .order_by("-count")[:5]
     )

@@ -46,7 +46,7 @@ export default function WeeklyStats() {
     const el = portRef.current;
     if (!el) return;
 
-    const maxScroll = el.scrollHeigh - el.clientHeight;
+    const maxScroll = el.scrollHeight - el.clientHeight;
     const next = Math.min(el.scrollTop + speed, maxScroll);
     el.scrollTop = next;
 
@@ -83,7 +83,7 @@ export default function WeeklyStats() {
             <div className="s-watches-num">{report.totalWatches}</div>
             <div className="s-watches-unit">watches this week</div>
             <div className="s-watches-change">
-              {report.percentChange == null ? "- new week" : `↑ ${Math.round(reportpercentChange)}% vs last week`}
+              {report.percentChange == null ? "- new week" : `↑ ${Math.round(report.percentChange)}% vs last week`}
               </div>
           </div>
 
