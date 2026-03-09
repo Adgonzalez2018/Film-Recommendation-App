@@ -10,7 +10,9 @@ export async function fetchWeeklyStats(token) {
     method: "GET",
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(extractErrorMessage("Failed to fetch weekly stats.", data));
+  if (!res.ok){
+    throw new Error(extractErrorMessage("Failed to fetch weekly stats.", data));
+  }
   return data;
 }
 
