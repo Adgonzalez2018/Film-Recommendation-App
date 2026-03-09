@@ -561,3 +561,34 @@ body {
 .dir-box:hover .dir-box-sub {
   color: rgba(226, 221, 212, 0.45);
 }
+.s-runtime {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.s-runtime-label {
+  font-family: "Cinzel", serif;
+  font-size: 0.56rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(226, 221, 212, 0.28);
+}
+
+.s-runtime-main {
+  font-family: "Cinzel", serif;
+  font-size: clamp(1.4rem, 5vw, 2.2rem);
+  letter-spacing: 0.08em;
+  color: #e2ddd4;
+  line-height: 1.1;
+}
+
+.s-runtime-sub {
+  font-family: "EB Garamond", serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: rgba(226, 221, 212, 0.42);
+}
