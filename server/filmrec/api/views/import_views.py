@@ -29,6 +29,7 @@ from ..models import WatchEvent, ImportBatch
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def manual_import(request):
+    watched_file = request.FILES.get("watched")
     reviews_file = request.FILES.get("reviews")
     watchlist_file = request.FILES.get("watchlist")
 
@@ -36,7 +37,7 @@ def manual_import(request):
     likes_upload = request.FILES.get("likes")
     films_file = films_upload or likes_upload
     
-    if not reviews_file and not watchlist_file and not films_file:
+    if not watched_file and not reviews_file and not watchlist_file and not films_file:
         return Response(
             {"error": "No files provided. Upload at least one of: reviews, watchlist, films."},
             status=status.HTTP_400_BAD_REQUEST,
@@ -44,6 +45,7 @@ def manual_import(request):
 
     counters = run_letterboxd_import(
         user=request.user,
+        watched_file=watched_file,
         reviews_file=reviews_file,
         watchlist_file=watchlist_file,
         films_file=films_file,

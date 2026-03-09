@@ -14,7 +14,7 @@ from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
 from ..utils.rss import make_eventkey
 
-def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films_file=None):
+def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchlist_file=None, films_file=None):
     """
     Business-logic import. No DRF here.
 
@@ -109,6 +109,51 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
             rel_updated += 1
 
     # ---------- per-csv handlers ----------
+    def import_watched_csv(file_obj):
+        nonlocal events_created
+
+        for row in iter_csv(file_obj):
+            name = row.get("Name")
+            year = row.get("Year")
+            uri = row.get("Letterboxd URI")
+
+            movie = upsert_movie(name, year, uri)
+            if not movie:
+                continue
+            mu = get_or_create_mu(movie)
+
+            posted_date = parse_iso_date(row.get("Date"))
+            updates = {"watch_status": "Watched"}
+
+            # keep the latest watched date on the snapshot
+            if posted_date:
+                if mu.watched_date is not None and posted_date > mu.watched_date:
+                    updates["rewatch"] = True
+                updates["watched_date"] = posted_date
+
+                event_key = make_eventkey(user.id, movie.letterboxd_uri, posted_date)
+                _, created = WatchEvent.objects.get_or_create(
+                    user=user,
+                    event_key=event_key,
+                    defaults={
+                        "movie": movie,
+                        "posted_date": posted_date,
+                        "watched_date": None,
+                        "rewatch": False,
+                        "source": "csv",
+                        "entry_url": movie.letterboxd_uri,
+                    },
+                )
+
+                if created:
+                    events_created += 1
+        
+            # a watched movie should not remain "want to watch"
+            if mu.in_watchlist:
+                updates["in_watchlist"] = False
+                
+            apply_update(mu, updates)
+
     def import_reviews_csv(file_obj):
         nonlocal events_created
 
@@ -127,6 +172,7 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
             watched_date = parse_iso_date(row.get("Watched Date"))
             rating = parse_float(row.get("Rating"))
             review_text = (row.get("Review") or "").strip()
+            rewatch_flag = ((row.get("Rewatch") or "").strip().lower()=="yes")
 
             # Create WatchEvent 
             event_posted = posted_date or watched_date
@@ -157,12 +203,18 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
             if snap_date:
                 if mu.watched_date is not None and snap_date > mu.watched_date:
                     updates["rewatch"] = True
+                elif rewatch_flag:
+                    updates["rewatch"] = True
                 updates["watched_date"] = snap_date
 
             if rating is not None:
                 updates["rating"] = rating
             if review_text:
                 updates["review"] = review_text
+
+            # reviewed movies should not remain in watchlist
+            if mu.in_watchlist:
+                updates["in_watchlist"] = False
 
             apply_update(mu, updates)
 
@@ -201,6 +253,8 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
 
     # ---------- run import ----------
     with transaction.atomic():
+        if watched_file:
+            import_watched_csv(watched_file)
         if reviews_file:
             import_reviews_csv(reviews_file)
         if watchlist_file:
