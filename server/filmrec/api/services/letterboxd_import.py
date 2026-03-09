@@ -50,10 +50,21 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
         nonlocal movies_created, movies_matched
 
         uri = normalize_letterboxd_uri(uri)
-        if not uri:
-            return None
+        if uri:
+            movie = Movie.objects.filter(letterboxd_uri=uri).first()
 
-        movie = Movie.objects.filter(letterboxd_uri=uri).first()
+        if not movie:
+            clean_name = ((name or "").strip()[:255] or "Unknown")
+            y = parse_year(year)
+            if clean_name and y is not None:
+                movie = Movie.objects.filter(title=clean_name, year=y).first()
+                if movie:
+                    movies_matched += 1
+                    if not movie.letterboxd_uri and uri:
+                        movie.letterboxd_uri = uri
+                        movie.save(update_fields=["letterboxd_uri"])
+                    return movie
+
         if movie:
             movies_matched += 1
             updates = {}
@@ -63,6 +74,8 @@ def run_letterboxd_import(*, user, reviews_file=None, watchlist_file=None, films
             y = parse_year(year)
             if movie.year is None and y is not None:
                 updates["year"] = y
+            if not movie.letterboxd_uri and uri:
+                updates["letterboxd_uri"] = uri
             if updates:
                 for k, v in updates.items():
                     setattr(movie, k,v)

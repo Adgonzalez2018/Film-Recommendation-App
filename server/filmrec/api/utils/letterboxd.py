@@ -5,14 +5,15 @@ _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
 
 def normalize_letterboxd_uri(uri: str):
     """
-    Canonicalize Letterboxd film URI.
     Accepts:
-      - https://letterboxd.com/film/<slug>/
-      - https://letterboxd.com/film/<slug>
-      - /film/<slug>/
-      - film/<slug>
-    Returns canonical: https://letterboxd.com/film/<slug>/
-    or None if it can't parse.
+        - https://letterboxd.com/film/<slug>/
+        - https://letterboxd.com/film/<slug>
+        - /film/<slug>/
+        - film/<slug>/
+        - https://boxd.it/<id>/
+        - https://boxd.it/<id>
+        returns a normalized url string, or None if blank/unparseable
+
     """
     uri = (uri or "").strip()
     if not uri:
@@ -21,25 +22,36 @@ def normalize_letterboxd_uri(uri: str):
     # If it's just a path-ish value, normalize it
     if uri.startswith("/"):
         path = uri
+        host = ""
     elif "://" not in uri:
         path = "/" + uri
+        host = ""
     else:
         try:
             parsed = urlparse(uri)
+            host = (parsed.netloc or "").lower()
             path = parsed.path or ""
         except Exception:
             return None
 
-    # Expect /film/<slug>/...
     parts = [p for p in path.split("/") if p]
-    if len(parts) < 2 or parts[0] != "film":
-        return None
 
-    slug = parts[1]
-    if not slug:
-        return None
-
-    return f"https://letterboxd.com/film/{slug}/"
+    # full letterboxd film path
+    if len(parts) >- 2 and parts[0] == "film" and parts[1]:
+        slug = parts[1]
+        return f"https://letterboxd.com/film/{slug}/"
+    
+    # short boxd.it link from csv exports
+    if "boxd.it" in host and len(parts) >= 1 and parts[0]:
+        short_id = parts[0]
+        return f"https://boxd.it/{short_id}/"
+    
+    # Raw boxd.it ish without scheme
+    if len(parts) == 1 and parts[0] and "." not in parts[0]:
+        # only use this if we allow bare short IDs
+        return f"https://boxd.it/{parts[0]}/"
+    
+    return None
 
 def extract_letterboxd_username(input_str: str) -> str | None:
     """
