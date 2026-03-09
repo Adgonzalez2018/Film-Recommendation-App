@@ -19,6 +19,7 @@ from ..models import (
     MovieUser, 
     Genre,
     Person,
+    WatchEvent,
     )
 from ..utils.dates import week_window_sunday_anchor
 
@@ -33,7 +34,7 @@ def loadAllTime(user):
     )
 
 def loadWeekly(user, start_date, end_date):
-    return MovieUser.objects.filter(
+    return WatchEvent.objects.filter(
         user=user,
         watch_status="Watched",
         watched_date__isnull=False,
@@ -51,7 +52,7 @@ def calculatePerDay(entries, start_date):
     start = start_date.date() if hasattr(start_date, "date") else start_date
 
     for entry in entries:
-        wd = entry.watched_date
+        wd = entry.posted_date
         if wd is None:
             continue
 
@@ -95,14 +96,14 @@ def _movie_card(m):
 def stats_payload(request):
     lastWeekStart, lastWeekEnd, thisWeekStart, thisWeekEnd = week_window_sunday_anchor()
 
-    thisWeekMovies = loadWeekly(request.user, thisWeekStart, thisWeekEnd)
-    lastWeekMovies = loadWeekly(request.user, lastWeekStart, lastWeekEnd)
+    thisWeekEvents = loadWeekly(request.user, thisWeekStart, thisWeekEnd)
+    lastWeekEvents = loadWeekly(request.user, lastWeekStart, lastWeekEnd)
 
     days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    thisWeekArr = calculatePerDay(thisWeekMovies, thisWeekStart)
-    lastWeekArr = calculatePerDay(lastWeekMovies, lastWeekStart)
+    thisWeekArr = calculatePerDay(thisWeekEvents, thisWeekStart)
+    lastWeekArr = calculatePerDay(lastWeekEvents, lastWeekStart)
 
-    week_movie_ids = thisWeekMovies.values_list("movie_id", flat=True)
+    week_movie_ids = thisWeekEvents.values_list("movie_id", flat=True)
 
     # Top 5 Directors Watched - Distinct
     topDirectors = (
@@ -131,14 +132,19 @@ def stats_payload(request):
     )
 
 
-    recentEntries = thisWeekMovies.select_related("movie").order_by("-watched_date")[:5]
+    recentEntries = thisWeekEvents.order_by("-watched_date")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
 
-    thisWeekCount = thisWeekMovies.count()
-    lastWeekCount = lastWeekMovies.count()
+    thisWeekCount = thisWeekEvents.count()
+    lastWeekCount = lastWeekEvents.count()
     percentChange = calc_percentChange(lastWeekCount, thisWeekCount)
 
-    decadeCounts = byDecadePayload(thisWeekMovies)
+    decadeCounts = byDecadePayload(
+        MovieUser.objects.filter(
+            user = request.user,
+            movie_id__in = week_movie_ids,
+        )
+    )
 
     return Response(
         {
