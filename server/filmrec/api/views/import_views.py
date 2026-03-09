@@ -60,7 +60,7 @@ def manual_import(request):
         events_created=counters.get("events_created",0),
         had_reviews=bool(reviews_file),
         had_watchlist=bool(watchlist_file),
-        had_films=bool(films_upload),
+        had_films=bool(films_file),
     )
 
     # update profile summary (fast reads for profile page)
