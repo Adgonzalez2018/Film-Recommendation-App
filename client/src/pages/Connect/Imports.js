@@ -13,18 +13,23 @@ import carImg from "../../assets/images/Fargo_car.png";
 // Border
 import PageFrame from "../../components/layout/PageFrame";
 
-// API (your real import layer)
+// API
 import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
-
-// ─── Component ────────────────────────────────────────────
 
 export default function LetterboxdConnect() {
   const navigate = useNavigate();
   const { isAuthenticating, authError, accessToken } = useAuth();
 
   // CSV state
-  const [files, setFiles] = useState({ reviews: null, watchlist: null, likes: null });
+  const [files, setFiles] = useState({
+    watched: null,
+    reviews: null,
+    watchlist: null,
+    likes: null,
+  });
+
   const fileInputRefs = {
+    watched: useRef(),
     reviews: useRef(),
     watchlist: useRef(),
     likes: useRef(),
@@ -39,9 +44,6 @@ export default function LetterboxdConnect() {
   const [rssError, setRssError] = useState(null);
   const [rssSuccess, setRssSuccess] = useState(null);
 
-  // ── Handlers ──────────────────────────────────────────
-
-
   const handleFileChange = (key, e) => {
     const file = e.target.files?.[0] ?? null;
     setFiles((prev) => ({ ...prev, [key]: file }));
@@ -54,24 +56,26 @@ export default function LetterboxdConnect() {
     loading: csvLoading,
     error: csvRequestError,
   } = useRequest(async () => {
-    if (!Object.values(files).some(Boolean)){
+    if (!Object.values(files).some(Boolean)) {
       throw new Error("Please upload at least one csv file.");
     }
+
     if (!accessToken) {
       throw new Error("Not authenticated. Please sign in again.");
     }
 
     await submitCSVImport(files, accessToken);
 
-    setCsvSuccess("Data imported! your all-time stats and inital weekly report is ready!");
+    setCsvSuccess("Data imported! Your all-time stats and initial weekly report are ready!");
     navigate("/chat");
-  })
+  });
 
   const handleCSVSubmit = (e) => {
     e.preventDefault();
     setCsvSuccess(null);
+    setCsvError(null);
     runCsvImport();
-  }
+  };
 
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
@@ -80,6 +84,7 @@ export default function LetterboxdConnect() {
       setRssError("Please enter your Letterboxd username or profile URL.");
       return;
     }
+
     if (!accessToken) {
       setRssError("Not authenticated. Please sign in again.");
       return;
@@ -92,7 +97,6 @@ export default function LetterboxdConnect() {
     try {
       await submitRSSSync(rssInput, accessToken);
       setRssSuccess("RSS linked! Weekly watch reports will sync automatically.");
-      // Don’t auto-navigate here unless RSS alone makes you “onboarded” in backend.
     } catch (err) {
       setRssError(err?.message || "RSS link failed.");
     } finally {
@@ -101,8 +105,6 @@ export default function LetterboxdConnect() {
   };
 
   const handleContinue = () => navigate("/chat");
-
-  // ── Auth guards ───────────────────────────────────────
 
   if (isAuthenticating) {
     return (
@@ -128,8 +130,6 @@ export default function LetterboxdConnect() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────
-
   return (
     <div className="connect-container">
       <PageFrame />
@@ -141,7 +141,6 @@ export default function LetterboxdConnect() {
         <p className="connect-subtitle">Connect your film data to get started</p>
 
         <div className="connect-import-row">
-          {/* ── SECTION 1: CSV Import ── */}
           <div className="connect-import-col">
             <div className="connect-section-header">
               <span className="connect-label">Manual Import</span>
@@ -151,12 +150,15 @@ export default function LetterboxdConnect() {
               For the best film recommendation experience, it's highly encouraged that you import
               your Letterboxd data. Head to{" "}
               <strong>letterboxd.com → Settings → Import &amp; Export → Export Your Data</strong>,
-              then upload the three CSV files below. This unlocks your{" "}
-              <strong>all-time stats report</strong> and generates an{" "}
-              <strong>initial weekly stats report</strong> right away.
+              then upload your CSV files below. The <strong>watched export</strong> helps recover
+              your full watch history, while reviews, likes/films, and watchlist fill in the rest
+              of your profile. This unlocks your <strong>all-time stats report</strong> and
+              generates an <strong>initial weekly stats report</strong> right away.
             </p>
 
-            {(csvError || csvRequestError) && (<div className="connect-error">{csvError || csvRequestError}</div>)}
+            {(csvError || csvRequestError) && (
+              <div className="connect-error">{csvError || csvRequestError}</div>
+            )}
             {csvSuccess && <div className="connect-success">{csvSuccess}</div>}
 
             <form onSubmit={handleCSVSubmit}>
@@ -165,10 +167,15 @@ export default function LetterboxdConnect() {
                   <div
                     key={key}
                     className={`csv-row ${files[key] ? "has-file" : ""}`}
-                    onClick={() => fileInputRefs[key].current.click()}
+                    onClick={() => fileInputRefs[key].current?.click()}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && fileInputRefs[key].current.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        fileInputRefs[key].current?.click();
+                      }
+                    }}
                   >
                     <input
                       type="file"
@@ -179,7 +186,9 @@ export default function LetterboxdConnect() {
                     <span className="csv-icon">{icon}</span>
                     <div className="csv-info">
                       <div className="csv-name">{label}</div>
-                      <div className="csv-file-name">{files[key] ? files[key].name : hint}</div>
+                      <div className="csv-file-name">
+                        {files[key] ? files[key].name : hint}
+                      </div>
                     </div>
                     <span className="csv-status">{files[key] ? "✅" : "＋"}</span>
                   </div>
@@ -192,14 +201,12 @@ export default function LetterboxdConnect() {
             </form>
           </div>
 
-          {/* ── Vertical divider ── */}
           <div className="connect-import-divider">
             <span className="connect-import-divider-line" />
             <span className="connect-import-divider-text"></span>
             <span className="connect-import-divider-line" />
           </div>
 
-          {/* ── SECTION 2: RSS Sync ── */}
           <div className="connect-import-col">
             <div className="connect-section-header">
               <span className="connect-label">Weekly Auto Sync</span>
@@ -232,7 +239,9 @@ export default function LetterboxdConnect() {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <p className="connect-hint">We'll build your RSS feed URL automatically from your username.</p>
+                <p className="connect-hint">
+                  We'll build your RSS feed URL automatically from your username.
+                </p>
               </div>
 
               <button type="submit" className="auth-button" disabled={rssLoading}>
@@ -242,7 +251,6 @@ export default function LetterboxdConnect() {
           </div>
         </div>
 
-        {/* ── Continue / Skip ── */}
         <div className="connect-skip">
           <button className="connect-skip-link" onClick={handleContinue}>
             {csvSuccess || rssSuccess ? "Continue to Chat" : "Skip for now"}
