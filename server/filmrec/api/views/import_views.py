@@ -109,11 +109,15 @@ def import_rss(request):
         )
 
     # update profile
-    prof = request.user
-    prof.rss_import_count = (prof.rss_import_count or 0) + 1
-    prof.last_sync = timezone.now()
-    prof.save(update_fields=["rss_import_count", "last_sync"])
-    
+
+
+
+    # only count as an import if new watch events were actually created
+    if (res.events_created or 0) > 0:
+        prof = request.user
+        prof.last_sync = timezone.now()
+        prof.rss_import_count = (prof.rss_import_count or 0) + 1    
+        prof.save(update_fields=["rss_import_count","last_sync"])
     return Response({
         "status": "ok",
         "rss_url": res.rss_url,

@@ -55,8 +55,20 @@ def sync_user_rss_watches(
         return RSSSyncResult(user_id=user.id, rss_url="", error="No valid letterboxd username/RSS input.")
 
     feed = feedparser.parse(rss_url)
+    status_code = getattr(feed, "status", None)
+    if status_code and status_code != 200:
+        return RSSSyncResult(
+            user_id = user.id,
+            rss_url = rss_url,
+            error =f"RSS returned HTTP {status_code}.",
+        )
+    
     if getattr(feed, "bozo", False):
-        return RSSSyncResult(user_id=user.id, rss_url=rss_url, error="Could not parse RSS feed (bozo=True).")
+        return RSSSyncResult(
+            user_id=user.id, 
+            rss_url=rss_url,
+            error="Could not parse RSS feed (bozo=True)."
+        )
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
 
@@ -142,9 +154,5 @@ def sync_user_rss_watches(
         rel_updated=res.rel_updated,
         events_created=res.events_created,
     )
-
-    user.rss_import_count = (user.rss_import_count or 0) + 1
-    user.last_sync = timezone.now()
-    user.save(update_fields=["rss_import_count", "last_sync"])
 
     return res
