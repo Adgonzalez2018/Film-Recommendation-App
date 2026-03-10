@@ -36,7 +36,6 @@ def loadAllTime(user):
 def loadWeekly(user, start_date, end_date):
     return WatchEvent.objects.filter(
         user=user,
-        watch_status="Watched",
         watched_date__isnull=False,
         watched_date__gte=start_date,
         watched_date__lt=end_date,
@@ -52,7 +51,7 @@ def calculatePerDay(entries, start_date):
     start = start_date.date() if hasattr(start_date, "date") else start_date
 
     for entry in entries:
-        wd = entry.posted_date
+        wd = entry.posted_date or entry.posted_date
         if wd is None:
             continue
 

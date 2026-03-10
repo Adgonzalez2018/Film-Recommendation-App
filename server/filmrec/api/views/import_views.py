@@ -118,6 +118,7 @@ def import_rss(request):
         prof.last_sync = timezone.now()
         prof.rss_import_count = (prof.rss_import_count or 0) + 1    
         prof.save(update_fields=["rss_import_count","last_sync"])
+        
     return Response({
         "status": "ok",
         "rss_url": res.rss_url,
