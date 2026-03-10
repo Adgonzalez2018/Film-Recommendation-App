@@ -168,10 +168,12 @@ export default function Profile() {
 
     try {
       const u = cleanUsername(rssInput);
-      await submitRSSSync(u, accessToken);
+      const data = await submitRSSSync(u, accessToken);
       setSavedRssUsername(u);
       setRssInput(u);
-      setRssSuccess("RSS linked for weekly reports.");
+      setRssSuccess(
+        `RSS linked. Processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
+      );
     } catch (err) {
       setRssError(err.message);
     } finally {
@@ -188,8 +190,10 @@ export default function Profile() {
     setRssSuccess(null);
 
     try {
-      await submitRSSSync(savedRssUsername, accessToken);
-      setRssSuccess("Sync complete — your data is up to date.");
+      const data = await submitRSSSync(savedRssUsername, accessToken);
+      setRssSuccess(
+        `Sync complete - processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
+      );
     } catch (err) {
       setRssError(err.message);
     } finally {
@@ -198,11 +202,27 @@ export default function Profile() {
   };
 
   // ── Helpers ────────────────────────────────────────────
-  const cleanUsername = (val) =>
-    val
-      .replace(/^https?:\/\/(www\.)?letterboxd\.com\//i, "")
-      .replace(/\/$/, "")
-      .trim();
+  const cleanUsername = (val = "") => {
+    const s = val.trim();
+
+    // full RSS URL
+    let m = s.match(/^https?:\/\/(www\.)?letterboxd\.com\/([^/]+)\/rss\/?$/i);
+    if (m) return m[2];
+
+    // profile URL
+    m = s.match(/^https?:\/\/(www\.)?letterboxd\.com\/([^/]+)\/?$/i);
+    if (m) return m[2];
+
+    // domain without scheme
+    m = s.match(/^(www\.)?letterboxd\.com\/([^/]+)\/rss\/?$/i);
+    if (m) return m[2];    
+
+    m = s.match(/^(www\.)?letterboxd\.com\/([^/]+)\/?$/i);
+    if (m) return m[2];
+    
+    // raw usernmae
+    return s.replace(/^@/, "").replace(/\/rss\/?$/i, "").replace(/\/$/, "");
+  };
 
   const letterboxdUsername = cleanUsername(savedRssUsername || "");
   const letterboxdProfileUrl = letterboxdUsername

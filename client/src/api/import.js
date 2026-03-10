@@ -49,7 +49,7 @@ export async function submitCSVImport(files, accessToken){
 }
 
 export async function submitRSSSync(rssInput, accessToken){
-  const res = await apiFetch("/api/import/rss",{
+  const res = await apiFetch("/api/import/rss/",{
     token: accessToken,
     method: "POST",
     headers: {"Content-Type": "application/json"},
