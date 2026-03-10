@@ -23,10 +23,10 @@ async function refreshAccessToken(){
 
   const res = await fetch("/api/token/refresh/",{
     method: "POST",
-    heads: {
+    headers: {
       "Content-Type": "application/json",
     },
-    body: json.stringify({refresh}),
+    body: json.stringify({ refresh }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -50,7 +50,7 @@ export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
     let finalBody = body;
 
     if (body && typeof body === "object" && !(body instanceof FormData)) {
-      if (!h.has("Content-Type")) h.set("Content-Type", "applicaiton/json");
+      if (!h.has("Content-Type")) h.set("Content-Type", "application/json");
       finalBody = JSON.stringify(body);
     } 
 

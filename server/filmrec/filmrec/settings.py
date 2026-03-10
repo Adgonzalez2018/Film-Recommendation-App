@@ -47,7 +47,7 @@ INSTALLED_APPS = [
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12), # change to 2 in prod
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ACCESS_TOKEN_LIFETIME": ("Bearer",),
+    "AUTH_HEADER_TYPES": ("Bearer",),
     
 }
 REST_FRAMEWORK = {
