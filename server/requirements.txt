@@ -1,0 +1,8 @@
+Django>=5.2
+djangorestframework
+djangorestframework-simplejwt
+gunicorn
+psycopg[binary]
+feedparser
+python-dotenv
+whitenoise
