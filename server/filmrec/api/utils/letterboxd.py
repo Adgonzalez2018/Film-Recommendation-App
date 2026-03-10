@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 import re
 
 _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
+_USERNAME_SAFE_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 def normalize_letterboxd_uri(uri: str):
     """
@@ -37,12 +38,12 @@ def normalize_letterboxd_uri(uri: str):
     parts = [p for p in path.split("/") if p]
 
     # full letterboxd film path
-    if len(parts) >- 2 and parts[0] == "film" and parts[1]:
+    if len(parts) >= 2 and parts[0] == "film" and parts[1]:
         slug = parts[1]
         return f"https://letterboxd.com/film/{slug}/"
     
     # short boxd.it link from csv exports
-    if "boxd.it" in host and len(parts) >= 1 and parts[0]:
+    if host in {"boxd.it","www.boxd.it"}and len(parts) >= 1 and parts[0]:
         short_id = parts[0]
         return f"https://boxd.it/{short_id}/"
     
@@ -67,8 +68,13 @@ def extract_letterboxd_username(input_str: str) -> str | None:
         return None
 
     # raw username
-    if "://" not in s and "/" not in s:
-        return s.strip("@")
+    if "://" not in s and "letterboxd.com/" not in s and "/" not in s:
+        username = s.strip("@").strip().lower()
+        return username if _USERNAME_SAFE_RE.match(username) else None
+
+    # support URLs without schem
+    if s.startswith("letterboxd.com/") or s.startswith("www.letterboxd.com/"):
+        s = "https://" + s
 
     try:
         u = urlparse(s)
@@ -77,7 +83,7 @@ def extract_letterboxd_username(input_str: str) -> str | None:
 
     # allow letterboxd.com only (or loosen if you want)
     host = (u.netloc or "").lower()
-    if "letterboxd.com" not in host:
+    if host not in {"letterboxd.com", "www.letterboxd.com"}:
         return None
 
     # path forms: /username/ or /username/rss/
@@ -89,32 +95,17 @@ def extract_letterboxd_username(input_str: str) -> str | None:
     if not m:
         return None
 
-    username = m.group(1)
+    username = m.group(1).strip().lower()
     # quick sanity
-    if not re.match(r"^[A-Za-z0-9_]+$", username):
+    if not _USERNAME_SAFE_RE.match(username):
         return None
+    
     return username
 
 # RSS Helper Function
 def build_letterboxd_rss_url(raw: str) -> str:
-    s = (raw or "").strip()
-    if not s:
+    username = extract_letterboxd_username(raw)
+    if not username:
         return ""
-    
-    # if they paste "letterboxd.com/username" without scheme
-    if s.startswith("letterboxd.com/"):
-        s = "https://" + s
-    
-    # Full URL with scheme
-    if s.startswith("http://") or s.startswith("https://"):
-        # if it's already an rss URL, keep it
-        if s.rstrip("/").endswith("/rss/"):
-            return s.rstrip("/") + "/"
-        # if it's a profile URL like httsp://letterboxd.com/<user>/
-        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s.rstrip("/"))
-        if m:
-            username = m.group(1)
-            return f"https://letterboxd.com/{username}/rss/"
-        # unnknown URL Format
-        return ""
+    return f"https://letterboxd.com/{username}/rss/"
     

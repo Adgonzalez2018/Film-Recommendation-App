@@ -207,18 +207,18 @@ export default function Profile() {
 
     // full RSS URL
     let m = s.match(/^https?:\/\/(www\.)?letterboxd\.com\/([^/]+)\/rss\/?$/i);
-    if (m) return m[2];
+    if (m) return m[2].toLowerCase();
 
     // profile URL
     m = s.match(/^https?:\/\/(www\.)?letterboxd\.com\/([^/]+)\/?$/i);
-    if (m) return m[2];
+    if (m) return m[2].toLowerCase();
 
     // domain without scheme
     m = s.match(/^(www\.)?letterboxd\.com\/([^/]+)\/rss\/?$/i);
-    if (m) return m[2];    
+    if (m) return m[2].toLowerCase();
 
     m = s.match(/^(www\.)?letterboxd\.com\/([^/]+)\/?$/i);
-    if (m) return m[2];
+    if (m) return m[2].toLowerCase();
     
     // raw usernmae
     return s.replace(/^@/, "").replace(/\/rss\/?$/i, "").replace(/\/$/, "");
