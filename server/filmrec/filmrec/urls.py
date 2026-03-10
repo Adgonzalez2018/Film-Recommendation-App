@@ -19,7 +19,7 @@ from django.urls import path
 
 
 from api.views.auth_views import (
-    loginView, registerView, ping, 
+    loginView, registerView, ping, TokenRefreshView,
     password_reset_confirm, password_reset_request)
 
 from api.views.stats_views import stats_payload, stats_all_time
@@ -42,6 +42,8 @@ urlpatterns = [
     # for authentication anything passing the login/registration
     path("api/ping/", ping, name="ping"),
 
+    # refresh
+    path("api/token/refresh/", TokenRefreshView.as_view()),
     # --- Profile ---
     path("api/profile/", profileView, name="profile"),
     

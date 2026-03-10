@@ -17,6 +17,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt import tokens
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from ..serializer import LoginSerializer, RegistrationSerializer
 
@@ -53,7 +54,6 @@ def registerView(request):
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
     return Response(get_user_tokens(user), status=status.HTTP_201_CREATED)
-
 
 # Ping for Token Authentication
 @api_view(["GET"])
