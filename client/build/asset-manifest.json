@@ -1,16 +1,24 @@
 {
   "files": {
-    "main.css": "/static/css/main.693d29d6.css",
-    "main.js": "/static/js/main.0cb3878b.js",
+    "main.css": "/static/css/main.fb774b97.css",
+    "main.js": "/static/js/main.2462c9da.js",
     "static/media/shining.png": "/static/media/shining.8348c4b9f68845f44ffc.png",
     "static/media/thething.png": "/static/media/thething.7fee2bda47b5e4c88241.png",
+    "static/media/Fargo_person.png": "/static/media/Fargo_person.31b13b34d93f2c2672a4.png",
+    "static/media/star.png": "/static/media/star.68fdc97f1c000ed9f283.png",
+    "static/media/la-haine-1.png": "/static/media/la-haine-1.10a16f53002b589787f2.png",
+    "static/media/Fargo_car.png": "/static/media/Fargo_car.db00cba2db6fa8e596b9.png",
+    "static/media/diamond-tile.png": "/static/media/diamond-tile.593ad2fec033dcf4f33c.png",
     "static/media/Albertus Medium Regular.ttf": "/static/media/Albertus Medium Regular.091c9d6505188f1e3c8a.ttf",
+    "static/media/Fargo_PERSONAL_USE_ONLY.otf": "/static/media/Fargo_PERSONAL_USE_ONLY.f334ee6a68edf63367f4.otf",
+    "static/media/Antique-Olive-Std-Compact_3864.ttf": "/static/media/Antique-Olive-Std-Compact_3864.34e057aae016aecf95d2.ttf",
+    "static/media/0Opus-Thin.ttf": "/static/media/0Opus-Thin.36e7f528a595ac30167c.ttf",
     "index.html": "/index.html",
-    "main.693d29d6.css.map": "/static/css/main.693d29d6.css.map",
-    "main.0cb3878b.js.map": "/static/js/main.0cb3878b.js.map"
+    "main.fb774b97.css.map": "/static/css/main.fb774b97.css.map",
+    "main.2462c9da.js.map": "/static/js/main.2462c9da.js.map"
   },
   "entrypoints": [
-    "static/css/main.693d29d6.css",
-    "static/js/main.0cb3878b.js"
+    "static/css/main.fb774b97.css",
+    "static/js/main.2462c9da.js"
   ]
 }

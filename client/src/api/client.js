@@ -1,3 +1,6 @@
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000";
+
 function getAccessToken() {
   return localStorage.getItem("access_token");
 }
@@ -21,12 +24,12 @@ async function refreshAccessToken(){
     throw new Error("No refresh token available.");
   }
 
-  const res = await fetch("/api/token/refresh/",{
+  const res = await fetch(`${API_BASE_URL}/api/token/refresh/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: json.stringify({ refresh }),
+    body: JSON.stringify({ refresh }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -41,6 +44,8 @@ async function refreshAccessToken(){
 
 
 export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
+  const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+
   const makeRequest = async (bearerToken) => {
     const h = new Headers(headers || {});
     if (bearerToken) {
@@ -52,9 +57,9 @@ export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
     if (body && typeof body === "object" && !(body instanceof FormData)) {
       if (!h.has("Content-Type")) h.set("Content-Type", "application/json");
       finalBody = JSON.stringify(body);
-    } 
+    }
 
-    return fetch(path, {
+    return fetch(url, {
       ...opts,
       body: finalBody,
       headers: h,
@@ -64,7 +69,7 @@ export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
   let authToken = token || getAccessToken();
   let res = await makeRequest(authToken);
 
-  if (res.status=== 401){
+  if (res.status === 401) {
     try {
       const newAccess = await refreshAccessToken();
       res = await makeRequest(newAccess);
