@@ -91,7 +91,7 @@ def chat_recommend(request):
     excluded_str = ", ".join(map(str, excluded_tmdb_ids[:400])) # cap prompt size
 
     # pick cheap model by default (override via env)
-    model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+    model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
     tools = [{
         "type": "file_search",
