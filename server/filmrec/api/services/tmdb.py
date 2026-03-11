@@ -95,7 +95,7 @@ def _parse_year_from_release_date(release_date: Optional[str]) -> Optional[int]:
     if not release_date:
         return None
     try:
-        return datetime.strptime(release_date, "%-%m-%d").date().year
+        return datetime.strptime(release_date, "%Y-%m-%d").date().year
     except Exception:
         return None
     
@@ -203,7 +203,7 @@ def _upsert_movie_fields_from_tmdb(*, tmdb_id: int, data: Dict[str, Any]) -> Dic
         }
 
 @transaction.atomic
-def upsert_tmdb_movie(movie_id: int, tmdb_id, cast_limit: int = 12) -> Movie:
+def upsert_tmdb_movie(tmdb_id, cast_limit: int = 12) -> Movie:
     try:
         tmdb_id_int = int(tmdb_id)
     except Exception:

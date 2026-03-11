@@ -51,7 +51,7 @@ class Movie(models.Model):
     title = models.CharField(max_length=255)
 
     # TMDb attributes
-    tmdb_id = models.IntegerField(blank=True, null=True, unique=True, db_index=True)
+    tmdb_id = models.IntegerField(unique=True, db_index=True)
     year = models.IntegerField(blank=True, null=True)
     overview = models.TextField(blank=True, null=True)
     avg_rating = models.FloatField(default=0.0, blank=True, null=True)
