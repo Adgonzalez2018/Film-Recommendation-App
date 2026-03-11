@@ -1,22 +1,31 @@
 import os
+from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-def run():
-    User = get_user_model()
 
-    username = os.environ.get("BOOTSTRAP_USERNAME", "test@example.com")
-    email = os.environ.get("BOOTSTRAP_EMAIL", "test@example.com")
-    password = os.environ.get("BOOTSTRAP_PASSWORD", "test123!")
+class Command(BaseCommand):
+    help = "Creates a bootstrap superuser if it does not exist"
 
-    if not User.objects.filter(username=username).exists():
-        print("Creating bootstrap user...")
-        User.objects.create_superuser(
-            username=username,
-            email=email,
-            password=password,
-        )
-    else:
-        print("Bootstrap user already exists.")
+    def handle(self, *args, **kwargs):
+        User = get_user_model()
 
-    print("Bootstrap finished.")
+        username = os.environ.get("BOOTSTRAP_USERNAME", "admin@example.com")
+        email = os.environ.get("BOOTSTRAP_EMAIL", "admin@example.com")
+        password = os.environ.get("BOOTSTRAP_PASSWORD", "admin123")
+
+        with transaction.atomic():
+            if not User.objects.filter(username=username).exists():
+                self.stdout.write("Creating bootstrap superuser...")
+
+                User.objects.create_superuser(
+                    username=username,
+                    email=email,
+                    password=password,
+                )
+
+                self.stdout.write(self.style.SUCCESS("Bootstrap user created"))
+            else:
+                self.stdout.write("Bootstrap user already exists")
+
+        self.stdout.write("Bootstrap complete")
