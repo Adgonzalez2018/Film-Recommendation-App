@@ -9,3 +9,4 @@ whitenoise
 dj-database-url
 django-cors-headers
 requests
+openai
