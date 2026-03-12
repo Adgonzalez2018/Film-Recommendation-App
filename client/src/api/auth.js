@@ -30,16 +30,14 @@ export async function loginAction({ email, password }) {
     res = await apiFetch("/api/login/", {
       method: "POST",
       body: { email, password }, // <-- pass object, apiFetch will JSON stringify
+      retryOn401: false,
+      redirectOnAuthFailure: false,
     });
   } catch (e) {
     throw new Error("Network error: could not reach backend (/api/login/). Check dev proxy + backend server.");
   }
 
-  console.log("STATUS", res.status);
-
   const data = await res.json().catch(() => ({}));
-  console.log("BODY", data);
-
   if (!res.ok) throw new Error(extractErrorMessage("Login failed.", data));
   return data;
 }
@@ -48,14 +46,12 @@ export async function registerAction({ email, password, first_name = "" }) {
   const res = await apiFetch("/api/register/",{
     method: "POST",
     body: { email, password, first_name},
+    retryOn401: false,
+    redirectOnAuthFailure: false,
   });
 
   const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(extractErrorMessage("Registration failed.", data));
-  }
-
+  if (!res.ok) throw new Error(extractErrorMessage("Registration failed.", data));
   return data;
 
 }
