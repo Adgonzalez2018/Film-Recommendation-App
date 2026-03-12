@@ -42,7 +42,9 @@ async function refreshAccessToken(){
 }
 
 
-export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
+export async function apiFetch(path, { token, 
+  headers, body,retryOn401 = true, 
+  redirectOnAuthFailure=True, ...opts } = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
 
   const makeRequest = async (bearerToken) => {
@@ -60,29 +62,33 @@ export async function apiFetch(path, { token, headers, body, ...opts } = {}) {
 
     return fetch(url, {
       ...opts,
-      body: finalBody,
       headers: h,
+      body: finalBody,
     });
   };
 
-  let authToken = token || getAccessToken();
+  const authToken = token || getAccessToken();
   let res = await makeRequest(authToken);
 
-  if (res.status === 401) {
-    try {
+  const shouldTryRefresh =
+    retryOn401 &&
+    res.status === 401 &&
+    !path.includes("/api/login/") &&
+    !path.includes("/api/register/") &&
+    !path.includes("/api/token/refresh/");
+    
+  if (shouldTryRefresh){
+    try{
       const newAccess = await refreshAccessToken();
       res = await makeRequest(newAccess);
-    } catch (err) {
+    } catch (err){
       clearAuthTokens();
-      window.location.href = "/signin";
+      if (redirectOnAuthFailure){
+        window.locoation.href = "/signin";
+      }
       throw err;
     }
   }
-
-  const data = await res.clone().json().catch(() => ({}));
-  console.log("STATUS", res.status);
-  console.log("BODY", data);
-  console.log("OK?", res.ok);
 
   return res;
 }
