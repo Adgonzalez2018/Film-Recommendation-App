@@ -1,5 +1,6 @@
 // src/hooks/useAuth.js
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { apiFetch } from "../api/client";
 
 function clearAuth() {
@@ -10,13 +11,22 @@ function clearAuth() {
 }
 
 export function useAuth() {
+  const location = useLocation();
+
   const [accessToken, setAccessTokenState] = useState(
     localStorage.getItem("access_token")
   );
-
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [authError, setAuthError] = useState(null);
-  const [isOnboarded, setIsOnboarded] = useState(null); // null unknown, true/false known
+  const [isOnboarded, setIsOnboarded] = useState(null);
+
+  // sync token from localStorage on route change
+  useEffect(() => {
+    const latestToken = localStorage.getItem("access_token");
+    if (latestToken !== accessToken) {
+      setAccessTokenState(latestToken);
+    }
+  }, [location.pathname, accessToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +37,7 @@ export function useAuth() {
 
       if (!accessToken) {
         if (!cancelled) {
-          setIsOnboarded(false);
+          setIsOnboarded(null);
           setIsAuthenticating(false);
         }
         return;
@@ -44,7 +54,8 @@ export function useAuth() {
         if (res.status === 401 || res.status === 403) {
           clearAuth();
           if (!cancelled) {
-            setIsOnboarded(false);
+            setAccessTokenState(null);
+            setIsOnboarded(null);
             setIsAuthenticating(false);
           }
           return;
@@ -72,12 +83,11 @@ export function useAuth() {
     };
   }, [accessToken]);
 
-  // If other code sets localStorage directly, you can optionally add a helper:
   const setToken = (token) => {
     if (token) {
       localStorage.setItem("access_token", token);
       setAccessTokenState(token);
-    } else{
+    } else {
       clearAuth();
       setAccessTokenState(null);
       setIsOnboarded(null);

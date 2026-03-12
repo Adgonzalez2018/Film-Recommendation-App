@@ -2,109 +2,135 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 
 import LandingPage from "./pages/Landing/LandingPage";
-
 import Register from "./pages/Auth/Register";
 import SignIn from "./pages/Auth/SignIn";
 import Imports from "./pages/Connect/Imports";
-
 import Profile from "./pages/Profile/Profile";
-
 import Chat from "./pages/Chat/Chat";
-
 import WeeklyStats from "./pages/Stats/WeeklyStats";
 import DirectoryStats from "./pages/Stats/DirectoryStats";
 import AllStats from "./pages/Stats/AllStats";
 
-function RequireAuth({ children }) {
-  const { accessToken, isAuthenticating } = useAuth();
+function LoadingScreen({ text = "Loading..." }) {
+  return <div>{text}</div>;
+}
 
-  if (isAuthenticating) return null;
+function ProtectedRoute({ accessToken, isAuthenticating, children }) {
+  if (isAuthenticating) return <LoadingScreen text="Checking auth..." />;
   if (!accessToken) return <Navigate to="/signin" replace />;
   return children;
 }
 
-function AppGate() {
-  const { accessToken, isOnboarded, isAuthenticating } = useAuth();
-
-  if (isAuthenticating) return null;
+function OnboardedRoute({
+  accessToken,
+  isAuthenticating,
+  isOnboarded,
+  children,
+}) {
+  if (isAuthenticating) return <LoadingScreen text="Checking account..." />;
   if (!accessToken) return <Navigate to="/signin" replace />;
-  if (isOnboarded == null) return null;
+  if (isOnboarded == null) return <LoadingScreen text="Checking onboarding..." />;
+  if (!isOnboarded) return <Navigate to="/connect" replace />;
+  return children;
+}
 
+function AppEntry({ accessToken, isAuthenticating, isOnboarded }) {
+  if (isAuthenticating) return <LoadingScreen text="Loading app..." />;
+  if (!accessToken) return <Navigate to="/signin" replace />;
+  if (isOnboarded == null) return <LoadingScreen text="Checking onboarding..." />;
   return <Navigate to={isOnboarded ? "/chat" : "/connect"} replace />;
 }
 
-function RequireOnboarding({ children }) {
-  const { accessToken, isOnboarded, isAuthenticating } = useAuth();
-
-  if (isAuthenticating) return null;
-  if (!accessToken) return <Navigate to="/signin" replace />;
-  if (isOnboarded == null) return null;
-  if (!isOnboarded) return <Navigate to="/connect" replace />;
-
-  return children;
-}
-
 export default function AppRoutes() {
+  const { accessToken, isAuthenticating, isOnboarded, authError } = useAuth();
+
+  if (authError) {
+    return <div>Auth error: {authError}</div>;
+  }
+
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-
       <Route path="/signup" element={<Register />} />
       <Route path="/signin" element={<SignIn />} />
-
-      <Route path="/app" element={<AppGate />} />
-
+      <Route
+        path="/app"
+        element={
+          <AppEntry
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+            isOnboarded={isOnboarded}
+          />
+        }
+      />
       <Route
         path="/profile"
         element={
-          <RequireAuth>
+          <ProtectedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+          >
             <Profile />
-          </RequireAuth>
+          </ProtectedRoute>
         }
       />
-
       <Route
         path="/connect"
         element={
-          <RequireAuth>
+          <ProtectedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+          >
             <Imports />
-          </RequireAuth>
+          </ProtectedRoute>
         }
       />
-
       <Route
         path="/chat"
         element={
-          <RequireOnboarding>
+          <OnboardedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+            isOnboarded={isOnboarded}
+          >
             <Chat />
-          </RequireOnboarding>
+          </OnboardedRoute>
         }
       />
-
       <Route
         path="/stats"
         element={
-          <RequireOnboarding>
+          <OnboardedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+            isOnboarded={isOnboarded}
+          >
             <DirectoryStats />
-          </RequireOnboarding>
+          </OnboardedRoute>
         }
       />
-
       <Route
         path="/stats/weekly"
         element={
-          <RequireOnboarding>
+          <OnboardedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+            isOnboarded={isOnboarded}
+          >
             <WeeklyStats />
-          </RequireOnboarding>
+          </OnboardedRoute>
         }
       />
-
       <Route
         path="/stats/alltime"
         element={
-          <RequireOnboarding>
+          <OnboardedRoute
+            accessToken={accessToken}
+            isAuthenticating={isAuthenticating}
+            isOnboarded={isOnboarded}
+          >
             <AllStats />
-          </RequireOnboarding>
+          </OnboardedRoute>
         }
       />
     </Routes>
