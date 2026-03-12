@@ -25,9 +25,8 @@ export default function SignUp() {
       const data = await registerAction({email: cleanEmail, password});
       
       // backend returns access and refresh
-      if (data?.access_token) localStorage.setItem("access_token", data.access_token);
-      if (data?.refresh) localStorage.setItem("refresh", data.refresh);
-      // navigate 
+      if (data?.access_token) setAccessToken(data.access_token);
+      if (data?.refresh) setRefreshToken(data.refresh);
       navigate("/app"); 
     } catch (err) {
       setError(err.message || "Sign up failed.");

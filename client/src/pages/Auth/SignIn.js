@@ -20,9 +20,9 @@ export default function SignIn() {
     setError(null);
 
     try {
-      const data = await loginAction({ cleanEmail, password });
+      const data = await loginAction({ email: cleanEmail, password });
 
-      if (data?.setAccessToken) setAccessToken(data.access_token);
+      if (data?.access_token) setAccessToken(data.access_token);
       if (data?.refresh) setRefreshToken(data.refresh);
 
       navigate("/app");
