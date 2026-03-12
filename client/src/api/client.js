@@ -33,12 +33,12 @@ async function refreshAccessToken(){
 
   const data = await res.json().catch(() => ({}));
 
-  if (!res.ok || !data.access) {
+  if (!res.ok || !data.access_token) {
     throw new Error(data?.detail || data?.error || "Token refresh failed.");
   }
 
-  setAccessToken(data.access);
-  return data.access;
+  setAccessToken(data.access_token);
+  return data.access_token;
 }
 
 

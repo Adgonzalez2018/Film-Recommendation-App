@@ -8,47 +8,66 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-# Core env
+# --------------------------------------------------
+# Core
+# --------------------------------------------------
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-secret-key")
-DEBUG = os.environ.get("DEBUG", "False") == "True"
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-# Render sets this automatically on deployed services
-ON_RENDER = os.environ.get("RENDER", "False") == "True"
+AUTH_USER_MODEL = "api.User"
 
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
-AUTH_USER_MODEL = "api.User"
-
-# Hosts / origins
+# --------------------------------------------------
+# Hosts / CORS / CSRF
+# --------------------------------------------------
 ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()
-]
-
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin.strip()
+    h.strip()
+    for h in os.environ.get(
+        "ALLOWED_HOSTS",
+        "127.0.0.1,localhost"
+    ).split(",")
+    if h.strip()
 ]
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    for origin in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
     if origin.strip()
 ]
 
-# Optional: easier local dev if you don't want to keep adding localhost origins
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CSRF_TRUSTED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# Optional: allow extra local origins in debug
 if DEBUG:
-    default_local_origins = [
+    extra_local_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
-    for origin in default_local_origins:
+    for origin in extra_local_origins:
         if origin not in CORS_ALLOWED_ORIGINS:
             CORS_ALLOWED_ORIGINS.append(origin)
+        if origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
 
+# --------------------------------------------------
+# Apps
+# --------------------------------------------------
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -62,6 +81,9 @@ INSTALLED_APPS = [
     "api",
 ]
 
+# --------------------------------------------------
+# Middleware
+# --------------------------------------------------
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -93,17 +115,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "filmrec.wsgi.application"
 
-# Database:
-# - Local: falls back to SQLite
-# - Render: uses DATABASE_URL automatically
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# --------------------------------------------------
+# Database
+# --------------------------------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
             conn_max_age=600,
-            ssl_require=False,
+            ssl_require=True,
         )
     }
 else:
@@ -114,6 +136,9 @@ else:
         }
     }
 
+# --------------------------------------------------
+# Password validation
+# --------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -129,6 +154,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# --------------------------------------------------
+# DRF / JWT
+# --------------------------------------------------
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -144,11 +172,17 @@ REST_FRAMEWORK = {
     ],
 }
 
+# --------------------------------------------------
+# Internationalization
+# --------------------------------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# --------------------------------------------------
+# Static files
+# --------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
@@ -163,10 +197,15 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Security settings for production
+# --------------------------------------------------
+# Security
+# --------------------------------------------------
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    X_FRAME_OPTIONS = "DENY"
     SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+    SECURE_BROWSER_XSS_FILTER = True
+
+    # Helpful if you put frontend on HTTPS later
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

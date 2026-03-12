@@ -20,7 +20,7 @@ export default function SignIn() {
       const data = await loginAction({email: cleanEmail, password});
       // store token & refresh
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);
-      if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
+      if (data?.refresh) localStorage.setItem("refresh", data.refresh);
       // navigate
       navigate("/chat");
     } catch (err) {

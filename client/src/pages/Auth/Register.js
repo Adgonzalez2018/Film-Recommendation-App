@@ -25,7 +25,7 @@ export default function SignUp() {
       
       // backend returns access and refresh
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);
-      if (data?.refresh) localStorage.setItem("refresh_token", data.refresh);
+      if (data?.refresh) localStorage.setItem("refresh", data.refresh);
       // navigate 
       navigate("/connect"); 
     } catch (err) {
