@@ -4,13 +4,13 @@ import { apiFetch } from "../api/client";
 
 function clearAuth() {
   localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("refresh");
   localStorage.removeItem("username");
   localStorage.removeItem("userId");
 }
 
 export function useAuth() {
-  const [accessToken, setAccessToken] = useState(
+  const [accessToken, setAccessTokenState] = useState(
     localStorage.getItem("access_token")
   );
 
@@ -74,9 +74,14 @@ export function useAuth() {
 
   // If other code sets localStorage directly, you can optionally add a helper:
   const setToken = (token) => {
-    if (token) localStorage.setItem("access_token", token);
-    else clearAuth();
-    setAccessToken(token);
+    if (token) {
+      localStorage.setItem("access_token", token);
+      setAccessTokenState(token);
+    } else{
+      clearAuth();
+      setAccessTokenState(null);
+      setIsOnboarded(null);
+    }
   };
 
   return {

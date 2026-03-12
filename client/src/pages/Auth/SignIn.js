@@ -22,7 +22,7 @@ export default function SignIn() {
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);
       if (data?.refresh) localStorage.setItem("refresh", data.refresh);
       // navigate
-      navigate("/chat");
+      navigate("/app");
     } catch (err) {
       setError(err.message || "Sign in failed.");
     } finally {

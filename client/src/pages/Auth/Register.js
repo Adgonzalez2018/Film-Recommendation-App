@@ -27,7 +27,7 @@ export default function SignUp() {
       if (data?.access_token) localStorage.setItem("access_token", data.access_token);
       if (data?.refresh) localStorage.setItem("refresh", data.refresh);
       // navigate 
-      navigate("/connect"); 
+      navigate("/app"); 
     } catch (err) {
       setError(err.message || "Sign up failed.");
     } finally {
