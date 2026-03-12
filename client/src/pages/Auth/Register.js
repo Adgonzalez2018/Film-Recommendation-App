@@ -6,11 +6,12 @@ import backgroundImg from "../../assets/images/shining.png";
 import AuthForm from "./components/AuthForm";
 
 import { registerAction } from "../../api/auth";
-
+import { useAuth } from "../../hooks/useAuth";
 
 
 export default function SignUp() {
   const navigate = useNavigate();
+  const { setAccessToken, setRefreshToken } = useAuth();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 

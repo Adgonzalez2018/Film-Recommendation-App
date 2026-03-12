@@ -1,32 +1,22 @@
-// src/hooks/useAuth.js
-import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { createContext, useContext, useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
-export { useAuth } from "../context/AuthContext";
-function clearAuth() {
+
+const AuthContext = createContext(null);
+
+function clearAuthStorage() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh");
   localStorage.removeItem("username");
   localStorage.removeItem("userId");
 }
 
-function useAuth() {
-  const location = useLocation();
-
+export function AuthProvider({ children }) {
   const [accessToken, setAccessTokenState] = useState(
     localStorage.getItem("access_token")
   );
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(null);
-
-  // sync token from localStorage on route change
-  useEffect(() => {
-    const latestToken = localStorage.getItem("access_token");
-    if (latestToken !== accessToken) {
-      setAccessTokenState(latestToken);
-    }
-  }, [location.pathname, accessToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +42,7 @@ function useAuth() {
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 401 || res.status === 403) {
-          clearAuth();
+          clearAuthStorage();
           if (!cancelled) {
             setAccessTokenState(null);
             setIsOnboarded(null);
@@ -78,27 +68,56 @@ function useAuth() {
     };
 
     run();
+
     return () => {
       cancelled = true;
     };
   }, [accessToken]);
 
-  const setToken = (token) => {
+  const setAccessToken = (token) => {
     if (token) {
       localStorage.setItem("access_token", token);
       setAccessTokenState(token);
     } else {
-      clearAuth();
+      clearAuthStorage();
       setAccessTokenState(null);
       setIsOnboarded(null);
     }
   };
 
-  return {
-    accessToken,
-    setAccessToken: setToken,
-    isAuthenticating,
-    authError,
-    isOnboarded,
+  const setRefreshToken = (token) => {
+    if (token) localStorage.setItem("refresh", token);
+    else localStorage.removeItem("refresh");
   };
+
+  const logout = () => {
+    clearAuthStorage();
+    setAccessTokenState(null);
+    setIsOnboarded(null);
+    setAuthError(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        accessToken,
+        setAccessToken,
+        setRefreshToken,
+        logout,
+        isAuthenticating,
+        authError,
+        isOnboarded,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside an AuthProvider");
+  }
+  return ctx;
 }

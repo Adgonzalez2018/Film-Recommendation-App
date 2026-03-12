@@ -1,138 +1,46 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./hooks/useAuth";
+import React, {useState} from "react";
+import "./Auth.css";
+import { useNavigate } from "react-router-dom";
+import AuthForm from "./components/AuthForm";
+import backgroundImg from "../../assets/images/shining.png";
+import { loginAction } from "../../api/auth";
+import { useAuth } from "../../hooks/useAuth";
 
-import LandingPage from "./pages/Landing/LandingPage";
-import Register from "./pages/Auth/Register";
-import SignIn from "./pages/Auth/SignIn";
-import Imports from "./pages/Connect/Imports";
-import Profile from "./pages/Profile/Profile";
-import Chat from "./pages/Chat/Chat";
-import WeeklyStats from "./pages/Stats/WeeklyStats";
-import DirectoryStats from "./pages/Stats/DirectoryStats";
-import AllStats from "./pages/Stats/AllStats";
+export default function SignIn() {
+  const navigate = useNavigate();
+  const { setAccessToken, setRefreshToken } = useAuth();
 
-function LoadingScreen({ text = "Loading..." }) {
-  return <div>{text}</div>;
-}
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-function ProtectedRoute({ accessToken, isAuthenticating, children }) {
-  if (isAuthenticating) return <LoadingScreen text="Checking auth..." />;
-  if (!accessToken) return <Navigate to="/signin" replace />;
-  return children;
-}
+  const handleSignIn = async ({ email, password }) => {
+    const cleanEmail = (email || "").trim().toLowerCase();
 
-function OnboardedRoute({
-  accessToken,
-  isAuthenticating,
-  isOnboarded,
-  children,
-}) {
-  if (isAuthenticating) return <LoadingScreen text="Checking account..." />;
-  if (!accessToken) return <Navigate to="/signin" replace />;
-  if (isOnboarded == null) return <LoadingScreen text="Checking onboarding..." />;
-  if (!isOnboarded) return <Navigate to="/connect" replace />;
-  return children;
-}
+    setLoading(true);
+    setError(null);
 
-function AppEntry({ accessToken, isAuthenticating, isOnboarded }) {
-  if (isAuthenticating) return <LoadingScreen text="Loading app..." />;
-  if (!accessToken) return <Navigate to="/signin" replace />;
-  if (isOnboarded == null) return <LoadingScreen text="Checking onboarding..." />;
-  return <Navigate to={isOnboarded ? "/chat" : "/connect"} replace />;
-}
+    try {
+      const data = await loginAction({ cleanEmail, password });
 
-export default function AppRoutes() {
-  const { accessToken, isAuthenticating, isOnboarded, authError } = useAuth();
+      if (data?.setAccessToken) setAccessToken(data.access_token);
+      if (data?.refresh) setRefreshToken(data.refresh);
 
-  if (authError) {
-    return <div>Auth error: {authError}</div>;
-  }
+      navigate("/app");
+    } catch (err){
+      setError(err.message || "Sign in failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/signup" element={<Register />} />
-      <Route path="/signin" element={<SignIn />} />
-      <Route
-        path="/app"
-        element={
-          <AppEntry
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-            isOnboarded={isOnboarded}
-          />
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-          >
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/connect"
-        element={
-          <ProtectedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-          >
-            <Imports />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/chat"
-        element={
-          <OnboardedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-            isOnboarded={isOnboarded}
-          >
-            <Chat />
-          </OnboardedRoute>
-        }
-      />
-      <Route
-        path="/stats"
-        element={
-          <OnboardedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-            isOnboarded={isOnboarded}
-          >
-            <DirectoryStats />
-          </OnboardedRoute>
-        }
-      />
-      <Route
-        path="/stats/weekly"
-        element={
-          <OnboardedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-            isOnboarded={isOnboarded}
-          >
-            <WeeklyStats />
-          </OnboardedRoute>
-        }
-      />
-      <Route
-        path="/stats/alltime"
-        element={
-          <OnboardedRoute
-            accessToken={accessToken}
-            isAuthenticating={isAuthenticating}
-            isOnboarded={isOnboarded}
-          >
-            <AllStats />
-          </OnboardedRoute>
-        }
-      />
-    </Routes>
+    <AuthForm
+      mode="signin"
+      title="SIGN IN"
+      backgroundImg={backgroundImg}
+      onSubmit={handleSignIn}
+      error={error}
+      loading={loading}
+    />
   );
 }
