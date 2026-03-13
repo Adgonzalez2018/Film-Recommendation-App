@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../api/client";
 
 const AuthContext = createContext(null);
@@ -17,60 +17,106 @@ export function AuthProvider({ children }) {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(null);
+  const [onboardingStatus, setOnboardingStatus] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const refreshOnboarding = useCallback(async (tokenOverride = null) => {
+    const token = tokenOverride ?? accessToken;
 
-    const run = async () => {
-      setIsAuthenticating(true);
-      setAuthError(null);
+    setAuthError(null);
+    
+    if (!token) {
+        setOnboardedAndStatus(null, null);
+        setIsAuthenticating(false);
+        return null;
+    }
 
-      if (!accessToken) {
-        if (!cancelled) {
-          setIsOnboarded(null);
-          setIsAuthenticating(false);
-        }
-        return;
-      }
-
-      try {
+    try {
         const res = await apiFetch("/api/onboarding-status/", {
-          token: accessToken,
-          method: "GET",
+            token,
+            method: "GET",
         });
 
         const data = await res.json().catch(() => ({}));
 
-        if (res.status === 401 || res.status === 403) {
-          clearAuthStorage();
-          if (!cancelled) {
+        if (res.status === 401 || res.status === 403){
+            clearAuthStorage();
             setAccessTokenState(null);
-            setIsOnboarded(null);
-            setIsAuthenticating(false);
-          }
-          return;
+            setOnboardedAndStatus(null, null);
+            setIsAuthenticating(null);
+            return null;
         }
 
-        if (!res.ok) {
-          throw new Error(data?.detail || data?.error || "Auth check failed.");
+        if (!res.ok){
+            throw new Error(data?.detail || data?.error || "Auth check failed.");
         }
 
-        if (!cancelled) {
-          setIsOnboarded(Boolean(data?.is_onboarded));
-          setIsAuthenticating(false);
+        setOnboardedAndStatus(Boolean(data?.is_onboarded), data);
+        setIsAuthenticating(false);
+        return data;
+    } catch (e) {
+        setAuthError(e?.message || "Server unavailable.");
+        setIsAuthenticating(false);
+        return null;
+    }
+  }, [accessToken]);
+
+  function setOnboardedAndStatus(onboarded, statusData){
+    setIsOnboarded(onboarded);
+    setOnboardingStatus(statusData);
+  }
+
+    useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+        setIsAuthenticating(true);
+
+        if (!accessToken) {
+            if (!cancelled) {
+                setOnboardedAndStatus(null, null);
+                setIsAuthenticating(false);
+            }
+            return;
         }
-      } catch (e) {
-        if (!cancelled) {
-          setAuthError(e?.message || "Server unavailable.");
-          setIsAuthenticating(false);
+
+        try {
+            const res = await apiFetch("/api/onboarding-status/", {
+                token: accessToken,
+                method: "GET",
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (res.status === 401 || res.status === 403){
+                clearAuthStorage();
+                if (!cancelled) {
+                    setAccessTokenState(null);
+                    setOnboardedAndStatus(null, null);
+                    setIsAuthenticating(false);
+                }
+                return;
+            }
+            
+            if (!res.ok) {
+                throw new Error(data?.detail || data?.error || "Auth check failed.");
+            }
+
+            if (!cancelled) {
+                setOnboardedAndStatus(Boolean(data?.is_onboarded), data);
+                setIsAuthenticating(false);
+            }
+        } catch(e) {
+            if (!cancelled) {
+                setAuthError(e?.message || "Server unavailable.");
+                setIsAuthenticating(false);
+            }
         }
-      }
     };
 
     run();
 
     return () => {
-      cancelled = true;
+        cancelled = true;
     };
   }, [accessToken]);
 
@@ -81,6 +127,7 @@ export function AuthProvider({ children }) {
     } else {
       clearAuthStorage();
       setAccessTokenState(null);
+      setOnboardedAndStatus(null, null);
       setIsOnboarded(null);
     }
   };
@@ -93,7 +140,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     clearAuthStorage();
     setAccessTokenState(null);
-    setIsOnboarded(null);
+    setOnboardedAndStatus(null, null);
     setAuthError(null);
   };
 
@@ -107,6 +154,8 @@ export function AuthProvider({ children }) {
         isAuthenticating,
         authError,
         isOnboarded,
+        onboardingStatus,
+        refreshOnboarding,
       }}
     >
       {children}

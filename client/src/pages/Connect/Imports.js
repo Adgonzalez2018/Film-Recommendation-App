@@ -1,7 +1,7 @@
 import "./Imports.css";
 import "../Auth/Auth.css";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useRequest } from "../../hooks/useRequest";
@@ -14,11 +14,30 @@ import carImg from "../../assets/images/Fargo_car.png";
 import PageFrame from "../../components/layout/PageFrame";
 
 // API
-import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
+import { CSV_FILES, submitCSVImport, submitRSSSync, markOnboardingSkipped } from "../../api/import";
 
 export default function LetterboxdConnect() {
   const navigate = useNavigate();
-  const { isAuthenticating, authError, accessToken } = useAuth();
+  const { isAuthenticating, 
+    authError, 
+    accessToken, 
+    isOnboarded, 
+    onboardingStatus, 
+    refreshOnboarding,
+  } = useAuth();
+
+  useEffect(() => {
+    if (isOnboarded) {
+      navigate("/chat", { replace: true});
+    }
+  }, [isOnboarded, navigate]);
+
+  // check if user imported or linked 
+  const hasImportedOrLinked =
+    Boolean(onboardingStatus?.has_manual_import) ||
+    Boolean(onboardingStatus?.has_rss_import) ||
+    Boolean(csvSuccess) ||
+    Boolean(rssSuccess);
 
   // CSV state
   const [files, setFiles] = useState({
@@ -65,9 +84,8 @@ export default function LetterboxdConnect() {
     }
 
     await submitCSVImport(files, accessToken);
-
+    await refreshOnboarding();
     setCsvSuccess("Data imported! Your all-time stats and initial weekly report are ready!");
-    navigate("/chat");
   });
 
   const handleCSVSubmit = (e) => {
@@ -96,6 +114,7 @@ export default function LetterboxdConnect() {
 
     try {
       await submitRSSSync(rssInput, accessToken);
+      await refreshOnboarding();
       setRssSuccess("RSS linked! Weekly watch reports will sync automatically.");
     } catch (err) {
       setRssError(err?.message || "RSS link failed.");
@@ -104,7 +123,23 @@ export default function LetterboxdConnect() {
     }
   };
 
-  const handleContinue = () => navigate("/chat");
+  const handleContinue = async () => {
+    try {
+      if (!accessToken){
+        throw new Error("Not authenticated. Please sign in again.");
+      }
+
+      // only mark skip if user hasn't imported anything
+      if (!hasImportedOrLinked && !isOnboarded) {
+        await markOnboardingSkipped(accessToken);
+        await refreshOnboarding();
+      }
+
+      navigate("/chat");
+    } catch (err) {
+      setCsvError(err?.message || "Could not continue.");
+    }
+  };
 
   if (isAuthenticating) {
     return (
@@ -253,7 +288,7 @@ export default function LetterboxdConnect() {
 
         <div className="connect-skip">
           <button className="connect-skip-link" onClick={handleContinue}>
-            {csvSuccess || rssSuccess ? "Continue to Chat" : "Skip for now"}
+            {hasImportedOrLinked ? "Continue to Chat" : "Skip for now"}
           </button>
         </div>
       </div>

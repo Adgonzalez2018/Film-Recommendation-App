@@ -73,3 +73,22 @@ export async function getOnboardingStatus(){
     method: "GET",
   });
 }
+
+export async function markOnboardingSkipped(accessToken) {
+  const res = await apiFetch("/api/onboarding/skip/", {
+    token: accessToken,
+    method: "POST",
+    headers: { "Content-Type": "application/json"},
+    body: JSON.stringify({ skipped: true}),
+  });
+
+  if (!res.ok) {
+    let msg = "Failed to skip onboarding.";
+    try {
+      const data = await res.json();
+      msg = extractErrorMessage(msg, data);
+    } catch{}
+    throw new Error(msg);
+  }
+  return res.json();
+}
