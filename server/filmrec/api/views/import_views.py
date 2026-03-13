@@ -147,5 +147,28 @@ def onboarding_status(request):
     return Response({
         "has_manual_import": has_manual_import,
         "has_rss_import": has_rss_import,
-        "is_onboarded": has_watch_data or has_manual_import or has_rss_import
+        "has_skipped_onboarding": bool(user.has_skipped_onboarding),
+        "is_onboarded": (
+            has_watch_data 
+            or has_manual_import
+            or has_rss_import 
+            or user.has_skipped_onboarding)
     })
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def skip_onboarding(request):
+    user = request.user
+    
+    if not user.has_skipped_onboarding:
+        user.has_skipped_onboarding = True
+        user.save(update_fields=["has_skipped_onboarding"])
+
+    return Response(
+        {
+            "status": "ok",
+            "has_skipped_onboarding": True,
+            "is_onboarded": True,
+        },
+        status=status.HTTP_200_OK
+    )

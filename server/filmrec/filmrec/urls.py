@@ -24,7 +24,12 @@ from api.views.auth_views import (
 
 from api.views.stats_views import stats_payload, stats_all_time
 
-from api.views.import_views import manual_import, import_rss, onboarding_status
+from api.views.import_views import( 
+    manual_import, 
+    import_rss, 
+    onboarding_status,
+    skip_onboarding,
+    )
 from api.views.profile_views import profileView
 
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
@@ -49,7 +54,8 @@ urlpatterns = [
     
     # --- Onboarding ---
     path("api/onboarding-status/", onboarding_status, name="onboarding-status"),
-    
+    path("api/onboarding/skip/", skip_onboarding, name="skip-onboarding"),
+
     # --- Data Import ---
     path("api/import/csv/", manual_import, name="import-csv"),
     path("api/import/rss/", import_rss, name="import-rss"),

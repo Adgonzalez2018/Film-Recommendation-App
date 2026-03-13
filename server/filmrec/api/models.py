@@ -77,7 +77,7 @@ class Movie(models.Model):
 class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
     birthday = models.DateTimeField(blank=True,null=True)
-    
+    has_skipped_onboarding = models.BooleanField(default=False)
 
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
