@@ -269,6 +269,22 @@ export default function Profile() {
   // ── Render ─────────────────────────────────────────────
   return (
     <div className="profile-page">
+      <div className="profile-top-nav">
+        <button
+          type="button"
+          className="profile-top-link"
+          onClick={() => navigate("/chat")}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          className="profile-top-link"
+          onClick={() => navigate("/directorystats")}
+        >
+          Directory Stats
+        </button>
+      </div>
       <div className="profile-hero">
         <img src={heroImg} alt="" className="profile-hero-img" />
       </div>

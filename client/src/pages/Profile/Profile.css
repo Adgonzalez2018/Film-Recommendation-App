@@ -251,6 +251,52 @@
   background: #111;
 }
 
+.profile-top-nav {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.profile-top-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.profile-top-link:hover {
+  opacity: 0.68;
+  transform: translateY(-1px);
+}
+
+.profile-top-link:focus {
+  outline: none;
+  opacity: 0.68;
+}
+
+@media (max-width: 600px) {
+  .profile-top-nav {
+    top: 12px;
+    right: 14px;
+    gap: 0.75rem;
+  }
+
+  .profile-top-link {
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+  }
+}
 /* ── Primary button (used for save + import + rss) ─────── */
 .profile-save-btn {
   width: 100%;
