@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
             clearAuthStorage();
             setAccessTokenState(null);
             setOnboardedAndStatus(null, null);
-            setIsAuthenticating(null);
+            setIsAuthenticating(false);
             return null;
         }
 

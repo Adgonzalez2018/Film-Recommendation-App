@@ -32,12 +32,6 @@ export default function LetterboxdConnect() {
     }
   }, [isOnboarded, navigate]);
 
-  // check if user imported or linked 
-  const hasImportedOrLinked =
-    Boolean(onboardingStatus?.has_manual_import) ||
-    Boolean(onboardingStatus?.has_rss_import) ||
-    Boolean(csvSuccess) ||
-    Boolean(rssSuccess);
 
   // CSV state
   const [files, setFiles] = useState({
@@ -69,6 +63,13 @@ export default function LetterboxdConnect() {
     setCsvError(null);
     setCsvSuccess(null);
   };
+
+  // check if user imported or linked 
+  const hasImportedOrLinked =
+    Boolean(onboardingStatus?.has_manual_import) ||
+    Boolean(onboardingStatus?.has_rss_import) ||
+    Boolean(csvSuccess) ||
+    Boolean(rssSuccess);
 
   const {
     run: runCsvImport,
