@@ -100,7 +100,7 @@ def _parse_year_from_release_date(release_date: Optional[str]) -> Optional[int]:
         return None
     
 def _safe_country_name(data: Dict[str, Any]) -> Optional[str]:
-    countries = data.get("produciton_countries") or []
+    countries = data.get("production_countries") or []
     if not countries:
         return None
     first = countries[0] or {}
@@ -189,7 +189,7 @@ def _upsert_movie_fields_from_tmdb(*, tmdb_id: int, data: Dict[str, Any]) -> Dic
     poster_url = (IMG_BASE_W500 + poster_path) if poster_path else None
 
     return {
-            "title":data.get("title" or "").strip() or "Unknown",
+            "title":(data.get("title") or "").strip() or "Unknown",
             "year": year,
             "overview": data.get("overview"),
             "avg_rating": data.get("vote_average"),
