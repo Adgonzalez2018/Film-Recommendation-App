@@ -1,130 +1,189 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Chat.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { apiFetch } from "../../api/client";
 
-// ─── TMDB poster fetching ────────────────────────────────
-// Put your TMDB read-access token in .env as REACT_APP_TMDB_TOKEN
-const TMDB_TOKEN = process.env.REACT_APP_TMDB_TOKEN;
+function extractErrorMessage(fallback, data) {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
 
-async function fetchPoster(title, year) {
-  if (!TMDB_TOKEN) return null;
-  try {
-    const query = encodeURIComponent(title);
-    const yearParam = year ? `&primary_release_year=${year}` : "";
-    const res = await fetch(
-      `https://api.themoviedb.org/3/search/movie?query=${query}${yearParam}&page=1`,
-      { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } }
-    );
-    const data = await res.json();
-    const hit = data.results?.[0];
-    if (hit?.poster_path) {
-      return `https://image.tmdb.org/t/p/w300${hit.poster_path}`;
-    }
-  } catch {}
-  return null;
-}
+  if (typeof data === "object") {
+    if (typeof data.error === "string" && data.error.trim()) return data.error.trim();
+    if (typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
 
-// ─── Parse movie recommendations from AI text ───────────
-function parseMovies(text) {
-  const results = [];
-  const seen = new Set();
-
-  const patterns = [
-    /(?:^|\n)\s*(?:\d+\.|[-*])\s+\*{1,2}([^*\n(]+?)\*{1,2}\s*(?:\((\d{4})\))?/gm,
-    /(?:^|\n)\s*(?:\d+\.|[-*])\s+"([^"\n(]+?)"\s*(?:\((\d{4})\))?/gm,
-    /\*{1,2}([A-Z][^*\n(]{2,50}?)\*{1,2}\s*\((\d{4})\)/gm,
-    /"([A-Z][^"\n(]{2,50}?)"\s*\((\d{4})\)/gm,
-  ];
-
-  for (const pat of patterns) {
-    let m;
-    while ((m = pat.exec(text)) !== null) {
-      const title = m[1].trim();
-      const year = m[2] || null;
-      const key = title.toLowerCase();
-      if (!seen.has(key) && title.length > 1) {
-        seen.add(key);
-        results.push({ title, year, poster: null, id: `${key}-${Date.now()}` });
-      }
+    for (const value of Object.values(data)) {
+      if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+      if (typeof value === "string" && value.trim()) return value.trim();
     }
   }
 
-  return results.slice(0, 3);
+  return fallback;
 }
+
+async function sendChatMessage(message, token) {
+  const res = await apiFetch("/api/chat/recommend/", {
+    token,
+    method: "POST",
+    body: { message },
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Chat request failed.", data));
+  }
+
+  return data;
+}
+
+async function fetchFilmBank(token, page = 1, pageSize = 50) {
+  const res = await apiFetch(`/api/film-bank/?page=${page}&page_size=${pageSize}`, {
+    token,
+    method: "GET",
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Failed to load film bank.", data));
+  }
+
+  return data;
+}
+
+async function deleteFilmBankMovie(movieId, token) {
+  const res = await apiFetch(`/api/film-bank/${movieId}/`, {
+    token,
+    method: "DELETE",
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Failed to remove film from bank.", data));
+  }
+
+  return data;
+}
+
+function normalizeFilmBankItem(item) {
+  const movie = item?.movie || {};
+
+  return {
+    id: item?.id,
+    movieId: movie?.id,
+    title: movie?.title || "Untitled",
+    year: movie?.year ?? null,
+    poster: movie?.poster_url || null,
+    tmdbId: movie?.tmdb_id ?? null,
+    description: movie?.description || "",
+    avgRating: movie?.avg_rating ?? null,
+    reason: item?.reason || "",
+    queryText: item?.query_text || "",
+    createdAt: item?.created_at || null,
+  };
+}
+
+function normalizeRecommendation(movie) {
+  return {
+    id: `rec-${movie?.id ?? movie?.tmdb_id ?? Math.random().toString(36).slice(2)}`,
+    movieId: movie?.id ?? null,
+    title: movie?.title || "Untitled",
+    year: movie?.year ?? null,
+    poster: movie?.poster_url || null,
+    tmdbId: movie?.tmdb_id ?? null,
+    description: movie?.description || "",
+    avgRating: movie?.avg_rating ?? null,
+  };
+}
+
+const INITIAL_ASSISTANT_MESSAGE = {
+  id: 1,
+  role: "assistant",
+  content:
+    "Hello! I'm your film recommendation AI. I know all about your Letterboxd viewing history. What would you like to know?",
+  recommendations: [],
+  timestamp: new Date(),
+};
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { isAuthenticating, authError } = useAuth();
+  const { accessToken, isAuthenticating, authError } = useAuth();
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: "assistant",
-      content:
-        "Hello! I'm your film recommendation AI. I know all about your Letterboxd viewing history. What would you like to know?",
-      timestamp: new Date(),
-    },
-  ]);
-
+  const [messages, setMessages] = useState([INITIAL_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
     { id: 1, title: "New conversation", date: "Today", active: true },
   ]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // ── Film bank ────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(false);
   const [filmBank, setFilmBank] = useState([]);
   const [bankOpen, setBankOpen] = useState(false);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState("");
 
   const messagesEndRef = useRef(null);
   const PROMPT = "user@film:~$";
+
+  const filmBankCount = useMemo(() => filmBank.length, [filmBank]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const loadFilmBank = async () => {
+    if (!accessToken) return;
 
-  // ── Add movies from AI response to film bank ─────────
-  const addToFilmBank = async (text) => {
-    const movies = parseMovies(text);
-    if (!movies.length) return;
+    setBankLoading(true);
+    setBankError("");
 
-    setFilmBank((prev) => {
-      const existingTitles = new Set(prev.map((f) => f.title.toLowerCase()));
-      const fresh = movies.filter((m) => !existingTitles.has(m.title.toLowerCase()));
-      return [...prev, ...fresh];
-    });
-
-    for (const movie of movies) {
-      const poster = await fetchPoster(movie.title, movie.year);
-      if (poster) {
-        setFilmBank((prev) =>
-          prev.map((f) =>
-            f.title.toLowerCase() === movie.title.toLowerCase()
-              ? { ...f, poster }
-              : f
-          )
-        );
-      }
+    try {
+      const data = await fetchFilmBank(accessToken);
+      const items = Array.isArray(data?.results)
+        ? data.results.map(normalizeFilmBankItem)
+        : [];
+      setFilmBank(items);
+    } catch (err) {
+      setBankError(err?.message || "Failed to load Film Bank.");
+    } finally {
+      setBankLoading(false);
     }
   };
 
-  const removeFromBank = (title) => {
-    setFilmBank((prev) => prev.filter((f) => f.title !== title));
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  useEffect(() => {
+    loadFilmBank();
+  }, [accessToken]);
+
+  const handleRemoveFromBank = async (movieId) => {
+    if (!movieId || !accessToken) return;
+
+    const prev = filmBank;
+    setFilmBank((current) => current.filter((film) => film.movieId !== movieId));
+
+    try {
+      await deleteFilmBankMovie(movieId, accessToken);
+    } catch (err) {
+      setFilmBank(prev);
+      setBankError(err?.message || "Failed to remove film.");
+    }
   };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+
+    const trimmed = input.trim();
+    if (!trimmed || isLoading || !accessToken) return;
 
     const userMessage = {
-      id: messages.length + 1,
+      id: Date.now(),
       role: "user",
-      content: input,
+      content: trimmed,
+      recommendations: [],
       timestamp: new Date(),
     };
 
@@ -132,22 +191,40 @@ const Chat = () => {
     setInput("");
     setIsLoading(true);
 
-    // TODO: replace with your backend call to /api/chat/recommend/
-    setTimeout(() => {
-      const aiResponse =
-        'Based on your history, I recommend:\n\n1. **Breathless** (1960) — Godard\'s jump-cut debut.\n2. **La Haine** (1995) — A single day in the banlieues.\n3. **Bande à part** (1964) — Outsiders running through the Louvre.';
+    try {
+      const data = await sendChatMessage(trimmed, accessToken);
 
-      const aiMessage = {
-        id: messages.length + 2,
+      const recommendations = Array.isArray(data?.recommendations)
+        ? data.recommendations.map(normalizeRecommendation)
+        : [];
+
+      const assistantMessage = {
+        id: Date.now() + 1,
         role: "assistant",
-        content: aiResponse,
+        content: data?.assistant || "Here are a few picks.",
+        recommendations,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
-      addToFilmBank(aiResponse);
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      if (recommendations.length > 0) {
+        await loadFilmBank();
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 2,
+          role: "assistant",
+          content: err?.message || "Something went wrong while getting recommendations.",
+          recommendations: [],
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   const handleNewChat = () => {
@@ -157,15 +234,10 @@ const Chat = () => {
       date: "Today",
       active: true,
     };
+
     setChatHistory([newChat, ...chatHistory.map((c) => ({ ...c, active: false }))]);
-    setMessages([
-      {
-        id: 1,
-        role: "assistant",
-        content: "Hello! I'm your film recommendation AI. What would you like to know?",
-        timestamp: new Date(),
-      },
-    ]);
+    setMessages([INITIAL_ASSISTANT_MESSAGE]);
+    setInput("");
   };
 
   const handleChatSelect = (chatId) => {
@@ -175,7 +247,9 @@ const Chat = () => {
   if (isAuthenticating) {
     return (
       <div className="chat-container dark-mode">
-        <div className="auth-loading"><p>Authenticating...</p></div>
+        <div className="auth-loading">
+          <p>Authenticating...</p>
+        </div>
       </div>
     );
   }
@@ -185,7 +259,9 @@ const Chat = () => {
       <div className="chat-container dark-mode">
         <div className="auth-error-container">
           <div className="error-message">{authError}</div>
-          <button className="retry-button" onClick={() => window.location.reload()}>RETRY</button>
+          <button className="retry-button" onClick={() => window.location.reload()}>
+            RETRY
+          </button>
         </div>
       </div>
     );
@@ -193,10 +269,11 @@ const Chat = () => {
 
   return (
     <div className="chat-container dark-mode">
-      {/* ── Left Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <button className="new-chat-button" onClick={handleNewChat}>+ New Chat</button>
+          <button className="new-chat-button" onClick={handleNewChat}>
+            + New Chat
+          </button>
         </div>
 
         <div className="chat-history">
@@ -226,32 +303,67 @@ const Chat = () => {
         </button>
       </aside>
 
-      {/* ── Main chat ── */}
       <main className="chat-main">
         <header className="chat-header">
           <h1 className="header-title">Film-Recommender v0.1</h1>
           <div className="chat-header-nav">
             <button className="stats-button" onClick={() => setBankOpen(true)}>
               Film Bank
-              {filmBank.length > 0 && <span className="bank-count">{filmBank.length}</span>}
+              {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
             </button>
-            <button className="stats-button" onClick={() => navigate("/stats")}>Stats</button>
+            <button className="stats-button" onClick={() => navigate("/stats")}>
+              Stats
+            </button>
           </div>
         </header>
 
         <div className="messages-container">
           {messages.map((m) => (
-            <div key={m.id} className={`log-line ${m.role}`}>
-              <span className="log-prefix">{m.role === "user" ? PROMPT : "ai@film:~#"}</span>
-              <span className="log-text">{m.content}</span>
+            <div key={m.id} className={`message-block ${m.role}`}>
+              <div className={`log-line ${m.role}`}>
+                <span className="log-prefix">{m.role === "user" ? PROMPT : "ai@film:~#"}</span>
+                <span className="log-text">{m.content}</span>
+              </div>
+
+              {m.role === "assistant" && Array.isArray(m.recommendations) && m.recommendations.length > 0 && (
+                <div className="chat-recommendations-grid">
+                  {m.recommendations.map((film) => (
+                    <div
+                      key={film.id}
+                      className="film-card"
+                      title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
+                    >
+                      <div className="film-card-poster">
+                        {film.poster ? (
+                          <img src={film.poster} alt={film.title} />
+                        ) : (
+                          <div className="film-card-placeholder">
+                            <span>{film.title.charAt(0)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="film-card-info">
+                        <div className="film-card-title">{film.title}</div>
+                        {film.year && <div className="film-card-year">{film.year}</div>}
+                        {!!film.description && (
+                          <div className="film-card-description">{film.description}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
+
           {isLoading && (
             <div className="log-line assistant">
               <span className="log-prefix">ai@film:~#</span>
               <span className="log-text typing">typing...</span>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -271,24 +383,35 @@ const Chat = () => {
                 }
               }}
             />
-            <button type="submit" className="send-button" disabled={!input.trim()}>ENTER</button>
+            <button type="submit" className="send-button" disabled={!input.trim() || isLoading}>
+              ENTER
+            </button>
           </form>
         </div>
       </main>
 
-      {/* ── Film Bank modal ── */}
       {bankOpen && (
         <div className="film-bank-overlay" onClick={() => setBankOpen(false)}>
           <div className="film-bank-modal" onClick={(e) => e.stopPropagation()}>
             <div className="film-bank-header">
               <span className="film-bank-title">FILM BANK</span>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span className="film-bank-count">{filmBank.length} saved</span>
-                <button className="film-bank-close" onClick={() => setBankOpen(false)}>×</button>
+                <span className="film-bank-count">{filmBankCount} saved</span>
+                <button className="film-bank-close" onClick={() => setBankOpen(false)}>
+                  ×
+                </button>
               </div>
             </div>
 
-            {filmBank.length === 0 ? (
+            {bankLoading ? (
+              <div className="film-bank-empty">
+                <p>Loading Film Bank...</p>
+              </div>
+            ) : bankError ? (
+              <div className="film-bank-empty">
+                <p>{bankError}</p>
+              </div>
+            ) : filmBank.length === 0 ? (
               <div className="film-bank-empty">
                 <span className="film-bank-empty-icon">⬚</span>
                 <p>Films recommended by the AI will appear here.</p>
@@ -296,7 +419,11 @@ const Chat = () => {
             ) : (
               <div className="film-bank-grid">
                 {filmBank.map((film) => (
-                  <div key={film.id} className="film-card" title={`${film.title}${film.year ? ` (${film.year})` : ""}`}>
+                  <div
+                    key={film.id}
+                    className="film-card"
+                    title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
+                  >
                     <div className="film-card-poster">
                       {film.poster ? (
                         <img src={film.poster} alt={film.title} />
@@ -305,17 +432,20 @@ const Chat = () => {
                           <span>{film.title.charAt(0)}</span>
                         </div>
                       )}
+
                       <button
                         className="film-card-remove"
-                        onClick={() => removeFromBank(film.title)}
+                        onClick={() => handleRemoveFromBank(film.movieId)}
                         aria-label={`Remove ${film.title}`}
                       >
                         ×
                       </button>
                     </div>
+
                     <div className="film-card-info">
                       <div className="film-card-title">{film.title}</div>
                       {film.year && <div className="film-card-year">{film.year}</div>}
+                      {!!film.reason && <div className="film-card-description">{film.reason}</div>}
                     </div>
                   </div>
                 ))}
