@@ -4,6 +4,8 @@ RAG-based recommender using OpenAI API + File search
 """
 import os
 import json
+import logging
+import time
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -19,12 +21,62 @@ from ..models import (
 from ..services.tmdb import upsert_tmdb_movie  
 from ..serializer import ChatRequestSerializer
 
+logger = logging.getLogger(__name__)
+
+def _clean_why(value: str) -> str:
+    text = " ".join((value or "").split()).strip()
+    if not text:
+        return "Matches your taste and current prompt."
+    return text[:280]
+
 def _safe_parsed_response(resp):
     parsed = getattr(resp, "output_parsed", None)
     if isinstance(parsed, dict):
         return parsed
     raise ValueError("Structured out put was not parsed into a dict.")
 
+def _is_valid_movie(mv) -> bool:
+    return bool(
+        mv
+        and getattr(mv, "tmdb_id", None)
+        and getattr(mv, "title", None)
+    )
+
+def _call_openai_with_retry(client, *, model, system, msg, tools, text_format, timeout=25, max_attempts=2):
+    last_exc = None
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = client.responses.create(
+                model=model,
+                input=[
+                    {
+                        "role": "system",
+                        "content": [{"type": "input_text", "text": system}],
+                    },
+                    {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": msg}],
+                    },
+                ],
+                tools=tools,
+                text={"format": text_format},
+                timeout=timeout,
+            )
+            return _safe_parsed_response(resp)
+        
+        except Exception as e:
+            last_exc = e
+            logger.warning(
+                "OpenAi chat attempt %s/%s failed: %s",
+                attempt,
+                max_attempts,
+                str(e),
+            )
+
+            if attempt > max_attempts:
+                time.sleep(1.2)
+        raise last_exc
 def _get_excluded_tmdb_ids(user) -> list[int]:
     """
     Exclude:
@@ -80,18 +132,25 @@ CHAT_RESPONSE_SCHEMA = {
             },
             "assistant": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 200
             },
             "recommendations": {
                 "type": "array",
+                "minItems": 0,
+                "maxItems": 6,  # 3 + 3 backups
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
                         "tmdb_id": {
                             "type": "integer",
+                            "minimum": 1
                         },
                         "why": {
                             "type": "string",
+                            "minLength": 1,
+                            "maxLength": 280   # short explanation
                         },
                     },
                     "required": ["tmdb_id", "why"],
@@ -161,7 +220,7 @@ Important Grounding Rules:
 - Use the movie corpus to choose actual movies.
 - Do NOT invent movies.
 - Do NOT invent TMDB ids.
-- Recommend exactly 3 distinct movies.
+- Recommend between 3 and 6 distinct movies. Prefer the strongest 3 first, then include up to 3 back ups.
 - Do NOT recommend any movie whose tmdb id is in this excluded list: 
   [{excluded_str}]
 - If you cannot identiy exactly 3 valid movie cnadidates from retrieved context, return a clarify response.
@@ -182,26 +241,26 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
     client = OpenAI()
     
     try:
-        resp = client.responses.create(
-            model = model,
-            input=[
-                # give prompt
-                {"role":"system","content":[{"type": "text","text": system}]},
-                # message from user
-                {"role":"user","content":[{"type": "text","text": msg}]},
-            ],
+        data = _call_openai_with_retry(
+            client,
+            model=model,
+            system=system,
+            msg=msg,
             tools=tools,
-            text={
-                "format": CHAT_RESPONSE_SCHEMA,
-            }
+            text_format=CHAT_RESPONSE_SCHEMA,
+            timeout=25,
+            max_attempts=2,
         )
 
-        data = _safe_parsed_response(resp)
-
     except Exception as e:
+        logger.exception(
+            "chat_recommend OpenAI failure user=%s taste_store=%s",
+            request.user.id,
+            bool(taste_store_id),
+        )
         return Response(
-            {"error":f"OpenAI call failed: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            {"error":"Recommendation service is temporarily unavailable."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     
     if not isinstance(data, dict):
@@ -242,8 +301,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
 
     for r in recs:
         tmdb_id = r.get("tmdb_id")
-        why = (r.get("why") or "").strip()
-
+        why = _clean_why(r.get("why"))
         # hard exclude safety check
         try:
             tmdb_id_int = int(tmdb_id)
@@ -260,8 +318,21 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
         try:
             mv = upsert_tmdb_movie(tmdb_id_int)
         except Exception:
+            logger.warning(
+                "upser_tmdb_movie failed user=%s tmdb_id=%s",
+                request.user.id,
+                tmdb_id_int,
+            )
             continue
 
+        if not _is_valid_movie(mv):
+            logger.warning(
+                "Invalid movie after upsert user=%s tmdb_id=%s",
+                request.user.id,
+                tmdb_id_int,
+            )
+            continue
+    
         seen_tmdb_ids.add(tmdb_id_int)
 
         # persist recommendation in filmbank
@@ -280,6 +351,14 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
             break
 
     if  len(movies_payload) != 3:
+        logger.info(
+            "chat_recommend clarify_after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
+            request.user.id,
+            bool(taste_store_id),
+            len(excluded_tmdb_ids),
+            len(recs) if isinstance(recs,list) else None,
+            len(movies_payload),
+        )
         return Response(
             {
                 "type":"clarify",
@@ -289,6 +368,14 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
             status=status.HTTP_200_OK,
         )
     
+    logger.info(
+        "chat_recommend usccess user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
+        request.user.id,
+        bool(taste_store_id),
+        len(excluded_tmdb_ids),
+        len(recs) if isinstance(recs,list) else None,
+        len(movies_payload),
+    )
     return Response(
         {
             "type": "recommendations",
