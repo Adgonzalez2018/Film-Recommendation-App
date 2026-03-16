@@ -165,12 +165,6 @@ class GenreSerializer(serializers.ModelSerializer):
 # --- Chat Serializers ---
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
-
-class ChatMovieCardSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField()
-    title = serializers.CharField()
-    poster_url = serializers.CharField(allow_null=True, required=False)
-    tmdb_id = serializers.IntegerField(allow_null=True, required=False)
     
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
