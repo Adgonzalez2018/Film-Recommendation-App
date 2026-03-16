@@ -19,6 +19,11 @@ from ..models import (
 from ..services.tmdb import upsert_tmdb_movie  
 from ..serializer import ChatRequestSerializer
 
+def _safe_parsed_response(resp):
+    parsed = getattr(resp, "output_parsed", None)
+    if isinstance(parsed, dict):
+        return parsed
+    raise ValueError("Structured out put was not parsed into a dict.")
 
 def _get_excluded_tmdb_ids(user) -> list[int]:
     """
@@ -60,6 +65,42 @@ def _movie_payload(mv, why: str = "") -> dict:
         "year": getattr(mv, "year", None),
         "why": why,
     }
+
+CHAT_RESPONSE_SCHEMA = {
+    "type": "json_schema",
+    "name": "film_recommendation_response",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "type": {
+                "type": "string",
+                "enum": ["recommendations", "clarify"],
+            },
+            "assistant": {
+                "type": "string",
+            },
+            "recommendations": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "tmdb_id": {
+                            "type": "integer",
+                        },
+                        "why": {
+                            "type": "string",
+                        },
+                    },
+                    "required": ["tmdb_id", "why"],
+                },
+            },
+        },
+        "required": ["type", "assistant", "recommendations"],
+    },
+}
 
 # MAIN ENDPOINT:
 @api_view(["POST"])
@@ -150,20 +191,12 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
                 {"role":"user","content":[{"type": "text","text": msg}]},
             ],
             tools=tools,
+            text={
+                "format": CHAT_RESPONSE_SCHEMA,
+            }
         )
 
-        out_text = resp.output_text # SDK convenience
-        data = json.loads(out_text)
-
-    except json.JSONDecodeError:
-        return Response(
-            {
-                "type":"clarify",
-                "assistant": "I had trouble formatting the response. Try rephrasing your request.",
-                "recommendations": [],
-            },
-            status=status.HTTP_200_OK,
-        )
+        data = _safe_parsed_response(resp)
 
     except Exception as e:
         return Response(
@@ -171,7 +204,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
     
-    if data.get("type") not in ("recommendations","clarify"):
+    if not isinstance(data, dict):
         return Response(
             {
                 "type": "clarify",
@@ -191,8 +224,8 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
             status=status.HTTP_200_OK,
         )
     
-    recs = data.get("recommendations")
-    if not isinstance(recs, list) or not recs:
+    recs = data.get("recommendations", [])
+    if not isinstance(recs, list) or len(recs) < 3:
         return Response(
             {
                 "type": "clarify",
@@ -220,7 +253,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
         # ensure movie exists in DB
         if tmdb_id_int in excluded_set:
             continue
-        
+
         if tmdb_id_int in seen_tmdb_ids:
             continue
 
