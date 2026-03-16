@@ -38,6 +38,8 @@ def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
     except Exception:
         year = None
 
+    return title, year
+
 def _find_existing_movie(*, link: str, entry_title: str) -> Optional[Movie]:
     movie = Movie.objects.filter(letterboxd_uri=link).first()
     if movie:
@@ -46,11 +48,11 @@ def _find_existing_movie(*, link: str, entry_title: str) -> Optional[Movie]:
     parsed_title, parsed_year = _parse_entry_title(entry_title)
 
     if parsed_title and parsed_year is not None:
-        movie = Movie.objects.filter(title=parsed_title, year=parsed_year)
+        movie = Movie.objects.filter(title=parsed_title, year=parsed_year).first()
         if movie:
             if not movie.letterboxd_uri:
                 movie.letterboxd_uri = link
-                movie.save(update_fileds=["letterboxd_uri"])
+                movie.save(update_fields=["letterboxd_uri"])
             return movie
         
     return None
@@ -107,6 +109,12 @@ def sync_user_rss_watches(
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
 
+    # unique set of event keys alr in user's watchevent table
+    existing_event_keys = set(
+        WatchEvent.objects.filter(user=user, source="rss")
+        .values_list("event_key", flat=True)
+    )
+
     cutoff_date = None
     if user.last_sync:
         cutoff_date = user.last_sync.date() - timedelta(days=cutoff_buffer_days)
@@ -134,7 +142,7 @@ def sync_user_rss_watches(
             # consistent fallback if date is missing
             event_key = make_eventkey(user.id, link, timezone.now().date())
 
-        if WatchEvent.objects.filter(user=user, event_key=event_key).exists():
+        if event_key in existing_event_keys:
             res.stopped_early = True
             break
 
@@ -149,8 +157,8 @@ def sync_user_rss_watches(
                 if movie.letterboxd_uri != link:
                     movie.letterboxd_uri = link
                     movie.save(update_fields=["letterboxd_uri"])
-                else:
-                    continue
+            else:
+                continue
 
 
         # create WatchEvent
@@ -167,7 +175,9 @@ def sync_user_rss_watches(
         )
         if we_created:
             res.events_created += 1
-
+            # add to set of event keys
+            existing_event_keys.add(event_key)
+            
         # MovieUser snapshot
         mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
         if created:
@@ -186,7 +196,7 @@ def sync_user_rss_watches(
             mu.save()
             if not created:
                 res.rel_updated += 1
-
+        
     # log once
     ImportBatch.objects.create(
         user=user,
