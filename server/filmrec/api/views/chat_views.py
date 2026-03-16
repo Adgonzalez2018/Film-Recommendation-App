@@ -74,9 +74,10 @@ def _call_openai_with_retry(client, *, model, system, msg, tools, text_format, t
                 str(e),
             )
 
-            if attempt > max_attempts:
+            if attempt < max_attempts:
                 time.sleep(1.2)
-        raise last_exc
+    raise last_exc
+        
 def _get_excluded_tmdb_ids(user) -> list[int]:
     """
     Exclude:
