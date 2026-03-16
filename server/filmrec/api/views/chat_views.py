@@ -16,8 +16,8 @@ from ..models import (
     FilmBank,
     MovieUser,
 )
-from ..services.tmdb import upsert_tmdb_movie  # <-- uses your existing file
-from ..serializer import ChatRequestSerializer  # must exist
+from ..services.tmdb import upsert_tmdb_movie  
+from ..serializer import ChatRequestSerializer
 
 
 def _get_excluded_tmdb_ids(user) -> list[int]:
@@ -48,17 +48,17 @@ def _get_excluded_tmdb_ids(user) -> list[int]:
             continue
     return sorted(s)
 
-def _movie_payload(mv) -> dict:
+def _movie_payload(mv, why: str = "") -> dict:
     # model uses overview in tmdb.py; keep safe fallback
     return {
         "id": mv.id,
         "title": mv.title,
         "tmdb_id": mv.tmdb_id,
         "poster_url": getattr(mv, "poster_url", None),
-        # change description
         "description": getattr(mv,"overview", None),
         "avg_rating": getattr(mv, "avg_rating", None),
         "year": getattr(mv, "year", None),
+        "why": why,
     }
 
 # MAIN ENDPOINT:
@@ -71,11 +71,14 @@ def chat_recommend(request):
 
     if len(msg) < 3:
         return Response(
-            {"type": "clarify", "assistant": "Tell me what you're in the mood for - genre, vibe, or a movie you liked."},
+            {
+                "type": "clarify", 
+                "assistant": "Tell me what you're in the mood for - genre, vibe, or a movie you liked.",
+                "recommendations": [],
+            },
             status=status.HTTP_200_OK
         )
     
-    # Tentative where the movie store id is located
     movies_store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
     if not movies_store_id:
         return Response(
@@ -93,40 +96,46 @@ def chat_recommend(request):
     # pick cheap model by default (override via env)
     model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
+    vector_store_ids = [movies_store_id]
+    if taste_store_id:
+        vector_store_ids.append(taste_store_id)
+
     tools = [{
         "type": "file_search",
-        "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
+        "vector_store_ids": vector_store_ids,
         "max_num_results": 20,
     }]
 
     # Prompt
     # tentative
     system = f"""
-You are the Film Recommender, a movie recommender.
+You are the Film Recommender.
 
-You MUST follow these rules:
-- Recommend exactly 3 movies.
-- ONLY recommend movies that appear in the retrieved file_search context (movie docs).
-- Do NOT recommend any movie with a TMDB id in this excluded list:
+Your job is to recommend movies using retrieved context from:
+1. a movie corpus vector store
+2. an optional user taste-summary vector store
+
+Important Grounding Rules:
+- Use the taste-summary store only to understand the user's preferences.
+- Use the movie corpus to choose actual movies.
+- Do NOT invent movies.
+- Do NOT invent TMDB ids.
+- Recommend exactly 3 distinct movies.
+- Do NOT recommend any movie whose tmdb id is in this excluded list: 
   [{excluded_str}]
-- If you cannot find 3 valid movies from retrieved context, respond with:
-  {{"type":"clarify","assistant":"...","recommendations":[]}}
+- If you cannot identiy exactly 3 valid movie cnadidates from retrieved context, return a clarify response.
 
-Output MUST be valid JSON ONLY (no markdown, no extra text), in this exact shape:
+Output valid JSON ONLY, with no markdown and no extra text, in exactly this shape:
 {{
   "type": "recommendations" | "clarify",
   "assistant": "string",
   "recommendations": [
     {{
       "tmdb_id": 123,
-      "title": "Movie Title",
-      "year": 1999,
-      "why": "1-2 sentences tied to user taste + prompt"
+      "why": "1-2 concise sentences tied to the user's taste and prompt"
     }}
   ]
 }}
-
-Be concise. Ground reasons in the user's taste (if present) and the user's prompt.
 """.strip()
     
     client = OpenAI()
@@ -148,7 +157,11 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
 
     except json.JSONDecodeError:
         return Response(
-            {"type":"clarify","assistant": "I had trouble formatting the response. Try rephrasing your request."},
+            {
+                "type":"clarify",
+                "assistant": "I had trouble formatting the response. Try rephrasing your request.",
+                "recommendations": [],
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -159,16 +172,22 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
         )
     
     if data.get("type") not in ("recommendations","clarify"):
-        return Response({
-                        "type": "clarify",
-            "assistant": "Tell me a bit more about what you want."
-        },
+        return Response(
+            {
+                "type": "clarify",
+                "assistant": "Tell me a bit more about what you want.",
+                "recommendations": [],
+            },
         status=status.HTTP_200_OK,
         )
     
     if data.get("type") == "clarify":
         return Response(
-            {"type":"clarify","assistant": data.get("assistant","Tell me a bit more about what you want.")},
+            {
+                "type":"clarify",
+                "assistant": data.get("assistant","Tell me a bit more about what you want."),
+                "recommendations": [],
+            },
             status=status.HTTP_200_OK,
         )
     
@@ -176,8 +195,9 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
     if not isinstance(recs, list) or not recs:
         return Response(
             {
-            "type": "clarify",
-            "assistant": "Tell me a bit more about what you want."
+                "type": "clarify",
+                "assistant": "Tell me a bit more about what you want.",
+                "recommendations": [],
             },
             status=status.HTTP_200_OK,
         )
@@ -185,23 +205,31 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
     # Persist + Build Response
     # now we create the payload 
     movies_payload = []
-    for r in recs[:3]:
+    seen_tmdb_ids = set()
+
+    for r in recs:
         tmdb_id = r.get("tmdb_id")
-        if not tmdb_id:
-            continue
+        why = (r.get("why") or "").strip()
 
         # hard exclude safety check
         try:
             tmdb_id_int = int(tmdb_id)
         except Exception:
             continue
+
         # ensure movie exists in DB
         if tmdb_id_int in excluded_set:
             continue
+        
+        if tmdb_id_int in seen_tmdb_ids:
+            continue
+
         try:
             mv = upsert_tmdb_movie(tmdb_id_int)
         except Exception:
             continue
+
+        seen_tmdb_ids.add(tmdb_id_int)
 
         # persist recommendation in filmbank
         FilmBank.objects.update_or_create(
@@ -209,15 +237,22 @@ Be concise. Ground reasons in the user's taste (if present) and the user's promp
             movie=mv,
             defaults={
                 "query_text":msg,
-                "reason": r.get("why", ""),
+                "reason": why,
             },
         )
 
-        movies_payload.append(_movie_payload(mv))
+        movies_payload.append(_movie_payload(mv, why=why))
 
-    if not movies_payload:
+        if len(movies_payload) == 3:
+            break
+
+    if  len(movies_payload) != 3:
         return Response(
-            {"type":"clarify","assistant": "I couldn't lock in 3 good picks. Try a 'like <movie title>' request."},
+            {
+                "type":"clarify",
+                "assistant": "I couldn't lock in 3 good picks. Try a 'like <movie title>' request.",
+                "recommendations": [],
+            },
             status=status.HTTP_200_OK,
         )
     

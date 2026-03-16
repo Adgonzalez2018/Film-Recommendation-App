@@ -165,7 +165,7 @@ class GenreSerializer(serializers.ModelSerializer):
 # --- Chat Serializers ---
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
-    
+
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
     movie = MovieCardSerializer(read_only=True)
