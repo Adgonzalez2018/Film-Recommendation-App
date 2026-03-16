@@ -3,16 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Optional
-
+from typing import Optional, Tuple
+import re
 import feedparser
 
 from django.utils import timezone
 
 from api.models import User, Movie, MovieUser, WatchEvent, ImportBatch
 from api.services.letterboxd_import import (
-    _parse_published_date,
+    _parse_published_date
 )
+from api.services.tmdb import find_best_tmdb_movie_match, upsert_tmdb_movie
 from api.utils.letterboxd import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
@@ -20,6 +21,40 @@ from api.utils.letterboxd import (
 
 from api.utils.rss import make_eventkey
 
+_TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
+
+def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
+    s = (entry_title or "").strip()
+    if not s:
+        return "Untitled", None
+    m = _TITLE_RE.match(s)
+    if not m:
+        return s[:255], None
+    
+    title = (m.group("title") or "").strip()[:255] or "Untitled"
+    year_str = m.group("year")
+    try:
+        year = int(year_str) if year_str else None
+    except Exception:
+        year = None
+
+def _find_existing_movie(*, link: str, entry_title: str) -> Optional[Movie]:
+    movie = Movie.objects.filter(letterboxd_uri=link).first()
+    if movie:
+        return movie
+    
+    parsed_title, parsed_year = _parse_entry_title(entry_title)
+
+    if parsed_title and parsed_year is not None:
+        movie = Movie.objects.filter(title=parsed_title, year=parsed_year)
+        if movie:
+            if not movie.letterboxd_uri:
+                movie.letterboxd_uri = link
+                movie.save(update_fileds=["letterboxd_uri"])
+            return movie
+        
+    return None
+    
 
 @dataclass
 class RSSSyncResult:
@@ -104,12 +139,19 @@ def sync_user_rss_watches(
             break
 
         # upsert movie by letterboxd_uri
-        movie, movie_created = Movie.objects.get_or_create(
-            letterboxd_uri=link,
-            defaults={"title": title[:255] if title else "Untitled"},
-        )
-        if movie_created:
-            res.movies_created += 1
+        movie = _find_existing_movie(link=link, entry_title=title)
+        if not movie:
+            parsed_title, parsed_year = _parse_entry_title(title)
+            tmdb_id = find_best_tmdb_movie_match(parsed_title, parsed_year)
+
+            if tmdb_id:
+                movie = upsert_tmdb_movie(tmdb_id)
+                if movie.letterboxd_uri != link:
+                    movie.letterboxd_uri = link
+                    movie.save(update_fields=["letterboxd_uri"])
+                else:
+                    continue
+
 
         # create WatchEvent
         we, we_created = WatchEvent.objects.get_or_create(
