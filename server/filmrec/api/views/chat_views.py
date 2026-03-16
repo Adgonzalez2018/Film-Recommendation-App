@@ -3,7 +3,6 @@ Endpoints for Chat.js
 RAG-based recommender using OpenAI API + File search
 """
 import os
-import json
 import logging
 import time
 
@@ -33,7 +32,7 @@ def _safe_parsed_response(resp):
     parsed = getattr(resp, "output_parsed", None)
     if isinstance(parsed, dict):
         return parsed
-    raise ValueError("Structured out put was not parsed into a dict.")
+    raise ValueError("Structured output was not parsed into a dict.")
 
 def _is_valid_movie(mv) -> bool:
     return bool(
@@ -42,14 +41,16 @@ def _is_valid_movie(mv) -> bool:
         and getattr(mv, "title", None)
     )
 
-def _call_openai_with_retry(client, *, model, system, msg, tools, text_format, timeout=25, max_attempts=2):
+def _call_openai_with_retry(
+    client, *, model, system, msg, tools=None, text_format=None, timeout=25, max_attempts=2
+):
     last_exc = None
-    
+
     for attempt in range(1, max_attempts + 1):
         try:
-            resp = client.responses.create(
-                model=model,
-                input=[
+            kwargs = {
+                "model": model,
+                "input": [
                     {
                         "role": "system",
                         "content": [{"type": "input_text", "text": system}],
@@ -59,24 +60,29 @@ def _call_openai_with_retry(client, *, model, system, msg, tools, text_format, t
                         "content": [{"type": "input_text", "text": msg}],
                     },
                 ],
-                tools=tools,
-                text={"format": text_format},
-                timeout=timeout,
-            )
+                "timeout": timeout,
+            }
+            if tools:
+                kwargs["tools"] = tools
+            if text_format:
+                kwargs["text"] = {"format": text_format}
+
+            resp = client.responses.create(**kwargs)
             return _safe_parsed_response(resp)
-        
+
         except Exception as e:
             last_exc = e
             logger.warning(
-                "OpenAi chat attempt %s/%s failed: %s",
+                "OpenAI chat attempt %s/%s failed: %s",
                 attempt,
                 max_attempts,
                 str(e),
             )
-
-            if attempt > max_attempts:
+            if attempt < max_attempts:
                 time.sleep(1.2)
-        raise last_exc
+
+    raise last_exc
+
 def _get_excluded_tmdb_ids(user) -> list[int]:
     """
     Exclude:
@@ -117,6 +123,125 @@ def _movie_payload(mv, why: str = "") -> dict:
         "year": getattr(mv, "year", None),
         "why": why,
     }
+
+def _build_candidate_block(candidates: list[dict]) -> str:
+    lines = []
+    for idx, c in enumerate(candidates, start=1):
+        title = c.get("title", "Unknown Title")
+        year = c.get("year")
+        tmdb_id = c.get("tmdb_id")
+        hint = c.get("reason_hint", "")
+
+        year_text = f" ({year})" if year else ""
+        lines.append(
+            f"{idx}. {title}{year_text} | TMDB_ID={tmdb_id} | Hint={hint}"
+        )
+    return "\n".join(lines)
+
+def _retrieve_candidates(client, *, model, msg, movies_store_id, taste_store_id, excluded_str):
+    tools = [
+        {
+            "type": "file_search",
+            "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
+            "max_num_results": 40,
+        }
+    ]
+    system = f"""
+You are a candidate generator for a movie recommender.
+
+You will receive retrieved context from:
+1. a movie corpus vector store
+2. optionally a user taste-summary vector store
+
+Rules:
+- Use the taste-summary only to understand the user's preferences.
+- Use the movie corpus to identify actual movie candidates.
+- Do NOT invent movies.
+- Do NOT invent TMDB ids.
+- Return between 8 and 20 candidate movies if possible.
+- Do NOT include any movie whose TMDB id is in this excluded list:
+  [{excluded_str}]
+- Each candidate should include a short reason_hint based on the user's taste and prompt.
+""".strip()
+    
+    data = _call_openai_with_retry(
+        client,
+        model=model,
+        system=system,
+        msg=msg,
+        tools=tools,
+        text_format=CANDIDATE_EXTRACTION_SCHEMA,
+        timeout=25,
+        max_attempts=2,
+    )
+    
+    candidates = data.get("candidates", [])
+    return candidates if isinstance(candidates, list) else []
+
+def _rank_candidates(client, *, model, msg, candidate_block, taste_store_exists, excluded_str):
+    taste_line = (
+        "A user taste summary exists and was already used during candidate generation."
+        if taste_store_exists
+        else "No stored user taste summary exists, so rank based on the user's current prompt only."
+    )
+    system = f"""
+You are the ranking stage for a movie recommender.
+
+You are given a pre-filtered candidate list.
+Choose the strongest recommendations from ONLY that list.
+
+Rules:
+- Recommend between 3 and 6 distinct movies.
+- Put the strongest 3 first.
+- Use only the provided candidates.
+- Do NOT invent movies.
+- Do NOT invent TMDB ids.
+- Do NOT recommend any movie whose TMDB id is in this excluded list:
+  [{excluded_str}]
+- Keep each "why" concise and specific.
+
+{taste_line}
+""".strip()
+
+    user_text = f"""
+User request:
+{msg}
+
+Candidate list:
+{candidate_block}
+""".strip()
+
+    return _call_openai_with_retry(
+        client,
+        model=model,
+        system=system,
+        msg=user_text,
+        tools=None,
+        text_format=CHAT_RESPONSE_SCHEMA,
+        timeout=25,
+        max_attempts=2,
+    )
+
+
+def _build_contextual_query(msg: str, user) -> str:
+    parts = [msg.strip()]
+
+    recent_movies = list(
+        MovieUser.objects.filter(
+            user=user,
+            movie__title__isnull=False, 
+            watch_status="Watched",
+        )
+        .select_related("movie")
+        .order_by("-watched_date", "-id")[:5]
+    )
+
+    if recent_movies:
+        recent_titles = [mu.movie.title for mu in recent_movies if mu.movie and mu.movie.title]
+        if recent_titles:
+            parts.append("recent user watches: " + ", ".join(recent_titles))
+    
+    return "\n".join(parts)
 
 CHAT_RESPONSE_SCHEMA = {
     "type": "json_schema",
@@ -161,6 +286,49 @@ CHAT_RESPONSE_SCHEMA = {
     },
 }
 
+
+CANDIDATE_EXTRACTION_SCHEMA = {
+    "type": "json_schema",
+    "name": "film_candidate_extraction",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "candidates": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 20,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "tmdb_id": {
+                            "type": "integer",
+                            "minimum": 1,
+                        },
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                        },
+                        "year": {
+                            "type": ["integer", "null"],
+                        },
+                        "reason_hint": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 180,
+                        },
+                    },
+                    "required": ["tmdb_id", "title", "year", "reason_hint"],
+                },
+            },
+        },
+        "required": ["candidates"],
+    },
+}
+
 # MAIN ENDPOINT:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -168,7 +336,6 @@ def chat_recommend(request):
     ser = ChatRequestSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     msg = ser.validated_data["message"].strip()
-
     if len(msg) < 3:
         return Response(
             {
@@ -178,6 +345,7 @@ def chat_recommend(request):
             },
             status=status.HTTP_200_OK
         )
+    contextual_msg = _build_contextual_query(msg, request.user)
     
     movies_store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
     if not movies_store_id:
@@ -195,71 +363,52 @@ def chat_recommend(request):
 
     # pick cheap model by default (override via env)
     model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
-
-    vector_store_ids = [movies_store_id]
-    if taste_store_id:
-        vector_store_ids.append(taste_store_id)
-
-    tools = [{
-        "type": "file_search",
-        "vector_store_ids": vector_store_ids,
-        "max_num_results": 20,
-    }]
-
-    # Prompt
-    # tentative
-    system = f"""
-You are the Film Recommender.
-
-Your job is to recommend movies using retrieved context from:
-1. a movie corpus vector store
-2. an optional user taste-summary vector store
-
-Important Grounding Rules:
-- Use the taste-summary store only to understand the user's preferences.
-- Use the movie corpus to choose actual movies.
-- Do NOT invent movies.
-- Do NOT invent TMDB ids.
-- Recommend between 3 and 6 distinct movies. Prefer the strongest 3 first, then include up to 3 back ups.
-- Do NOT recommend any movie whose tmdb id is in this excluded list: 
-  [{excluded_str}]
-- If you cannot identiy exactly 3 valid movie cnadidates from retrieved context, return a clarify response.
-
-Output valid JSON ONLY, with no markdown and no extra text, in exactly this shape:
-{{
-  "type": "recommendations" | "clarify",
-  "assistant": "string",
-  "recommendations": [
-    {{
-      "tmdb_id": 123,
-      "why": "1-2 concise sentences tied to the user's taste and prompt"
-    }}
-  ]
-}}
-""".strip()
-    
     client = OpenAI()
     
     try:
-        data = _call_openai_with_retry(
+        candidates = _retrieve_candidates(
             client,
             model=model,
-            system=system,
-            msg=msg,
-            tools=tools,
-            text_format=CHAT_RESPONSE_SCHEMA,
-            timeout=25,
-            max_attempts=2,
+            msg=contextual_msg,
+            movies_store_id=movies_store_id,
+            taste_store_id=taste_store_id,
+            excluded_str=excluded_str,
         )
 
-    except Exception as e:
+    except Exception:
         logger.exception(
-            "chat_recommend OpenAI failure user=%s taste_store=%s",
+            "Candidate retrieval failed user=%s",
             request.user.id,
-            bool(taste_store_id),
         )
         return Response(
             {"error":"Recommendation service is temporarily unavailable."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    
+    if not candidates:
+        return Response(
+            {
+                "type": "clarify",
+                "assistant": "Tell me a bit more about what you want.",
+                "recommendations": [],
+            },
+        status=status.HTTP_200_OK,
+        )
+    
+    candidate_block = _build_candidate_block(candidates)
+    try: 
+        data = _rank_candidates(
+            client,
+            model=model,
+            msg=msg,
+            candidate_block=candidate_block,
+            taste_store_exists=bool(taste_store_id),
+            excluded_str=excluded_str,
+        )
+    except Exception:
+        logger.exception("candidate ranking failed user=%s", request.user.id)
+        return Response(
+            {"error": "Recommendation service is temporarily unavailable.",},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     
@@ -270,7 +419,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
                 "assistant": "Tell me a bit more about what you want.",
                 "recommendations": [],
             },
-        status=status.HTTP_200_OK,
+            status=status.HTTP_200_OK,
         )
     
     if data.get("type") == "clarify":
@@ -319,7 +468,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
             mv = upsert_tmdb_movie(tmdb_id_int)
         except Exception:
             logger.warning(
-                "upser_tmdb_movie failed user=%s tmdb_id=%s",
+                "upsert_tmdb_movie failed user=%s tmdb_id=%s",
                 request.user.id,
                 tmdb_id_int,
             )
@@ -352,7 +501,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
 
     if  len(movies_payload) != 3:
         logger.info(
-            "chat_recommend clarify_after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
+            "chat_recommend clarify after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
             request.user.id,
             bool(taste_store_id),
             len(excluded_tmdb_ids),
@@ -369,7 +518,7 @@ Output valid JSON ONLY, with no markdown and no extra text, in exactly this shap
         )
     
     logger.info(
-        "chat_recommend usccess user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
+        "chat_recommend success user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
         request.user.id,
         bool(taste_store_id),
         len(excluded_tmdb_ids),
