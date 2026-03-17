@@ -17,18 +17,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from django.utils import timezone
-
-from ..services.letterboxd_import import run_letterboxd_import
 from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss_url
-from api.services.rss_sync import sync_user_rss_watches
 from ..services.import_uploads import save_temp_upload
 from ..tasks.import_tasks import enqueue_csv_import, enqueue_rss_import
 
 from ..models import WatchEvent, ImportBatch
-import logging
-
-logger = logging.getLogger(__name__)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -50,6 +43,7 @@ def manual_import(request):
     batch = ImportBatch.objects.create(
         user=request.user,
         source="csv",
+        status="queued",
         had_reviews=bool(reviews_file),
         had_watchlist=bool(watchlist_file),
         had_films=bool(films_file),
@@ -66,6 +60,9 @@ def manual_import(request):
             "status": "queued",
             "batch_id": batch.id,
             "source": batch.source,
+            "tmdb_queued": batch.tmdb_queued,
+            "tmdb_done": batch.tmdb_done,
+            "tmdb_failed": batch.tmdb_failed,
         },
         status=status.HTTP_202_ACCEPTED,
     )
@@ -110,6 +107,9 @@ def import_rss(request):
             "batch_id":batch.id,
             "source": batch.source,
             "rss_url": rss_url,
+            "tmdb_queued": batch.tmdb_queued,
+            "tmdb_done": batch.tmdb_done,
+            "tmdb_failed": batch.tmdb_failed,
         },
         status=status.HTTP_202_ACCEPTED,
     )
