@@ -29,6 +29,7 @@ from api.views.import_views import(
     import_rss, 
     onboarding_status,
     skip_onboarding,
+    import_batch_detail,
     )
 from api.views.profile_views import profileView
 
@@ -59,7 +60,7 @@ urlpatterns = [
     # --- Data Import ---
     path("api/import/csv/", manual_import, name="import-csv"),
     path("api/import/rss/", import_rss, name="import-rss"),
-    
+    path("api/import-batches/<int:batch_id>/", import_batch_detail, name="import-batch-detail"),
     path("api/password-reset/", password_reset_request, name="password-reset"),
     path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
     
