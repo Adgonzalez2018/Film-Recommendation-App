@@ -112,6 +112,7 @@ class ImportBatch(models.Model):
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="import_batches")
+    status = models.CharField(max_length=20, default="queued")
     source = models.CharField(max_length=8, choices=SOURCE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     
