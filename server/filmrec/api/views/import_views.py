@@ -42,7 +42,7 @@ def manual_import(request):
     
     if not watched_file and not reviews_file and not watchlist_file and not films_file:
         return Response(
-            {"error": "No files provided. Upload at least one of: reviews, watchlist, films."},
+            {"error": "No files provided. Upload at least one of: watched, reviews, watchlist, films."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -54,9 +54,9 @@ def manual_import(request):
         had_watchlist=bool(watchlist_file),
         had_films=bool(films_file),
         watched_path=save_temp_upload(watched_file, "watched") if watched_file else "",
-        reviews_path=save_temp_upload(reviews_file, "watched") if reviews_file else "",
-        watchlist_path=save_temp_upload(watchlist_file, "watched") if watchlist_file else "",
-        films_path=save_temp_upload(films_file, "watched") if films_file else "",
+        reviews_path=save_temp_upload(reviews_file, "reviews") if reviews_file else "",
+        watchlist_path=save_temp_upload(watchlist_file, "watchlist") if watchlist_file else "",
+        films_path=save_temp_upload(films_file, "films") if films_file else "",
     )
 
     enqueue_csv_import(batch.id)
