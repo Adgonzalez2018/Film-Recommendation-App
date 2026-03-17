@@ -21,7 +21,9 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_URL")
+if not REDIS_URL:
+    raise RuntimeError("REDIS_URL is not set")
 CELERY_BROKER_URL = REDIS_URL
 # optional only set this if we want celery tasks results stored
 CELERY_RESULT_BACKEND = REDIS_URL
