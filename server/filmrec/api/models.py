@@ -98,12 +98,26 @@ class ImportBatch(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="import_batches")
     source = models.CharField(max_length=8, choices=SOURCE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    started_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+
+    # queue payload / debugging
+    rss_input = models.CharField(max_length=255, blank=True, null=True)
+
+    # temp uploaded file paths
+    watched_path = models.CharField(max_length=500, blank=True,null=True)
+    reviews_path = models.CharField(max_length=500, blank=True,null=True)
+    watchlist_path = models.CharField(max_length=500, blank=True,null=True)
+    films_path = models.CharField(max_length=500, blank=True,null=True)
 
     # store whatever counters you want (from your importer)
     movies_created = models.IntegerField(default=0)
     movies_matched = models.IntegerField(default=0)
     rel_created = models.IntegerField(default=0)
     rel_updated = models.IntegerField(default=0)
+    events_created = models.IntegerField(default=0)
 
     # optional: what files were included
     had_reviews = models.BooleanField(default=False)
