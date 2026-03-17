@@ -161,7 +161,7 @@ def sync_user_rss_watches(
                 letterboxd_uri=link,
                 enrichment_status="pending",
             )
-            movies_to_enrich(movie.id)
+            movies_to_enrich.add(movie.id)
             res.movies_created+= 1
         if not movie:
             continue
