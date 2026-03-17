@@ -9,6 +9,10 @@ from email.utils import parsedate_to_datetime
 
 from django.db import transaction
 
+from ..services.tmdb import (
+    find_best_tmdb_movie_match,
+    upsert_tmdb_movie,
+)
 from ..models import Movie, MovieUser, WatchEvent
 from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
@@ -27,6 +31,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
     rel_updated = 0
 
     def iter_csv(file_obj):
+        file_obj.file.seek(0)
         text = io.TextIOWrapper(file_obj.file, encoding="utf-8-sig")
         return csv.DictReader(text)
 
@@ -49,43 +54,85 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
     def upsert_movie(name, year, uri):
         nonlocal movies_created, movies_matched
         movie = None
-        
+        clean_name = ((name or "").strip()[:255] or "Unknown")
+        y = parse_year(year)
         uri = normalize_letterboxd_uri(uri)
+
+        # 1 Best local key: Letterboxd URI
         if uri:
             movie = Movie.objects.filter(letterboxd_uri=uri).first()
 
-        if not movie:
-            clean_name = ((name or "").strip()[:255] or "Unknown")
-            y = parse_year(year)
-            if clean_name and y is not None:
-                movie = Movie.objects.filter(title=clean_name, year=y).first()
-                if movie:
-                    movies_matched += 1
-                    if not movie.letterboxd_uri and uri:
-                        movie.letterboxd_uri = uri
-                        movie.save(update_fields=["letterboxd_uri"])
-                    return movie
-
+        # 2 Fallback local key: title + year
+        if not movie and clean_name and y is not None:
+            movie = Movie.objects.filter(title=clean_name, year=y).first()
+            if movie:
+                movies_matched += 1
+                updates = {}
+                if not movie.letterboxd_uri and uri:
+                    updates["letterboxd_uri"] = uri
+                if updates:
+                    for k, v in updates.items():
+                        setattr(movie, k,v)
+                    movie.save(update_fields=list(updates.keys()))
+                return movie
+            
+        # 3 If found locally, patch missing basics and return
         if movie:
-            movies_matched += 1
             updates = {}
             # updates movie title if possible
-            if (movie.title == "Unknown") and name:
-               updates["title"] = (name or "").strip()[:255]
-            y = parse_year(year)
+            if (movie.title == "Unknown") and clean_name:
+               updates["title"] = clean_name
+
+            # update year if possible
             if movie.year is None and y is not None:
                 updates["year"] = y
+            
+            # update letterboxd uri if possible
             if not movie.letterboxd_uri and uri:
                 updates["letterboxd_uri"] = uri
+            
+            # Apply updates to movie record
             if updates:
                 for k, v in updates.items():
                     setattr(movie, k,v)
                 movie.save(update_fields=list(updates.keys()))
             return movie
 
+        # 4 TMDB enrichment path
+        tmdb_id = None
+        if clean_name and y is not None:
+            try:
+                tmdb_id = find_best_tmdb_movie_match(clean_name, y)
+            except Exception:
+                tmdb_id = None
+
+        if tmdb_id:
+            try:
+                movie = upsert_tmdb_movie(tmdb_id)
+                updates = {}
+                if uri and movie.letterboxd_uri != uri:
+                    updates["letterboxd_uri"] = uri
+
+                if movie.title == "Unknown" and clean_name:
+                    updates["title"] = clean_name
+                
+                if movie.year is None and y is not None:
+                    updates["year"] = y
+
+                if updates:
+                    for k,v in updates.items():
+                        setattr(movie, k, v)
+                    movie.save(update_fields=list(updates.keys()))
+
+                movies_matched += 1
+                return movie
+            except Exception:
+                pass
+
+        # 5 Last resort: create local minimal movie row
         movie = Movie.objects.create(
-            title=((name or "").strip()[:255] or "Unknown"),
-            year=parse_year(year),
+            title=clean_name,
+            year=y,
             letterboxd_uri=uri,
         )
         movies_created += 1
