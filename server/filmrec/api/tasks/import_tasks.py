@@ -1,6 +1,8 @@
 import os
 import logging
 
+from celery import shared_task
+
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django_rq import enqueue
@@ -20,6 +22,7 @@ def _cleanup_file(path: str):
         except Exception:
             logger.warning("Could not delete temp import file: %s", path)
 
+@shared_task
 def run_csv_import_job(batch_id: int):
     batch = ImportBatch.objects.select_related("user").get(id=batch_id)
     batch.status = "running"
@@ -85,6 +88,7 @@ def run_csv_import_job(batch_id: int):
         _cleanup_file(batch.watchlist_path)
         _cleanup_file(batch.films_path)
 
+@shared_task
 def run_rss_import_job(batch_id: int):
     batch = ImportBatch.objects.select_related("user").get(id=batch_id)
     batch.status = "running"
@@ -131,7 +135,7 @@ def run_rss_import_job(batch_id: int):
         batch.save(update_fields=["status", "finished_at", "error_message"])
 
 def enqueue_csv_import(batch_id: int):
-    enqueue(run_csv_import_job, batch_id)
+    run_csv_import_job.delay(batch_id)
 
 def enqueue_rss_import(batch_id: int):
-    enqueue(run_rss_import_job, batch_id)
+    run_rss_import_job.delay(batch_id)

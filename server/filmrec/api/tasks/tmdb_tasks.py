@@ -1,10 +1,14 @@
 # For movie enrichment
 from django.utils import timezone
 from django_rq import enqueue
+from django.db import models
+
+from celery import shared_task
 
 from ..models import Movie
 from ..services.tmdb import upsert_tmdb_movie, attach_tmdb_to_movie, find_best_tmdb_movie_match
 
+@shared_task
 def enrich_movie_from_tmdb(movie_id: int):
     movie = Movie.objects.get(id=movie_id)
 
@@ -51,10 +55,11 @@ def enrich_movie_from_tmdb(movie_id: int):
         movie.enrichment_error = str(e)
         movie.save(update_fields=["enrichment_status","last_enriched_at", "enrichment_error"])
 
+@shared_task
 def enrich_movie_chunk(movie_ids, batch_id=None):
     for movie_id in movie_ids:
-        enrich_movie_from_tmdb(movie_id)
-        
+        enrich_movie_from_tmdb(movie_id, batch_id=batch_id)
+
 def enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=None, chunk_size=25):
     unique_ids = sorted(set(movie_ids))
     for i in range(0, len(unique_ids), chunk_size):

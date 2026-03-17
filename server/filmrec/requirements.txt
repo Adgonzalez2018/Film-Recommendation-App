@@ -11,3 +11,5 @@ django-cors-headers
 django_rq
 requests
 openai
+celery
+redis
