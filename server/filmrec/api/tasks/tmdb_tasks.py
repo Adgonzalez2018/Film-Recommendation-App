@@ -2,14 +2,15 @@
 from django.utils import timezone
 from django_rq import enqueue
 from django.db import models
+from django.db.models import F
 
 from celery import shared_task
 
-from ..models import Movie
+from ..models import Movie, ImportBatch
 from ..services.tmdb import upsert_tmdb_movie, attach_tmdb_to_movie, find_best_tmdb_movie_match
 
 @shared_task
-def enrich_movie_from_tmdb(movie_id: int):
+def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
     movie = Movie.objects.get(id=movie_id)
 
     if movie.enrichment_status == "done" and movie.tmdb_id:
@@ -48,12 +49,19 @@ def enrich_movie_from_tmdb(movie_id: int):
         movie.last_enriched_at = timezone.now()
         movie.enrichment_error = ""
         movie.save(update_fields=["enrichment_status","last_enriched_at", "enrichment_error"])
+        
+        if batch_id:
+            ImportBatch.objects.filter(id=batch_id).update(tmdb_done=F("tmdb_done") + 1)
 
     except Exception as e:
         movie.enrichment_status = "failed"
         movie.last_enriched_at = timezone.now()
         movie.enrichment_error = str(e)
         movie.save(update_fields=["enrichment_status","last_enriched_at", "enrichment_error"])
+
+        if batch_id:
+            ImportBatch.objects.filter(id=batch_id).update(tmdb_failed=F('tmdb_failed') + 1)
+        raise
 
 @shared_task
 def enrich_movie_chunk(movie_ids, batch_id=None):
@@ -64,7 +72,7 @@ def enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=None, chunk_size=25):
     unique_ids = sorted(set(movie_ids))
     for i in range(0, len(unique_ids), chunk_size):
         chunk = unique_ids[i: i + chunk_size]
-        enqueue(enrich_movie_chunk, chunk, batch_id=batch_id)
+        enrich_movie_chunk.delay(chunk, batch_id=batch_id)
 
 
         
