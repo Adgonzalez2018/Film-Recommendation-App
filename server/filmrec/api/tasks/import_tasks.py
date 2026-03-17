@@ -8,6 +8,7 @@ from django_rq import enqueue
 from ..models import ImportBatch
 from ..services.letterboxd_import import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
+from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -43,12 +44,16 @@ def run_csv_import_job(batch_id: int):
                 watchlist_file=watchlist_f,
                 films_file=films_f,
             )
+            movie_ids = counters.get("movies_to_enrich", [])
+            if movie_ids:
+                enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
+                batch.tmdb_queued = len(set(movie_ids))
         finally:
             for f in [watched_f, reviews_f, watchlist_f, films_f]:
                 if f:
                     f.close()
         
-        batch.status = "complete"
+        batch.status = "completed"
         batch.finished_at = timezone.now()
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
@@ -57,7 +62,7 @@ def run_csv_import_job(batch_id: int):
         batch.events_created = counters.get("events_created", 0)
         batch.save(
             update_fields=[
-                "status", "finished_at"
+                "status", "finished_at", "tmdb_queued",
                 "movies_created", "movies_matched",
                 "rel_created", "rel_updated", "events_created",
             ]
@@ -89,9 +94,15 @@ def run_rss_import_job(batch_id: int):
 
     try:
         res = sync_user_rss_watches(batch.user, rss_input=batch.rss_input)
-
         if res.error:
             raise ValueError("Could not read that RSS feed. Make sure the profile is public and the input is correct.")
+        
+        movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
+        if movie_ids:
+            enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
+            batch.tmdb_queued = len(set(movie_ids))
+        else:
+            batch.tmdb_queued = 0
         
         batch.status = "completed"
         batch.finished_at = timezone.now()
@@ -101,7 +112,7 @@ def run_rss_import_job(batch_id: int):
         batch.events_created = res.events_created or 0
         batch.save(
             update_fields=[
-                "status", "finished_at",
+                "status", "finished_at", "tmdb_queued",
                 "movies_created", "rel_created", "rel_updated", "events_created",
             ]
         )

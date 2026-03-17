@@ -9,11 +9,10 @@ import feedparser
 
 from django.utils import timezone
 
-from api.models import User, Movie, MovieUser, WatchEvent, ImportBatch
+from api.models import User, Movie, MovieUser, WatchEvent
 from api.services.letterboxd_import import (
     _parse_published_date
 )
-from api.services.tmdb import find_best_tmdb_movie_match, upsert_tmdb_movie
 from api.utils.letterboxd import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
@@ -22,6 +21,7 @@ from api.utils.letterboxd import (
 from api.utils.rss import make_eventkey
 
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
+MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
 
 def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
     s = (entry_title or "").strip()
@@ -69,6 +69,7 @@ class RSSSyncResult:
     rel_updated: int = 0
     stopped_early: bool = False
     error: Optional[str] = None
+    movie_ids_to_enrich: list[int] | None = None
 
 
 def sync_user_rss_watches(
@@ -83,7 +84,7 @@ def sync_user_rss_watches(
       - entry date <= (user.last_sync.date - buffer_days), OR
       - exact WatchEvent already exists (event_key)
     """
-
+    movies_to_enrich = set()
     raw = (rss_input if rss_input is not None else user.letterboxd_username) or ""
     raw = raw.strip()
     rss_url = build_letterboxd_rss_url(raw)
@@ -152,21 +153,19 @@ def sync_user_rss_watches(
 
         # upsert movie by letterboxd_uri
         movie = _find_existing_movie(link=link, entry_title=title)
+        if not movie.tmdb_id or getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
+            movies_to_enrich.add(movie.id)
+
         if not movie:
             parsed_title, parsed_year = _parse_entry_title(title)
-            tmdb_id = find_best_tmdb_movie_match(parsed_title, parsed_year)
-
-            if tmdb_id:
-                existed_before = Movie.objects.filter(tmdb_id = tmdb_id).exists()
-                movie = upsert_tmdb_movie(tmdb_id)
-                if not existed_before:
-                    res.movies_created += 1
-
-                if movie.letterboxd_uri != link:
-                    movie.letterboxd_uri = link
-                    movie.save(update_fields=["letterboxd_uri"])
-            else:
-                continue
+            movie = Movie.objects.create(
+                title = parsed_title,
+                year=parsed_year,
+                letterboxd_uri=link,
+                enrichment_status="pending",
+            )
+            movies_to_enrich(movie.id)
+            res.movies_created+= 1
 
 
         # create WatchEvent
@@ -204,15 +203,6 @@ def sync_user_rss_watches(
             mu.save()
             if not created:
                 res.rel_updated += 1
-        
-    # log once
-    ImportBatch.objects.create(
-        user=user,
-        source="rss",
-        movies_created=res.movies_created,
-        rel_created=res.rel_created,
-        rel_updated=res.rel_updated,
-        events_created=res.events_created,
-    )
 
+    res.movie_ids_to_enrich = list(movies_to_enrich)
     return res

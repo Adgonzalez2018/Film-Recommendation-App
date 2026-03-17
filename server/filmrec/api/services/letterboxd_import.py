@@ -9,26 +9,33 @@ from email.utils import parsedate_to_datetime
 
 from django.db import transaction
 
-from ..services.tmdb import (
-    find_best_tmdb_movie_match,
-    upsert_tmdb_movie,
-)
 from ..models import Movie, MovieUser, WatchEvent
 from ..utils.letterboxd import normalize_letterboxd_uri
 from ..utils.dates import parse_iso_date
 from ..utils.rss import make_eventkey
 
+MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
 def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchlist_file=None, films_file=None):
     """
     Business-logic import. No DRF here.
 
     Returns counters dict.
     """
+    movies_to_enrich = set()
     events_created = 0 # go to watchEvent 
     movies_created = 0
     movies_matched = 0
     rel_created = 0
     rel_updated = 0
+
+    def mark_for_enrichment(movie):
+        if not movie:
+            return
+        if not movie.tmdb_id:
+            movies_to_enrich.add(movie.id)
+            return
+        if getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
+            movies_to_enrich.add(movie.id)
 
     def iter_csv(file_obj):
         file_obj.file.seek(0)
@@ -98,42 +105,12 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 movie.save(update_fields=list(updates.keys()))
             return movie
 
-        # 4 TMDB enrichment path
-        tmdb_id = None
-        if clean_name and y is not None:
-            try:
-                tmdb_id = find_best_tmdb_movie_match(clean_name, y)
-            except Exception:
-                tmdb_id = None
-
-        if tmdb_id:
-            try:
-                movie = upsert_tmdb_movie(tmdb_id)
-                updates = {}
-                if uri and movie.letterboxd_uri != uri:
-                    updates["letterboxd_uri"] = uri
-
-                if movie.title == "Unknown" and clean_name:
-                    updates["title"] = clean_name
-                
-                if movie.year is None and y is not None:
-                    updates["year"] = y
-
-                if updates:
-                    for k,v in updates.items():
-                        setattr(movie, k, v)
-                    movie.save(update_fields=list(updates.keys()))
-
-                movies_matched += 1
-                return movie
-            except Exception:
-                pass
-
-        # 5 Last resort: create local minimal movie row
+        # 4 Last resort: create local minimal movie row
         movie = Movie.objects.create(
             title=clean_name,
             year=y,
             letterboxd_uri=uri,
+            enrichment_status="pending",
         )
         movies_created += 1
         return movie
@@ -166,6 +143,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
+            mark_for_enrichment(movie)
             if not movie:
                 continue
             mu = get_or_create_mu(movie)
@@ -211,6 +189,8 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
+            mark_for_enrichment(movie)
+
             if not movie:
                 continue
 
@@ -273,6 +253,8 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
+            mark_for_enrichment(movie)
+
             if not movie:
                 continue
 
@@ -293,22 +275,22 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
+            mark_for_enrichment(movie)
+
             if not movie:
                 continue
 
             mu = get_or_create_mu(movie)
             apply_update(mu, {"liked": True})
 
-    # ---------- run import ----------
-    with transaction.atomic():
-        if watched_file:
-            import_watched_csv(watched_file)
-        if reviews_file:
-            import_reviews_csv(reviews_file)
-        if watchlist_file:
-            import_watchlist_csv(watchlist_file)
-        if films_file:
-            import_films_likes_csv(films_file)
+    if watched_file:
+        import_watched_csv(watched_file)
+    if reviews_file:
+        import_reviews_csv(reviews_file)
+    if watchlist_file:
+        import_watchlist_csv(watchlist_file)
+    if films_file:
+        import_films_likes_csv(films_file)
 
     return {
         "movies_created": movies_created,
@@ -316,6 +298,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         "events_created": events_created,
         "rel_created": rel_created,
         "rel_updated": rel_updated,
+        "movies_to_enrich": list(movies_to_enrich)
     }
 
 def _parse_published_date(entry) -> date | None:

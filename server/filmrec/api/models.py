@@ -85,7 +85,7 @@ class Movie(models.Model):
     enrichment_attempts = models.PositiveIntegerField(default=0)
     last_enriched_at = models.DateTimeField(blank=True, null = True)
     enrichment_error = models.TextField(blank=True, null=True)
-    
+
     def __str__(self):
         return self.title
 
@@ -135,6 +135,11 @@ class ImportBatch(models.Model):
     rel_updated = models.IntegerField(default=0)
     events_created = models.IntegerField(default=0)
 
+    # enrichments
+    tmdb_queued = models.IntegerField(default=0)
+    tmdb_done = models.IntegerField(default=0)
+    tmdb_failed = models.IntegerField(default=0)
+    
     # optional: what files were included
     had_reviews = models.BooleanField(default=False)
     had_watchlist = models.BooleanField(default=False)
