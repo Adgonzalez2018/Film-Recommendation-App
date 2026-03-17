@@ -122,5 +122,5 @@ def run_rss_import_job(batch_id: int):
 def enqueue_csv_import(batch_id: int):
     enqueue(run_csv_import_job, batch_id)
 
-def enqueue_csv_import(batch_id: int):
+def enqueue_rss_import(batch_id: int):
     enqueue(run_rss_import_job, batch_id)

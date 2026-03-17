@@ -63,13 +63,29 @@ class Movie(models.Model):
     language = models.CharField(max_length=50, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
     poster_url = models.URLField(max_length=500, blank=True, null=True)
-
     # Letterboxd URI
     letterboxd_uri = models.CharField(max_length=500, unique=True, null=True, blank=True)
 
     # For RAG - Global movie output jsonl
     movie_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 
+    enrichment_status = models.CharField(
+        max_length=20,
+        default="pending",
+        choices=[
+            ("pending", "Pending"),
+            ("queued", "Queued"),
+            ("enriching", "Enriching"),
+            ("done", "Done"),
+            ("failed", "Failed"),
+            ("not_found", "Not Found"),
+        ]
+    )
+
+    enrichment_attempts = models.PositiveIntegerField(default=0)
+    last_enriched_at = models.DateTimeField(blank=True, null = True)
+    enrichment_error = models.TextField(blank=True, null=True)
+    
     def __str__(self):
         return self.title
 
