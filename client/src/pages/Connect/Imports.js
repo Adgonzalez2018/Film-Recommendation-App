@@ -14,7 +14,11 @@ import carImg from "../../assets/images/Fargo_car.png";
 import PageFrame from "../../components/layout/PageFrame";
 
 // API
-import { CSV_FILES, submitCSVImport, submitRSSSync, markOnboardingSkipped, pollImportBatch } from "../../api/import";
+import { CSV_FILES, 
+  submitCSVImport, 
+  submitRSSSync,
+  markOnboardingSkipped, 
+  pollImportBatch } from "../../api/import";
 
 export default function LetterboxdConnect() {
   const navigate = useNavigate();
@@ -123,7 +127,6 @@ export default function LetterboxdConnect() {
     try {
       const queued = await submitRSSSync(rssInput, accessToken);
       setRssSuccess("Processing your data... this may take a moment.");
-
       const result = await pollImportBatch(queued.batch_id, accessToken);
 
       if (result.status === "failed"){

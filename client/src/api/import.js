@@ -104,6 +104,9 @@ export async function pollImportBatch(batchId, token, options = {}) {
   }
 }
 
+
+
+// Onboarding Status -----------------------
 export async function getOnboardingStatus() {
   return apiFetch("/api/onboarding-status/", {
     method: "GET",
