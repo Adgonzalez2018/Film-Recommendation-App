@@ -27,7 +27,6 @@ def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
             tmdb_id = find_best_tmdb_movie_match(
                 title = movie.title,
                 year=movie.year,
-                letterboxd_uri=movie.letterboxd_uri,
             )
 
         if not tmdb_id:

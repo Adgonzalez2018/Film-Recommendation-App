@@ -169,7 +169,6 @@ def import_batch_detail(request, batch_id: int):
 @permission_classes([IsAuthenticated])
 def onboarding_status(request):
     user = request.user
-    has_watch_data = WatchEvent.objects.filter(user=user).exists()
     has_manual_import = (user.manual_import_count or 0) > 0
     has_rss_import = (user.rss_import_count or 0) >0
 
@@ -178,8 +177,7 @@ def onboarding_status(request):
         "has_rss_import": has_rss_import,
         "has_skipped_onboarding": bool(user.has_skipped_onboarding),
         "is_onboarded": (
-            has_watch_data 
-            or has_manual_import
+            has_manual_import
             or has_rss_import 
             or user.has_skipped_onboarding)
     })
