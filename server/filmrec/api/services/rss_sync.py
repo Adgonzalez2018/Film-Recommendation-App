@@ -122,6 +122,7 @@ def sync_user_rss_watches(
     for entry in getattr(feed, "entries", []) or []:
         link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
+        entry_ref = (getattr(entry, "id", "") or getattr(entry, "link","") or "").strip()
         if not link:
             continue
 
@@ -144,7 +145,7 @@ def sync_user_rss_watches(
             )
         else:
             # consistent fallback if date is missing
-            event_key = make_eventkey(user.id, link, timezone.now().date())
+            event_key = make_eventkey(user.id,entry_ref or link, timezone.now().date())
 
         if event_key in existing_event_keys:
             continue
@@ -156,7 +157,11 @@ def sync_user_rss_watches(
             tmdb_id = find_best_tmdb_movie_match(parsed_title, parsed_year)
 
             if tmdb_id:
+                existed_before = Movie.objects.filter(tmdb_id = tmdb_id).exists()
                 movie = upsert_tmdb_movie(tmdb_id)
+                if not existed_before:
+                    res.movies_created += 1
+
                 if movie.letterboxd_uri != link:
                     movie.letterboxd_uri = link
                     movie.save(update_fields=["letterboxd_uri"])
@@ -173,7 +178,7 @@ def sync_user_rss_watches(
                 "posted_date": posted_date or timezone.now().date(),
                 "watched_date": posted_date,
                 "source": "rss",
-                "entry_url": link,
+                "entry_url": entry_ref or link,
             },
         )
         if we_created:
