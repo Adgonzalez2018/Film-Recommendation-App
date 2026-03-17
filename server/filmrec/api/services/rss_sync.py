@@ -153,9 +153,6 @@ def sync_user_rss_watches(
 
         # upsert movie by letterboxd_uri
         movie = _find_existing_movie(link=link, entry_title=title)
-        if not movie.tmdb_id or getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
-            movies_to_enrich.add(movie.id)
-
         if not movie:
             parsed_title, parsed_year = _parse_entry_title(title)
             movie = Movie.objects.create(
@@ -166,8 +163,11 @@ def sync_user_rss_watches(
             )
             movies_to_enrich(movie.id)
             res.movies_created+= 1
+        if not movie:
+            continue
 
-
+        if not movie.tmdb_id or getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
+            movies_to_enrich.add(movie.id)
         # create WatchEvent
         we, we_created = WatchEvent.objects.get_or_create(
             user=user,

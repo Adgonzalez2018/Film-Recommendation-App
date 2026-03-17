@@ -113,6 +113,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             enrichment_status="pending",
         )
         movies_created += 1
+        mark_for_enrichment(movie)
         return movie
 
     def get_or_create_mu(movie):
@@ -143,7 +144,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
-            mark_for_enrichment(movie)
             if not movie:
                 continue
             mu = get_or_create_mu(movie)
@@ -189,13 +189,10 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
-            mark_for_enrichment(movie)
-
             if not movie:
                 continue
 
             mu = get_or_create_mu(movie)
-
             posted_date = parse_iso_date(row.get("Date")) # CSV "Date" col
             watched_date = parse_iso_date(row.get("Watched Date"))
             rating = parse_float(row.get("Rating"))
@@ -253,7 +250,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
-            mark_for_enrichment(movie)
 
             if not movie:
                 continue
@@ -275,7 +271,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             uri = row.get("Letterboxd URI")
 
             movie = upsert_movie(name, year, uri)
-            mark_for_enrichment(movie)
 
             if not movie:
                 continue
