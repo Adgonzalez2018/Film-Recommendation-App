@@ -84,6 +84,27 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     
+    # guard: don't start a 2nd RSS sync while one is active 
+    existing = ImportBatch.objects.filter(
+        user=request.user,
+        source="rss",
+        status__in=["queued", "running"],
+    ).order_by("-created_at").first()
+
+    if existing:
+        return Response(
+            {
+                "status": existing.status,
+                "batch_id":existing.id,
+                "source": existing.source,
+                "rss_url": rss_url,
+                "tmdb_queued": existing.tmdb_queued,
+                "tmdb_done": existing.tmdb_done,
+                "tmdb_failed": existing.tmdb_failed,
+            },
+            status=status.HTTP_202_ACCEPTED
+        )
+    
     # save username when they link RSS
     username = extract_letterboxd_username(rss_input) or extract_letterboxd_username(rss_url)
     if username:

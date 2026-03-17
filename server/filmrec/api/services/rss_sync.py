@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 import re
 import feedparser
 
+from django.db import IntegrityError
 from django.utils import timezone
 
 from api.models import User, Movie, MovieUser, WatchEvent
@@ -155,54 +156,69 @@ def sync_user_rss_watches(
         movie = _find_existing_movie(link=link, entry_title=title)
         if not movie:
             parsed_title, parsed_year = _parse_entry_title(title)
-            movie = Movie.objects.create(
-                title = parsed_title,
-                year=parsed_year,
-                letterboxd_uri=link,
-                enrichment_status="pending",
-            )
-            movies_to_enrich.add(movie.id)
-            res.movies_created+= 1
+            try:
+                movie, movie_created = Movie.objects.get_or_create(
+                    letterboxd_uri = link,
+                    defaults={
+                        "title": parsed_title,
+                        "year": parsed_year,
+                        "enrichment_status": "pending",
+                    },
+                )
+            except IntegrityError:
+                movie = Movie.objects.get(letterboxd_uri=link)
+                movie_created = False
+            if movie_created:
+                res.movies_created += 1 
+                movies_to_enrich.add(movie.id)
+                
         if not movie:
             continue
+        
+        try:
+            # create WatchEvent
+            we, we_created = WatchEvent.objects.update_or_create(
+                user=user,
+                event_key=event_key,
+                defaults={
+                    "movie": movie,
+                    "posted_date": posted_date or timezone.now().date(),
+                    "watched_date": posted_date,
+                    "source": "rss",
+                    "entry_url": entry_ref or link,
+                },
+            )
+        except IntegrityError:
+            we = WatchEvent.objects.get(user=user, event_key=event_key)
+            we_created = False
+        
+        existing_event_keys.add(event_key)
+
+        if we_created:
+            res.events_created += 1
 
         if not movie.tmdb_id or getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
             movies_to_enrich.add(movie.id)
-        # create WatchEvent
-        we, we_created = WatchEvent.objects.get_or_create(
-            user=user,
-            event_key=event_key,
-            defaults={
-                "movie": movie,
-                "posted_date": posted_date or timezone.now().date(),
-                "watched_date": posted_date,
-                "source": "rss",
-                "entry_url": entry_ref or link,
-            },
-        )
-        if we_created:
-            res.events_created += 1
-            # add to set of event keys
-            existing_event_keys.add(event_key)
             
-        # MovieUser snapshot
-        mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
+        defaults = {"watch_status": "Watched"}
+        if posted_date:
+            defaults["watched_date"] = posted_date
+
+        try:
+            # MovieUser snapshot
+            mu, created = MovieUser.objects.update_or_create(
+                user=user, 
+                movie=movie,
+                defaults=defaults,
+            )
+        except IntegrityError:
+            mu = MovieUser.objects.get(user=user, movie=movie)
+            created = False
+
         if created:
             res.rel_created += 1
-
-        changed = False
-        if mu.watch_status != "Watched":
-            mu.watch_status = "Watched"
-            changed = True
-
-        if posted_date and mu.watched_date != posted_date:
-            mu.watched_date = posted_date
-            changed = True
-
-        if changed:
-            mu.save()
-            if not created:
-                res.rel_updated += 1
-
+        else:
+            res.rel_updated += 1 
+            
     res.movie_ids_to_enrich = list(movies_to_enrich)
     return res
