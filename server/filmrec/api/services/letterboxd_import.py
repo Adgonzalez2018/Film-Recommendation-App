@@ -48,7 +48,8 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     def upsert_movie(name, year, uri):
         nonlocal movies_created, movies_matched
-
+        movie = None
+        
         uri = normalize_letterboxd_uri(uri)
         if uri:
             movie = Movie.objects.filter(letterboxd_uri=uri).first()

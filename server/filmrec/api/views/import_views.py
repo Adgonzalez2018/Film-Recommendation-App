@@ -24,7 +24,9 @@ from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss
 from api.services.rss_sync import sync_user_rss_watches
 
 from ..models import WatchEvent, ImportBatch
+import logging
 
+logger = logging.getLogger(__name__)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -43,14 +45,20 @@ def manual_import(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    counters = run_letterboxd_import(
-        user=request.user,
-        watched_file=watched_file,
-        reviews_file=reviews_file,
-        watchlist_file=watchlist_file,
-        films_file=films_file,
-    )
-    
+    try: 
+        counters = run_letterboxd_import(
+            user=request.user,
+            watched_file=watched_file,
+            reviews_file=reviews_file,
+            watchlist_file=watchlist_file,
+            films_file=films_file,
+        )
+    except Exception:
+        logger.exception("manual_import failed user=%s", request.user.id)
+        return Response(
+            {"error": "Manual import failed. Check the server logs for the exact cause."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
     # log batch
     ImportBatch.objects.create(
         user=request.user,

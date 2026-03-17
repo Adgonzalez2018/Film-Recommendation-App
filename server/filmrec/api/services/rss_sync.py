@@ -137,14 +137,17 @@ def sync_user_rss_watches(
 
         # event key + stop if already imported
         if posted_date:
-            event_key = make_eventkey(user.id, link, posted_date)
+            event_key = make_eventkey(
+                user.id, 
+                getattr(entry, "id", link), 
+                posted_date
+            )
         else:
             # consistent fallback if date is missing
             event_key = make_eventkey(user.id, link, timezone.now().date())
 
         if event_key in existing_event_keys:
-            res.stopped_early = True
-            break
+            continue
 
         # upsert movie by letterboxd_uri
         movie = _find_existing_movie(link=link, entry_title=title)
