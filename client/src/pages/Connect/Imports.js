@@ -30,12 +30,6 @@ export default function LetterboxdConnect() {
     refreshOnboarding,
   } = useAuth();
 
-  useEffect(() => {
-    if (isOnboarded) {
-      navigate("/chat", { replace: true});
-    }
-  }, [isOnboarded, navigate]);
-
 
   // CSV state
   const [files, setFiles] = useState({
