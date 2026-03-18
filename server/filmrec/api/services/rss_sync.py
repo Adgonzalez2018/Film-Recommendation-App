@@ -11,10 +11,10 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from api.models import User, Movie, MovieUser, WatchEvent
-from api.services.letterboxd_import import (
+from server.filmrec.api.services.manual_import import (
     _parse_published_date
 )
-from api.utils.letterboxd import (
+from server.filmrec.api.utils.import_helper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
     makeEventKey

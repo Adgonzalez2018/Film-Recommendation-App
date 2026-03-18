@@ -17,11 +17,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from ..utils.letterboxd import extract_letterboxd_username, build_letterboxd_rss_url
+from ..utils.import_helper import extract_letterboxd_username, build_letterboxd_rss_url
 from ..services.import_uploads import save_temp_upload
 from ..tasks.import_tasks import enqueue_csv_import, enqueue_rss_import
 
-from ..models import WatchEvent, ImportBatch
+from ..models import ImportBatch
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
