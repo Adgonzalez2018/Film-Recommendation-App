@@ -17,11 +17,13 @@ from server.filmrec.api.services.manual_import import (
 from server.filmrec.api.utils.import_helper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
-    makeEventKey
+    needToEnrich,
+    upsert_movieuser_snapshot,
+    upsert_watch_event,
+    upsertMovie
     )
 
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
-MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
 
 def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
     s = (entry_title or "").strip()
@@ -39,24 +41,6 @@ def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
         year = None
 
     return title, year
-
-def _find_existing_movie(*, link: str, entry_title: str) -> Optional[Movie]:
-    movie = Movie.objects.filter(letterboxd_uri=link).first()
-    if movie:
-        return movie
-    
-    parsed_title, parsed_year = _parse_entry_title(entry_title)
-
-    if parsed_title and parsed_year is not None:
-        movie = Movie.objects.filter(title=parsed_title, year=parsed_year).first()
-        if movie:
-            if not movie.letterboxd_uri:
-                movie.letterboxd_uri = link
-                movie.save(update_fields=["letterboxd_uri"])
-            return movie
-        
-    return None
-    
 
 @dataclass
 class RSSSyncResult:
@@ -137,86 +121,40 @@ def sync_user_rss_watches(
             res.stopped_early = True
             break
 
+        parsed_title, parsed_year = _parse_entry_title(title)
+        movie, was_created, _ = upsertMovie(parsed_title, parsed_year, link)
         # event key + stop if already imported
         if posted_date:
-            event_key = makeEventKey(
-                user.id, 
-                getattr(entry, "id", link), 
-                posted_date
-            )
-        else:
-            # consistent fallback if date is missing
-            event_key = makeEventKey(user.id,entry_ref or link, timezone.now().date())
-
-        if event_key in existing_event_keys:
-            continue
-
-        # upsert movie by letterboxd_uri
-        movie = _find_existing_movie(link=link, entry_title=title)
-        if not movie:
-            parsed_title, parsed_year = _parse_entry_title(title)
             try:
-                movie, movie_created = Movie.objects.get_or_create(
-                    letterboxd_uri = link,
-                    defaults={
-                        "title": parsed_title,
-                        "year": parsed_year,
-                        "enrichment_status": "pending",
-                    },
+                _, we_created = upsert_watch_event(
+                    user=user,
+                    movie=movie,
+                    posted_date=posted_date,
+                    watched_date=posted_date,
+                    rewatch=False,
+                    source="rss",
+                    entry_url=entry_ref or link,
                 )
             except IntegrityError:
-                movie = Movie.objects.get(letterboxd_uri=link)
-                movie_created = False
-            if movie_created:
-                res.movies_created += 1 
-                movies_to_enrich.add(movie.id)
-                
-        if not movie:
-            continue
-        
-        try:
-            # create WatchEvent
-            we, we_created = WatchEvent.objects.update_or_create(
-                user=user,
-                event_key=event_key,
-                defaults={
-                    "movie": movie,
-                    "posted_date": posted_date or timezone.now().date(),
-                    "watched_date": posted_date,
-                    "source": "rss",
-                    "entry_url": entry_ref or link,
-                },
-            )
-        except IntegrityError:
-            we = WatchEvent.objects.get(user=user, event_key=event_key)
-            we_created = False
-        
-        existing_event_keys.add(event_key)
+                we_created = False
 
-        if we_created:
-            res.events_created += 1
-
-        if not movie.tmdb_id or getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS:
+            if we_created:
+                res.events_created += 1
+        if needToEnrich(movie):
             movies_to_enrich.add(movie.id)
-            
+
         defaults = {"watch_status": "Watched"}
         if posted_date:
             defaults["watched_date"] = posted_date
-
         try:
-            # MovieUser snapshot
-            mu, created = MovieUser.objects.update_or_create(
-                user=user, 
-                movie=movie,
-                defaults=defaults,
-            )
+            _, created_mu, changed_mu = upsert_movieuser_snapshot(user, movie, defaults)
         except IntegrityError:
-            mu = MovieUser.objects.get(user=user, movie=movie)
-            created = False
+            created_mu = False
+            changed_mu = False
 
-        if created:
+        if created_mu:
             res.rel_created += 1
-        else:
+        elif changed_mu:
             res.rel_updated += 1 
 
     res.movie_ids_to_enrich = list(movies_to_enrich)
