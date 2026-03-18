@@ -200,7 +200,11 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             if needToEnrich(movie):
                 movies_to_enrich.add(movie.id)
 
-            upsert_movieuser_snapshot(user, movie, {"liked": True})
+            _, created_mu, changed_mu = upsert_movieuser_snapshot(user, movie, {"liked": True})
+            if created_mu:
+                rel_created += 1
+            if changed_mu:
+                rel_updated += 1
 
     if watched_file:
         import_watched_csv(watched_file)
