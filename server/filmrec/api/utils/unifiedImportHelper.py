@@ -4,6 +4,8 @@ from typing import Optional
 import hashlib
 from datetime import date
 
+from django.db import IntegrityError
+
 from api.models import Movie, WatchEvent, MovieUser
 
 _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
@@ -203,14 +205,28 @@ def upsertMovie(title: str, year: int | None, uri: str | None):
         return movie, created, matched_existing 
 
     # 4 Last resort: create local minimal movie row
-    movie = Movie.objects.create(
-        title=clean_name,
-        year=y,
-        letterboxd_uri=uri,
-        enrichment_status="pending",
-    )
-    created = True
-    return movie, created, matched_existing
+    try:
+        movie = Movie.objects.create(
+            title=clean_name,
+            year=y,
+            letterboxd_uri=uri,
+            enrichment_status="pending",
+        )
+        created = True
+
+        return movie, created, matched_existing
+    except IntegrityError:
+        if uri:
+            movie = Movie.objects.filter(letterboxd_uri=uri).first()
+            if movie:
+                matched_existing = True
+                return movie, created, matched_existing
+            if clean_name and y is not None:
+                movie = Movie.objects.filter(title=clean_name, year=y).first()
+                if movie:
+                    matched_existing=True
+                    return movie, created, matched_existing
+            raise
 
 # --- Unified Event key for both Manual & RSS Imports ---
 def makeEventKey(user_id:int, uri: str, posted_date: Optional[date], entry_url: str | None = None) -> str:
@@ -230,24 +246,32 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
         return None, False
     
     event_key = makeEventKey(user.id, movie.letterboxd_uri, posted_date)
-
-    we, created = WatchEvent.objects.get_or_create(
-        user=user,
-        event_key=event_key,
-        defaults={
-            "movie": movie,
-            "posted_date": posted_date,
-            "watched_date": watched_date,
-            "rewatch": rewatch,
-            "source": source,
-            "entry_url": entry_url or movie.letterboxd_uri,
-        },
-    )
-    return we, created
+    try:
+        we, created = WatchEvent.objects.get_or_create(
+            user=user,
+            event_key=event_key,
+            defaults={
+                "movie": movie,
+                "posted_date": posted_date,
+                "watched_date": watched_date,
+                "rewatch": rewatch,
+                "source": source,
+                "entry_url": entry_url or movie.letterboxd_uri,
+            },
+        )
+        return we, created
+    except IntegrityError:
+        we = WatchEvent.objects.get(user=user, event_key=event_key)
+        return we, False
 
 def upsert_movieuser_snapshot(user, movie, updates):
-    # returns (movie_user, created)
-    mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
+    try:
+        mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
+    except IntegrityError:
+        # returns (movie_user, created)
+        mu, created = MovieUser.objects.get_or_create(user=user, movie=movie)
+        created = False
+
     changed = False
     for k, v in updates.items():
         if getattr(mu, k) != v:
@@ -262,8 +286,6 @@ def needToEnrich(movie) -> bool:
     if not movie:
         return False
     return(
-        movie is not None and (
-            not movie.tmdb_id or 
-            getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS
-        )
+        not movie.tmdb_id or 
+        getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS
     )
