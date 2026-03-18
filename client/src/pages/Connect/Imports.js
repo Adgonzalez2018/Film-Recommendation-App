@@ -14,8 +14,7 @@ import carImg from "../../assets/images/Fargo_car.png";
 import PageFrame from "../../components/layout/PageFrame";
 
 // API
-import { CSV_FILES, 
-  submitCSVImport, 
+import { CSV_FILES,  
   submitRSSSync,
   markOnboardingSkipped, 
   pollImportBatch } from "../../api/import";
@@ -82,8 +81,6 @@ export default function LetterboxdConnect() {
       throw new Error("Not authenticated. Please sign in again.");
     }
 
-    const queued = await submitCSVImport(files, accessToken);
-    setCsvSuccess("Processing your data... this may take a moment");
     const result = await pollImportBatch(queued.batch_id, accessToken);
 
     if (result.status === "failed"){
