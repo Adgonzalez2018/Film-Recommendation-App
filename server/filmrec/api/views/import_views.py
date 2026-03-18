@@ -70,7 +70,7 @@ def manual_import(request):
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
         batch.rel_created = counters.get("rel_created", 0)
-        batch.rel_updated = counters.get("rel_matched", 0)
+        batch.rel_updated = counters.get("rel_updated", 0)
         batch.events_created = counters.get("events_created", 0)
         batch.tmdb_queued = tmdb_queued
         batch.finished_at = timezone.now()
@@ -229,6 +229,7 @@ def onboarding_status(request):
         "has_rss_import": has_rss_import,
         "has_skipped_onboarding": bool(user.has_skipped_onboarding),
         "is_onboarded": (
+            has_watch_data or 
             has_manual_import
             or has_rss_import 
             or user.has_skipped_onboarding)
