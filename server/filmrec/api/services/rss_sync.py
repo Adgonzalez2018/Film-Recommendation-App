@@ -8,13 +8,12 @@ import re
 import feedparser
 
 from django.db import IntegrityError
-from django.utils import timezone
 
-from api.models import User, Movie, MovieUser, WatchEvent
-from server.filmrec.api.services.manual_import import (
+from api.models import User, WatchEvent
+from server.filmrec.api.services.csvImport import (
     _parse_published_date
 )
-from server.filmrec.api.utils.import_helper import (
+from server.filmrec.api.utils.unifiedImportHelper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
     needToEnrich,
@@ -123,6 +122,9 @@ def sync_user_rss_watches(
 
         parsed_title, parsed_year = _parse_entry_title(title)
         movie, was_created, _ = upsertMovie(parsed_title, parsed_year, link)
+
+        if was_created:
+            res.movies_created += 1
         # event key + stop if already imported
         if posted_date:
             try:
