@@ -142,6 +142,7 @@ class ImportBatch(models.Model):
     tmdb_failed = models.IntegerField(default=0)
     
     # optional: what files were included
+    had_watched_file = models.BooleanField(default=False)
     had_reviews = models.BooleanField(default=False)
     had_watchlist = models.BooleanField(default=False)
     had_films = models.BooleanField(default=False)

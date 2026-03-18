@@ -213,7 +213,6 @@ def upsertMovie(title: str, year: int | None, uri: str | None):
             enrichment_status="pending",
         )
         created = True
-
         return movie, created, matched_existing
     except IntegrityError:
         if uri:

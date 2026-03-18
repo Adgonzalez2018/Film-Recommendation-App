@@ -11,6 +11,7 @@ Allows:
 
 Dependencies: letterboxd_import.py
 """
+from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -18,8 +19,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from ..utils.unifiedImportHelper import extract_letterboxd_username, build_letterboxd_rss_url
-from ..services.import_uploads import save_temp_upload
-from ..tasks.import_tasks import enqueue_csv_import, enqueue_rss_import
+from ..tasks.import_tasks import enqueue_rss_import
+from ..services.csvImport import run_letterboxd_import
+from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
 
 from ..models import ImportBatch
 
@@ -43,29 +45,78 @@ def manual_import(request):
     batch = ImportBatch.objects.create(
         user=request.user,
         source="csv",
-        status="queued",
+        status="running",
+        had_watched_file=bool(watched_file),
         had_reviews=bool(reviews_file),
         had_watchlist=bool(watchlist_file),
         had_films=bool(films_file),
-        watched_path=save_temp_upload(watched_file, "watched") if watched_file else "",
-        reviews_path=save_temp_upload(reviews_file, "reviews") if reviews_file else "",
-        watchlist_path=save_temp_upload(watchlist_file, "watchlist") if watchlist_file else "",
-        films_path=save_temp_upload(films_file, "films") if films_file else "",
     )
+    try:
+        counters = run_letterboxd_import(
+            user=request.user,
+            watched_file=watched_file,
+            reviews_file=reviews_file,
+            watchlist_file=watchlist_file,
+            films_file=films_file,
+        )
+        
+        movie_ids = counters.get("movies_to_enrich", [])
+        tmdb_queued = len(set(movie_ids))
 
-    enqueue_csv_import(batch.id)
+        if movie_ids:
+            enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
 
-    return Response(
-        {
-            "status": "queued",
-            "batch_id": batch.id,
-            "source": batch.source,
-            "tmdb_queued": batch.tmdb_queued,
-            "tmdb_done": batch.tmdb_done,
-            "tmdb_failed": batch.tmdb_failed,
-        },
-        status=status.HTTP_202_ACCEPTED,
-    )
+        batch.status = "completed"
+        batch.movies_created = counters.get("movies_created", 0)
+        batch.movies_matched = counters.get("movies_matched", 0)
+        batch.rel_created = counters.get("rel_created", 0)
+        batch.rel_matched = counters.get("rel_matched", 0)
+        batch.events_created = counters.get("events_created", 0)
+        batch.tmdb_queued = tmdb_queued
+        batch.finished_at = timezone.now()
+        batch.save(
+            update_fields=[
+                "status",
+                "movies_created",
+                "movies_matched",
+                "rel_created",
+                "rel_updated",
+                "events_created",
+                "tmdb_queued",
+                "finished_at",
+            ]
+        )
+        request.user.manual_import_count = (request.user.manual_import_count or 0) + 1
+        request.last_sync = timezone.now()
+        request.user.save(update_fields=["manual_import_count", "last_sync"])
+
+        return Response(
+            {
+                "status": "queued",
+                "batch_id": batch.id,
+                "source": batch.source,
+                "movies_created": batch.movies_created,
+                "movies_matched": batch.movies_matched,
+                "rel_created": batch.rel_created,
+                "rel_updated": batch.rel_updated,
+                "events_created": batch.events_created,
+                "tmdb_queued": batch.tmdb_queued,
+                "tmdb_done": batch.tmdb_done,
+                "tmdb_failed": batch.tmdb_failed,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+    except Exception as e:
+        batch.status = "failed"
+        batch.error_message = str(e)
+        batch.finished_at = timezone.now()
+        batch.save(update_fields=["status","error_message","finished_at"])
+
+        return Response(
+            {"error": str(e), "batch_id":batch.id},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
 
 # --- RSS Import Endpoint ---
 @api_view(['POST'])

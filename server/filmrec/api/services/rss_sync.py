@@ -10,10 +10,10 @@ import feedparser
 from django.db import IntegrityError
 
 from api.models import User, WatchEvent
-from server.filmrec.api.services.csvImport import (
+from api.services.csvImport import (
     _parse_published_date
 )
-from server.filmrec.api.utils.unifiedImportHelper import (
+from api.utils.unifiedImportHelper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
     needToEnrich,
