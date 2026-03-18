@@ -5,7 +5,6 @@ from celery import shared_task
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from django_rq import enqueue
 
 from ..models import ImportBatch
 from ..services.letterboxd_import import run_letterboxd_import

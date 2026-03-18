@@ -7,7 +7,7 @@ from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 
 from ..models import MovieUser
-from ..utils.letterboxd import (
+from ..utils.import_helper import (
     upsertMovie, 
     needToEnrich, 
     upsert_movieuser_snapshot, 

@@ -1,7 +1,5 @@
 # For movie enrichment
 from django.utils import timezone
-from django_rq import enqueue
-from django.db import models
 from django.db.models import F
 
 from celery import shared_task

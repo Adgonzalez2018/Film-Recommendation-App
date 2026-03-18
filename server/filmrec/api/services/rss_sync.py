@@ -17,9 +17,8 @@ from api.services.letterboxd_import import (
 from api.utils.letterboxd import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
+    makeEventKey
     )
-
-from api.utils.rss import make_eventkey
 
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
 MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
@@ -140,14 +139,14 @@ def sync_user_rss_watches(
 
         # event key + stop if already imported
         if posted_date:
-            event_key = make_eventkey(
+            event_key = makeEventKey(
                 user.id, 
                 getattr(entry, "id", link), 
                 posted_date
             )
         else:
             # consistent fallback if date is missing
-            event_key = make_eventkey(user.id,entry_ref or link, timezone.now().date())
+            event_key = makeEventKey(user.id,entry_ref or link, timezone.now().date())
 
         if event_key in existing_event_keys:
             continue
@@ -219,6 +218,6 @@ def sync_user_rss_watches(
             res.rel_created += 1
         else:
             res.rel_updated += 1 
-            
+
     res.movie_ids_to_enrich = list(movies_to_enrich)
     return res
