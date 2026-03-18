@@ -70,7 +70,7 @@ def manual_import(request):
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
         batch.rel_created = counters.get("rel_created", 0)
-        batch.rel_matched = counters.get("rel_matched", 0)
+        batch.rel_updated = counters.get("rel_matched", 0)
         batch.events_created = counters.get("events_created", 0)
         batch.tmdb_queued = tmdb_queued
         batch.finished_at = timezone.now()
@@ -87,12 +87,12 @@ def manual_import(request):
             ]
         )
         request.user.manual_import_count = (request.user.manual_import_count or 0) + 1
-        request.last_sync = timezone.now()
+        request.user.last_sync = timezone.now()
         request.user.save(update_fields=["manual_import_count", "last_sync"])
 
         return Response(
             {
-                "status": "queued",
+                "status": "completed",
                 "batch_id": batch.id,
                 "source": batch.source,
                 "movies_created": batch.movies_created,

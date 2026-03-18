@@ -46,7 +46,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     # ---------- per-csv handlers ----------
     def import_watched_csv(file_obj):
-        nonlocal events_created, movies_created, movies_matched
+        nonlocal events_created, movies_created, movies_matched, rel_created, rel_updated
 
         for row in iter_csv(file_obj):
             name = row.get("Name")
@@ -95,7 +95,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 rel_updated += 1
 
     def import_reviews_csv(file_obj):
-        nonlocal events_created, movies_created, movies_matched
+        nonlocal events_created, movies_created, movies_matched, rel_created, rel_updated
         for row in iter_csv(file_obj):
             name = row.get("Name")
             year = row.get("Year")
@@ -153,7 +153,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 rel_updated += 1
 
     def import_watchlist_csv(file_obj):
-        nonlocal movies_created, movies_matched
+        nonlocal events_created, movies_created, movies_matched, rel_created, rel_updated
 
         for row in iter_csv(file_obj):
             name = row.get("Name")
@@ -184,7 +184,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 rel_updated += 1
 
     def import_films_likes_csv(file_obj):
-        nonlocal movies_created, movies_matched
+        nonlocal events_created, movies_created, movies_matched, rel_created, rel_updated
         for row in iter_csv(file_obj):
             name = row.get("Name")
             year = row.get("Year")
