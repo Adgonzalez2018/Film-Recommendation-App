@@ -23,7 +23,7 @@ from ..tasks.import_tasks import enqueue_rss_import
 from ..services.csvImport import run_letterboxd_import
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
 
-from ..models import ImportBatch
+from ..models import ImportBatch, WatchEvent
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -220,6 +220,7 @@ def import_batch_detail(request, batch_id: int):
 @permission_classes([IsAuthenticated])
 def onboarding_status(request):
     user = request.user
+    has_watch_data = WatchEvent.objects.filter(user=user).exists()
     has_manual_import = (user.manual_import_count or 0) > 0
     has_rss_import = (user.rss_import_count or 0) >0
 
