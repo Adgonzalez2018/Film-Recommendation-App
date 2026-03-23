@@ -17,7 +17,9 @@ import PageFrame from "../../components/layout/PageFrame";
 import { CSV_FILES,  
   submitRSSSync,
   markOnboardingSkipped, 
-  pollImportBatch } from "../../api/import";
+  submitCSVImport,
+  pollImportBatch, 
+  submitCSVImport} from "../../api/import";
 
 export default function LetterboxdConnect() {
   const navigate = useNavigate();
@@ -81,6 +83,8 @@ export default function LetterboxdConnect() {
       throw new Error("Not authenticated. Please sign in again.");
     }
 
+    const queued = await submitCSVImport(files, accessToken);
+    setCsvSuccess("Processing your data... this may take a moment.");
     const result = await pollImportBatch(queued.batch_id, accessToken);
 
     if (result.status === "failed"){
