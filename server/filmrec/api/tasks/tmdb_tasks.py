@@ -1,6 +1,7 @@
 # For movie enrichment
 from django.utils import timezone
 from django.db.models import F
+from django.core.exceptions import ValidationError
 
 from celery import shared_task
 
@@ -33,13 +34,26 @@ def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
             movie.save(update_fields=["enrichment_status","last_enriched_at"])
             return
         
-        # let your existing tmdb service do the real population
-        if movie.tmdb_id and movie.tmdb_id == tmdb_id:
-            enriched = upsert_tmdb_movie(tmdb_id)
-            if enriched.id != movie.id:
+        try:
+            # let your existing tmdb service do the real population
+            if movie.tmdb_id and movie.tmdb_id == tmdb_id:
+                enriched = upsert_tmdb_movie(tmdb_id)
+                if enriched.id != movie.id:
+                    attach_tmdb_to_movie(movie_id=movie.id, tmdb_id=tmdb_id)
+            else:
                 attach_tmdb_to_movie(movie_id=movie.id, tmdb_id=tmdb_id)
-        else:
-            attach_tmdb_to_movie(movie_id=movie.id, tmdb_id=tmdb_id)
+        except ValidationError as e:
+            msg = str(e)
+            if "already attached to another movie" in msg:
+                movie.enrichment_status = "done"
+                movie.last_enriched_at = timezone.now()
+                movie.enrichment_error = "Skipped duplicate tmdb attach"
+                movie.save(update_fields=["enrichment_status", "last_enriched_at", "enrichment_error"])
+
+                if batch_id:
+                    ImportBatch.objects.filter(id=batch_id).update(tmdb_done=F("tmdb_done") + 1)
+                return
+            raise
         
         movie.refresh_from_db()
         movie.enrichment_status = "done"
