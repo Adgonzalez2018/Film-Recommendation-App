@@ -16,8 +16,7 @@ import PageFrame from "../../components/layout/PageFrame";
 // API
 import { CSV_FILES,  
   submitRSSSync,
-  markOnboardingSkipped, 
-  submitCSVImport,
+  markOnboardingSkipped,
   pollImportBatch, 
   submitCSVImport} from "../../api/import";
 
