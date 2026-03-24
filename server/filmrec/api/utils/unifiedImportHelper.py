@@ -3,6 +3,7 @@ import re
 from typing import Optional
 import hashlib
 from datetime import date
+from dataclasses import dataclass
 
 from django.db import IntegrityError
 
@@ -11,6 +12,93 @@ from api.models import Movie, WatchEvent, MovieUser
 _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
 _USERNAME_SAFE_RE = re.compile(r"^[A-Za-z0-9_]+$")
 MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
+
+@dataclass
+class NormalizedMovieCandidate:
+    title: str
+    year: Optional[int]
+    raw_uri: Optional[str]
+    canonical_uri: Optional[str]
+    weak_uri: Optional[str]
+    tmdb_id: Optional[int] = None
+
+
+def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
+    # Returns canonical uri and weak uri
+    # canonical uri is stable film-page uri
+    # weak uri are normalized uri that may be useful as a hint but shouldn't be part of movie's primary identity
+    normalized = normalize_letterboxd_uri(uri)
+    if not normalized:
+        return None, None
+    
+    if "/film/" in normalized:
+        return normalized, None
+    
+    return None, normalized
+
+def normalize_movie_candidate(title, year, uri=None, tmdb_id=None) -> NormalizedMovieCandidate:
+    clean_title = clean_letterboxd_title(title)
+    parsed = parse_year(year)
+    canonical_uri, weak_uri = normalize_letterboxd_movie_identity(uri)
+
+    return NormalizedMovieCandidate(
+        title=clean_title,
+        year=parsed,
+        raw_uri=normalize_letterboxd_uri(uri),
+        canonical_uri=canonical_uri,
+        weak_uri=weak_uri,
+        tmdb_id=tmdb_id,
+    )
+
+def patch_movie_from_candidate(movie: Movie, cand: NormalizedMovieCandidate) -> bool:
+    changed = False
+
+    if movie.tmdb_id is None and cand.tmdb_id is not None:
+        movie.tmdb_id = cand.tmdb_id
+        changed = True
+
+    if not movie.letterboxd_uri and cand.canonical_uri:
+        movie.letterboxd_uri = cand.canonical_uri
+        changed = True
+    
+    if (not movie.title or movie.title == "Unknown") and cand.title:
+        movie.title = cand.title
+        changed = True
+
+    if movie.year is None and cand.year is not None:
+        movie.year = cand.year
+        changed = True
+
+    return changed
+
+def choose_existing_movie_one(cand: NormalizedMovieCandidate) -> Optional[Movie]:
+    # Robust single-row lookup policy
+    # 1. tmdb id
+    # 2. canonical film uri
+    # 3. exact title/year
+    # 4. weak uri only as a last resort
+
+    if cand.tmdb_id is not None:
+        movie = Movie.objects.filter(tmdb_id=cand.tmdb_id).first()
+        if movie:
+            return movie
+
+    if cand.canonical_uri:
+        movie = Movie.objects.filter(letterboxd_uri=cand.canonical_uri).first()
+        if movie:
+            return movie
+
+    if cand.title and cand.year is not None:
+        movie = Movie.objects.filter(title=cand.title, year=cand.year).first()
+        if movie:
+            return movie
+
+    if cand.weak_uri:
+        movie = Movie.objects.filter(letterboxd_uri=cand.weak_uri).first()
+        if movie:
+            return movie     
+        
+    return None
 
 def normalize_letterboxd_uri(uri: str):
     """
@@ -148,85 +236,120 @@ def parse_year(year_str):
 def clean_letterboxd_title(name: str) -> str:
     return ((name or "").strip()[:255] or "Unknown")
 
-def upsertMovie(title: str, year: int | None, uri: str | None):
-    # Returns movie created matched_existing
-    # - matches by letterboxd uri first
-    # fall back to title + year
-    # patches missing basics
-    # creats minimal movie with enrichment status if needed
-    #nonlocal movies_created, movies_matched
-    movie = None
+def upsertMovie(title: str, year: int | None, uri: str | None, tmdb_id: int | None = None):
+    return resolve_movie_one(title, year, uri, tmdb_id)
+
+def resolve_movie_one(title: str, year: int | None, uri: str | None, tmdb_id: int | None = None):
+    cand = normalize_movie_candidate(title, year, uri, tmdb_id)
+
+    movie = choose_existing_movie_one(cand)
     created = False
-    matched_existing = False
-    clean_name = clean_letterboxd_title(title)
-    y = parse_year(year)
-    uri = normalize_letterboxd_uri(uri)
-
-    # 1 Best local key: Letterboxd URI
-    if uri:
-        movie = Movie.objects.filter(letterboxd_uri=uri).first()
-
-    # 2 Fallback local key: title + year
-    if not movie and clean_name and y is not None:
-        movie = Movie.objects.filter(title=clean_name, year=y).first()
-        if movie:
-            matched_existing = True
-            updates = {}
-            if not movie.letterboxd_uri and uri:
-                updates["letterboxd_uri"] = uri
-            if (movie.title == "Unknown") and clean_name:
-                updates["title"] = clean_name
-            if movie.year is None and y is not None:
-                updates["year"] = y
-            if updates:
-                for k, v in updates.items():
-                    setattr(movie, k,v)
-                movie.save(update_fields=list(updates.keys()))
-            return movie, created, matched_existing 
-        
-    # 3 If found locally, patch missing basics and return
     if movie:
-        matched_existing = True
-        updates = {}
-        # updates movie title if possible
-        if (movie.title == "Unknown") and clean_name:
-            updates["title"] = clean_name
-        # update year if possible
-        if movie.year is None and y is not None:
-            updates["year"] = y
-        # update letterboxd uri if possible
-        if not movie.letterboxd_uri and uri:
-            updates["letterboxd_uri"] = uri
-        # Apply updates to movie record
-        if updates:
-            for k, v in updates.items():
-                setattr(movie, k,v)
-            movie.save(update_fields=list(updates.keys()))
-        return movie, created, matched_existing 
-
-    # 4 Last resort: create local minimal movie row
+        if patch_movie_from_candidate(movie, cand):
+            movie.save(update_fields=["tmdb_id", "letterboxd_uri", "title", "year"])
+        return movie, created, needToEnrich(movie)
+    
     try:
+        create_uri = cand.canonical_uri or None
         movie = Movie.objects.create(
-            title=clean_name,
-            year=y,
-            letterboxd_uri=uri,
-            enrichment_status="pending",
+            title=cand.title,
+            year=cand.year,
+            letterboxd_uri=create_uri,
+            tmdb_id=cand.tmdb_id,
         )
         created = True
-        return movie, created, matched_existing
+        return movie, created, needToEnrich(movie)
+    
     except IntegrityError:
-        if uri:
-            movie = Movie.objects.filter(letterboxd_uri=uri).first()
-            if movie:
-                matched_existing = True
-                return movie, created, matched_existing
-            if clean_name and y is not None:
-                movie = Movie.objects.filter(title=clean_name, year=y).first()
-                if movie:
-                    matched_existing=True
-                    return movie, created, matched_existing
+        movie = choose_existing_movie_one(cand)
+        if not movie:
             raise
+        if patch_movie_from_candidate(movie, cand):
+            movie.save(update_fields=["tmdb_id","letterboxd_uri","title","year"])
+        return movie, False, needToEnrich(movie)
+    
+def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
+    # Bulk resolver that follows the same policy as upsert movie:
+    # canon uri -> title/year -> weak uri
 
+    canonical_uris = {c.canonical_uri for c in candidates if c.canonical_uri}
+    titles = {c.title for c in candidates if c.title}
+    years = {c.year for c in candidates if c.year is not None}
+
+
+    
+    existing_by_uri = {}
+    all_uris = canonical_uris
+    if all_uris:
+        for m in Movie.objects.filter(letterboxd_uri__in=all_uris):
+            existing_by_uri[m.letterboxd_uri] = m
+
+    existing_by_pair = {}
+    if titles and years:
+        for m in Movie.objects.filter(title__in=titles, year__in=years):
+            existing_by_pair[(m.title, m.year)] = m
+    
+    resolved = []
+    to_patch = {}
+    to_create = {}
+
+    def choose_existing_bulk(c: NormalizedMovieCandidate):
+        if c.canonical_uri and c.canonical_uri in existing_by_uri:
+            return existing_by_uri[c.canonical_uri]
+        if c.title and c.year is not None and (c.title, c.year) in existing_by_pair:
+            return existing_by_pair[(c.title, c.year)]
+        return None
+    
+    for c in candidates:
+        movie = choose_existing_bulk(c)
+        if movie:
+            if patch_movie_from_candidate(movie, c):
+                to_patch[movie.id] = movie
+            resolved.append(movie)
+            continue
+
+        create_key = (
+            c.canonical_uri,
+            c.title,
+            c.year,
+        )
+
+        if create_key not in to_create:
+            to_create[create_key] = Movie(
+                title=c.title,
+                year=c.year,
+                letterboxd_uri=c.canonical_uri or None,
+            )
+
+        resolved.append(to_create[create_key])
+
+    if to_patch:
+        Movie.objects.bulk_update(
+            list(to_patch.values()),
+            ["letterboxd_uri", "title", "year"],
+        )
+        
+    created_movies = []
+    if to_create:
+        Movie.objects.bulk_create(list(to_create.values()), ignore_conflicts=True)
+
+        created_uris = [m.letterboxd_uri for m in to_create.values() if m.letterboxd_uri]
+
+        fetched = {}
+        if created_uris:
+            for m in Movie.objects.filter(letterboxd_uri__in=created_uris):
+                fetched[m.letterboxd_uri] = m
+        
+        new_resolved = []
+        for movie in resolved:
+            if movie.id is None and movie.letterboxd_uri:
+                new_resolved.append(fetched.get(movie.letterboxd_uri, movie))
+            else:
+                new_resolved.append(movie)
+        resolved = new_resolved
+        
+    return resolved
+    
 # --- Unified Event key for both Manual & RSS Imports ---
 def makeEventKey(user_id:int, uri: str, posted_date: Optional[date], entry_url: str | None = None) -> str:
     date_part = posted_date.isoformat() if posted_date else "nodate"
@@ -244,7 +367,7 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
     if not posted_date or not movie or not movie.letterboxd_uri:
         return None, False
     
-    event_key = makeEventKey(user.id, movie.letterboxd_uri, posted_date)
+    event_key = makeEventKey(user.id, movie.letterboxd_uri, posted_date, entry_url=entry_url or movie.letterboxd_uri,)
     try:
         we, created = WatchEvent.objects.get_or_create(
             user=user,

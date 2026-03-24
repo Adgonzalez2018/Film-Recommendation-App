@@ -3,16 +3,13 @@
 # & Profile Page
 import csv
 import io
-from datetime import date, datetime
-from email.utils import parsedate_to_datetime
 
-from ..models import MovieUser, Movie, WatchEvent
+from ..models import MovieUser, WatchEvent
 from ..utils.unifiedImportHelper import (
-    normalize_letterboxd_uri, 
-    needToEnrich, 
-    clean_letterboxd_title,
-    parse_year,
-    makeEventKey
+    makeEventKey,
+    resolve_movies_bulk,
+    normalize_movie_candidate,
+    needToEnrich
 )
 
 from ..utils.dates import parse_iso_date
@@ -55,7 +52,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "kind": "watched",
                     "title": row.get("Name"),
                     "year": row.get("Year"),
-                    "uri": normalize_letterboxd_uri(row.get("Letterboxd URI")),
+                    "uri": row.get("Letterboxd URI"),
                     "posted_date": parse_iso_date(row.get("Date")),
                     "watched_date": None,
                     "rating": None,
@@ -71,7 +68,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "kind": "review",
                     "title": row.get("Name"),
                     "year": row.get("Year"),
-                    "uri": normalize_letterboxd_uri(row.get("Letterboxd URI")),
+                    "uri": row.get("Letterboxd URI"),
                     "posted_date": parse_iso_date(row.get("Date")),
                     "watched_date": parse_iso_date(row.get("Watched Date")),
                     "rating": parse_float(row.get("Rating")),
@@ -87,7 +84,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "kind": "watchlist",
                     "title": row.get("Name"),
                     "year": row.get("Year"),
-                    "uri": normalize_letterboxd_uri(row.get("Letterboxd URI")),
+                    "uri": row.get("Letterboxd URI"),
                     "posted_date": None,
                     "watched_date": None,
                     "rating": None,
@@ -103,7 +100,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "kind": "likes",
                     "title": row.get("Name"),
                     "year": row.get("Year"),
-                    "uri": normalize_letterboxd_uri(row.get("Letterboxd URI")),
+                    "uri": row.get("Letterboxd URI"),
                     "posted_date": None,
                     "watched_date": None,
                     "rating": None,
@@ -114,141 +111,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 })
 
         return rows
-
-    def resolve_movies(rows):
-        # Bulk resolve/create movies by:
-        # letterboxd uri
-        # fallback title + year
-        nonlocal movies_created, movies_matched
-        uris = {r["uri"] for r in rows if r["uri"]}
-        titles = set()
-        years = set()
-
-        for r in rows:
-            title = clean_letterboxd_title(r["title"])
-            year = parse_year(r["year"])
-            r["_clean_title"] = title
-            r["_parsed_year"] = year
-            if title and year is not None:
-                titles.add(title)
-                years.add(year)
-
-        existing_by_uri = {}
-        if uris:
-            for m in Movie.objects.filter(letterboxd_uri__in=uris):
-                existing_by_uri[m.letterboxd_uri] = m
-
-        existing_by_pair = {}
-        if titles and years:
-            for m in Movie.objects.filter(title__in=titles, year__in=years):
-                existing_by_pair[(m.title, m.year)] = m
-        
-        
-        movies_to_patch = {}
-        create_candidates = {}
-        row_movie_keys = []
-
-        def row_key_for_create(r):
-            if r["uri"]:
-                return ("uri", r["uri"])
-            return ("pair", r["_clean_title"], r["_parsed_year"])
-        
-        # first pass: resolve existing or stage new creations
-        for r in rows:
-            movie = None
-            uri = r["uri"]
-            pair = (r["_clean_title"], r["_parsed_year"])
-
-            if uri and uri in existing_by_uri:
-                movie = existing_by_uri[uri]
-            elif pair[0] and pair[1] is not None and pair in existing_by_pair:
-                movie = existing_by_pair[pair]
-
-            if movie:
-                row_movie_keys.append(("existing", movie))
-                patch = movies_to_patch.get(movie.id)
-                if patch is None:
-                    patch = {"movie": movie, "changed": False}
-                    movies_to_patch[movie.id] = patch
-
-                if not movie.letterboxd_uri and uri:
-                    movie.letterboxd_uri = uri
-                    patch["changed"] = True
-                if movie.title == "Unknown" and r["_clean_title"]:
-                    movie.title = r["_clean_title"]
-                    patch["changed"] = True
-                if movie.year is None and r["_parsed_year"] is not None:
-                    movie.year = r["_parsed_year"]
-                    patch["changed"] = True
-            else:
-                create_key = row_key_for_create(r)
-                if create_key not in create_candidates:
-                    resolved_uri = r["uri"] or None
-                    create_candidates[create_key] = Movie(
-                        title=r["_clean_title"],
-                        year=r["_parsed_year"],
-                        letterboxd_uri=resolved_uri,
-                        enrichment_status="pending",
-                    )
-                row_movie_keys.append(("created_or_fetch", create_key))
-
-        # Patch existing movies in bulk
-        patch_list = [v["movie"] for v in movies_to_patch.values() if v["changed"]]
-        if patch_list:
-            Movie.objects.bulk_update(patch_list, ["letterboxd_uri", "title", "year"])
-
-        # bulk create missing movies
-        if create_candidates:
-            Movie.objects.bulk_create(list(create_candidates.values()), ignore_conflicts=True)
-
-        # Re-fetch after create/patch
-        all_by_uri = {}
-        if uris:
-            for m in Movie.objects.filter(letterboxd_uri__in=uris):
-                all_by_uri[m.letterboxd_uri] = m
-        
-        all_by_pair = {}
-        if titles and years:
-            for m in Movie.objects.filter(title__in=titles, year__in=years):
-                all_by_pair[(m.title,m.year)] = m
-
-        # Final row -> movie resolution and counters
-        seen_created_keys = set()
-        for idx, r in enumerate(rows):
-            marker, payload = row_movie_keys[idx]
-
-            if marker == "existing":
-                movie = payload
-                movies_matched += 1
-            else:
-                create_key = payload
-                movie = None
-
-                if create_key[0] == "uri":
-                    movie = all_by_uri.get(create_key[1])
-                else:
-                    movie = all_by_pair.get((create_key[1], create_key[2]))
-
-                if not movie:
-                    resolved_uri = r["uri"] or None
-                    # very defensive fallback
-                    movie = Movie.objects.create(
-                        title=r["_clean_title"],
-                        year=r["_parsed_year"],
-                        letterboxd_uri=resolved_uri,
-                        enrichment_status="pending",
-                    )
-                
-                if create_key not in seen_created_keys:
-                    movies_created += 1
-                    seen_created_keys.add(create_key)
-                else:
-                    movies_matched += 1
-            
-            r["_movie"] = movie
-
-            if needToEnrich(movie):
-                movies_to_enrich.add(movie.id)
 
     def apply_update(state, updates):
         changed = False
@@ -269,7 +131,24 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             "movies_to_enrich": [],
         }
     
-    resolve_movies(rows)
+    candidates = [
+        normalize_movie_candidate(
+            title=r["title"],
+            year=r["year"],
+            uri=r["uri"],
+            tmdb_id=None,
+        )
+        for r in rows
+    ]
+
+    resolved_movies = resolve_movies_bulk(candidates)
+    for r, movie in zip(rows, resolved_movies):
+        if not movie:
+            continue
+        r["_movie"] = movie
+        movies_matched += 1
+        if needToEnrich(movie):
+            movies_to_enrich.add(movie.id)
 
     movie_ids = list({r["_movie"].id for r in rows if r.get("_movie")})
     
@@ -282,11 +161,11 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     for r in rows:
         movie = r["_movie"]
-
+        
         if r["kind"] == "watched":
             event_posted = r["posted_date"]
             if event_posted and movie.letterboxd_uri:
-                event_key = makeEventKey(user.id, movie.letterboxd_uri, event_posted)
+                event_key = makeEventKey(user.id, movie.letterboxd_uri, event_posted, entry_url=movie.letterboxd_uri,)
                 desired_event_rows.append({
                     "event_key": event_key,
                     "movie": movie,
@@ -474,32 +353,3 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         "movies_to_enrich": list(movies_to_enrich),
     }
 
-def _parse_published_date(entry) -> date | None:
-    """
-    Returns a *date* for when the RSS entry was published/updated.
-    prefer parsed structs if available; fall back to parsing string
-    """
-
-    tp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-    if tp:
-        try:
-            return date(tp.tm_year, tp.tm_mon, tp.tm_mday)
-        except Exception:
-            return None
-
-    # fallback: try published string
-    s = getattr(entry, "published", None) or getattr(entry, "updated", None)
-    if not s:
-        return None
-
-    # RSS commonly uses RFC822
-    try:
-        return parsedate_to_datetime(s).date()
-    except Exception:
-        pass
-
-    # last-ditch: iso like str
-    try:
-        return datetime.fromisoformat(s).date()
-    except Exception:
-        return None

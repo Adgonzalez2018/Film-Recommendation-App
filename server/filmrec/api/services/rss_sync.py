@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import timedelta, date, datetime
+from email.utils import parsedate_to_datetime
 from typing import Optional, Tuple
 import re
 import feedparser
@@ -10,20 +11,50 @@ import feedparser
 from django.db import IntegrityError
 
 from api.models import User, WatchEvent
-from api.services.csvImport import (
-    _parse_published_date
-)
+
 from api.utils.unifiedImportHelper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
     needToEnrich,
     upsert_movieuser_snapshot,
     upsert_watch_event,
-    upsertMovie
+    resolve_movie_one,
+    makeEventKey,
     )
 
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
 
+
+def _parse_published_date(entry) -> date | None:
+    """
+    Returns a *date* for when the RSS entry was published/updated.
+    prefer parsed structs if available; fall back to parsing string
+    """
+
+    tp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if tp:
+        try:
+            return date(tp.tm_year, tp.tm_mon, tp.tm_mday)
+        except Exception:
+            return None
+
+    # fallback: try published string
+    s = getattr(entry, "published", None) or getattr(entry, "updated", None)
+    if not s:
+        return None
+
+    # RSS commonly uses RFC822
+    try:
+        return parsedate_to_datetime(s).date()
+    except Exception:
+        pass
+
+    # last-ditch: iso like str
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
+    
 def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
     s = (entry_title or "").strip()
     if not s:
@@ -110,7 +141,10 @@ def sync_user_rss_watches(
         if not link:
             continue
 
-        link = normalize_letterboxd_uri(link) or link
+        link = normalize_letterboxd_uri(link)
+        if not link:
+            continue
+        
         res.entries_seen += 1
 
         posted_date = _parse_published_date(entry)  # date | None
@@ -121,7 +155,13 @@ def sync_user_rss_watches(
             break
 
         parsed_title, parsed_year = _parse_entry_title(title)
-        movie, was_created, _ = upsertMovie(parsed_title, parsed_year, link)
+        if posted_date and link:
+            event_key = makeEventKey(user.id, link, posted_date, entry_ref)
+            if event_key in existing_event_keys:
+                res.stopped_early = True
+                break
+
+        movie, was_created, _ = resolve_movie_one(parsed_title, parsed_year, link)
 
         if was_created:
             res.movies_created += 1
@@ -142,6 +182,8 @@ def sync_user_rss_watches(
 
             if we_created:
                 res.events_created += 1
+                existing_event_keys.add(event_key)
+
         if needToEnrich(movie):
             movies_to_enrich.add(movie.id)
 
