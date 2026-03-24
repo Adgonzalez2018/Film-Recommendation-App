@@ -269,26 +269,20 @@ def resolve_movie_one(title: str, year: int | None, uri: str | None, tmdb_id: in
         return movie, False, needToEnrich(movie)
     
 def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
-    # Bulk resolver that follows the same policy as upsert movie:
-    # canon uri -> title/year -> weak uri
-
     canonical_uris = {c.canonical_uri for c in candidates if c.canonical_uri}
     titles = {c.title for c in candidates if c.title}
     years = {c.year for c in candidates if c.year is not None}
 
-
-    
     existing_by_uri = {}
-    all_uris = canonical_uris
-    if all_uris:
-        for m in Movie.objects.filter(letterboxd_uri__in=all_uris):
+    if canonical_uris:
+        for m in Movie.objects.filter(letterboxd_uri__in=canonical_uris):
             existing_by_uri[m.letterboxd_uri] = m
 
     existing_by_pair = {}
     if titles and years:
         for m in Movie.objects.filter(title__in=titles, year__in=years):
             existing_by_pair[(m.title, m.year)] = m
-    
+
     resolved = []
     to_patch = {}
     to_create = {}
@@ -299,7 +293,7 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
         if c.title and c.year is not None and (c.title, c.year) in existing_by_pair:
             return existing_by_pair[(c.title, c.year)]
         return None
-    
+
     for c in candidates:
         movie = choose_existing_bulk(c)
         if movie:
@@ -308,11 +302,7 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
             resolved.append(movie)
             continue
 
-        create_key = (
-            c.canonical_uri,
-            c.title,
-            c.year,
-        )
+        create_key = (c.canonical_uri, c.title, c.year)
 
         if create_key not in to_create:
             to_create[create_key] = Movie(
@@ -328,28 +318,39 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
             list(to_patch.values()),
             ["letterboxd_uri", "title", "year"],
         )
-        
-    created_movies = []
+
     if to_create:
         Movie.objects.bulk_create(list(to_create.values()), ignore_conflicts=True)
 
-        created_uris = [m.letterboxd_uri for m in to_create.values() if m.letterboxd_uri]
+        # Re-fetch all possible created rows
+        refetched_by_uri = {}
+        if canonical_uris:
+            for m in Movie.objects.filter(letterboxd_uri__in=canonical_uris):
+                refetched_by_uri[m.letterboxd_uri] = m
 
-        fetched = {}
-        if created_uris:
-            for m in Movie.objects.filter(letterboxd_uri__in=created_uris):
-                fetched[m.letterboxd_uri] = m
-        
+        refetched_by_pair = {}
+        if titles and years:
+            for m in Movie.objects.filter(title__in=titles, year__in=years):
+                refetched_by_pair[(m.title, m.year)] = m
+
         new_resolved = []
         for movie in resolved:
-            if movie.id is None and movie.letterboxd_uri:
-                new_resolved.append(fetched.get(movie.letterboxd_uri, movie))
-            else:
+            if movie.id is not None:
                 new_resolved.append(movie)
+                continue
+
+            replacement = None
+            if movie.letterboxd_uri:
+                replacement = refetched_by_uri.get(movie.letterboxd_uri)
+
+            if replacement is None and movie.title and movie.year is not None:
+                replacement = refetched_by_pair.get((movie.title, movie.year))
+
+            new_resolved.append(replacement or movie)
+
         resolved = new_resolved
-        
+
     return resolved
-    
 # --- Unified Event key for both Manual & RSS Imports ---
 def makeEventKey(user_id:int, uri: str, posted_date: Optional[date], entry_url: str | None = None) -> str:
     date_part = posted_date.isoformat() if posted_date else "nodate"

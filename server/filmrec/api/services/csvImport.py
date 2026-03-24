@@ -143,7 +143,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     resolved_movies = resolve_movies_bulk(candidates)
     for r, movie in zip(rows, resolved_movies):
-        if not movie:
+        if not movie or not movie.id:
             continue
         r["_movie"] = movie
         movies_matched += 1
@@ -251,6 +251,9 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     for r in rows:
         movie = r["_movie"]
+        if not movie:
+            continue
+        
         movie_id = movie.id
 
         if movie_id not in snapshot_state:
