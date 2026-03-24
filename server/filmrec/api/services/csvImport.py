@@ -3,7 +3,8 @@
 # & Profile Page
 import csv
 import io
-
+from datetime import date, datetime
+from email.utils import parsedate_to_datetime
 
 from ..models import MovieUser, Movie, WatchEvent
 from ..utils.unifiedImportHelper import (
@@ -473,3 +474,32 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         "movies_to_enrich": list(movies_to_enrich),
     }
 
+def _parse_published_date(entry) -> date | None:
+    """
+    Returns a *date* for when the RSS entry was published/updated.
+    prefer parsed structs if available; fall back to parsing string
+    """
+
+    tp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if tp:
+        try:
+            return date(tp.tm_year, tp.tm_mon, tp.tm_mday)
+        except Exception:
+            return None
+
+    # fallback: try published string
+    s = getattr(entry, "published", None) or getattr(entry, "updated", None)
+    if not s:
+        return None
+
+    # RSS commonly uses RFC822
+    try:
+        return parsedate_to_datetime(s).date()
+    except Exception:
+        pass
+
+    # last-ditch: iso like str
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
