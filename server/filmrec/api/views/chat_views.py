@@ -5,6 +5,7 @@ RAG-based recommender using OpenAI API + File search
 import os
 import logging
 import time
+import json
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -30,10 +31,37 @@ def _clean_why(value: str) -> str:
 
 def _safe_parsed_response(resp):
     parsed = getattr(resp, "output_parsed", None)
+
     if isinstance(parsed, dict):
         return parsed
-    raise ValueError("Structured output was not parsed into a dict.")
+    
+    if hasattr(parsed, "model"):
+        dumped = parsed.model_dump()
+        if isinstance(dumped, dict):
+            return dumped
+        
+    out_text = getattr(resp, "output_text", None)
+    if out_text:
+        try:
+            # strip markdown code fences if present
+            clean = out_text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```", 2)[1]
+                if "\n" in clean:
+                    clean = clean[clean.index("\n"):].strip()
+                if clean.endswith("```"):
+                    clean = clean[:-3].strip()
+            
+            data = json.loads(out_text)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
 
+    raise ValueError(
+        f"Structured output was not parsed into a dict. "
+        f"output_text={getattr(resp, 'output_text', None)!r}"
+    )
 def _is_valid_movie(mv) -> bool:
     return bool(
         mv
@@ -73,10 +101,11 @@ def _call_openai_with_retry(
         except Exception as e:
             last_exc = e
             logger.warning(
-                "OpenAI chat attempt %s/%s failed: %s",
+                "OpenAI chat attempt %s/%s failed: %s | output_text=$r",
                 attempt,
                 max_attempts,
                 str(e),
+                getattr(resp, "output_text", "NO_RESP") if 'resp' in dir() else "NO_RESP",
             )
             if attempt < max_attempts:
                 time.sleep(1.2)
