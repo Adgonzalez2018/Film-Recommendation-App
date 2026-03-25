@@ -8,17 +8,17 @@ from django.core.management.base import BaseCommand
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = "Create/Update a user's taste vector store from taste_user_id.jsonl"
+    help = "Create/Update a user's taste vector store from taste_user_id.txt"
     def add_arguments(self, parser):
         parser.add_argument("--user-id", type=int, required=True)
-        parser.add_argument("--jsonl", type=str, required=True, help="Path to taste_user_id.jsonl")
+        parser.add_argument("--file", type=str, required=True, help="Path to taste_user_id.txt")
         parser.add_argument("--name-prefix", type=str, default="FilmRec Taste Store")
 
     def handle(self, *args, **opts):
         client = OpenAI()
 
         user = User.objects.get(id=opts["user-id"])
-        jsonl_path = Path(opts["jsonl"])
+        jsonl_path = Path(opts["file"])
         if not jsonl_path.exists():
             raise FileNotFoundError(f"Missing File: {jsonl_path}")
         

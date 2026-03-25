@@ -5,6 +5,7 @@ from celery import shared_task
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 
 from ..models import ImportBatch
 from ..services.csvImport import run_letterboxd_import
@@ -56,6 +57,7 @@ def run_csv_import_job(batch_id: int):
                     f.close()
         
         batch.status = "completed"
+        build_and_index_taste.delay(batch.user.id)
         batch.finished_at = timezone.now()
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
@@ -108,6 +110,7 @@ def run_rss_import_job(batch_id: int):
             batch.tmdb_queued = 0
         
         batch.status = "completed"
+        build_and_index_taste.delay(batch.user.id)
         batch.finished_at = timezone.now()
         batch.movies_created = res.movies_created or 0
         batch.rel_created = res.rel_created or 0
@@ -132,6 +135,23 @@ def run_rss_import_job(batch_id: int):
         batch.finished_at = timezone.now()
         batch.error_message = str(e)
         batch.save(update_fields=["status", "finished_at", "error_message"])
+
+
+@shared_task
+def build_and_index_taste(user_id):
+    out_dir = "taste_out"
+    filename = f"taste_user_{user_id}.txt"
+    file_path = f"{out_dir}/{filename}"
+
+    # build file
+    call_command("build_taste_file", user_id=user_id, out=out_dir)
+
+    # index said file
+    call_command(
+        "index_user_taste_store",
+        user_id=user_id,
+        file=file_path,
+    )
 
 def enqueue_csv_import(batch_id: int):
     run_csv_import_job.delay(batch_id)

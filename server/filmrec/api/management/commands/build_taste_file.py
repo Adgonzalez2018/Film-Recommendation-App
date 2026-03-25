@@ -70,7 +70,7 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
     text = "\n".join([
         "USER_TASTE_SUMMARY",
         f"Favorite genres (loved): {', '.join(top_loved) if top_loved else '(unknown)'}",
-        f"Avoid genres (disliked): {', '.join(top_disliked) if top_disliked else '(unknown'}",
+        f"Avoid genres (disliked): {', '.join(top_disliked) if top_disliked else '(unknown)'}",
         f"Recent mood genres: {', '.join(top_recent) if top_recent else '(unknown)'}",
 
     ])
