@@ -57,7 +57,6 @@ def run_csv_import_job(batch_id: int):
                     f.close()
         
         batch.status = "completed"
-        build_and_index_taste.delay(batch.user.id)
         batch.finished_at = timezone.now()
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
@@ -71,6 +70,14 @@ def run_csv_import_job(batch_id: int):
                 "rel_created", "rel_updated", "events_created",
             ]
         )
+
+        if (
+            counters.get("events_created", 0) > 0
+            or counters.get("rel_created", 0) > 0
+            or counters.get("rel_updated", 0) > 0
+        ):
+            build_and_index_taste.delay(batch.user.id)
+
         user = batch.user
         user.manual_import_count = (user.manual_import_count or 0) + 1
         user.last_sync = timezone.now()
@@ -128,6 +135,13 @@ def run_rss_import_job(batch_id: int):
             user.rss_import_count = (user.rss_import_count or 0) + 1
             user.last_sync = timezone.now()
             user.save(update_fields=["rss_import_count", "last_sync"])
+
+        if (
+        (res.events_created or 0) > 0
+        or (res.rel_created or 0) > 0
+        or (res.rel_updated or 0) > 0
+        ):
+            build_and_index_taste.delay(batch.user.id)
 
     except Exception as e:
         logger.exception("RSS import failed batch_id=%s", batch_id)
