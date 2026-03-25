@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Movie, User, Genre, Person, FilmBank
 from django.contrib.auth import get_user_model
-from api.utils.letterboxd import extract_letterboxd_username
+from .utils.unifiedImportHelper import extract_letterboxd_username
 
 User = get_user_model()
 

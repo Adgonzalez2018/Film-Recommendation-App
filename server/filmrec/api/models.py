@@ -51,7 +51,7 @@ class Movie(models.Model):
     title = models.CharField(max_length=255)
 
     # TMDb attributes
-    tmdb_id = models.IntegerField(unique=True, db_index=True)
+    tmdb_id = models.IntegerField(unique=True, db_index=True, null=True)
     year = models.IntegerField(blank=True, null=True)
     overview = models.TextField(blank=True, null=True)
     avg_rating = models.FloatField(default=0.0, blank=True, null=True)
@@ -63,12 +63,28 @@ class Movie(models.Model):
     language = models.CharField(max_length=50, blank=True, null=True)
     country = models.CharField(max_length=100, blank=True, null=True)
     poster_url = models.URLField(max_length=500, blank=True, null=True)
-
     # Letterboxd URI
     letterboxd_uri = models.CharField(max_length=500, unique=True, null=True, blank=True)
 
     # For RAG - Global movie output jsonl
     movie_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
+
+    enrichment_status = models.CharField(
+        max_length=20,
+        default="pending",
+        choices=[
+            ("pending", "Pending"),
+            ("queued", "Queued"),
+            ("enriching", "Enriching"),
+            ("done", "Done"),
+            ("failed", "Failed"),
+            ("not_found", "Not Found"),
+        ]
+    )
+
+    enrichment_attempts = models.PositiveIntegerField(default=0)
+    last_enriched_at = models.DateTimeField(blank=True, null = True)
+    enrichment_error = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.title
@@ -76,7 +92,7 @@ class Movie(models.Model):
 # --- User Model ---
 class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
-    birthday = models.DateTimeField(blank=True,null=True)
+    birthday = models.DateField(blank=True,null=True)
     has_skipped_onboarding = models.BooleanField(default=False)
 
     #letterboxd
@@ -96,16 +112,37 @@ class ImportBatch(models.Model):
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="import_batches")
+    status = models.CharField(max_length=20, default="queued")
     source = models.CharField(max_length=8, choices=SOURCE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    started_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+
+    # queue payload / debugging
+    rss_input = models.CharField(max_length=255, blank=True, null=True)
+
+    # temp uploaded file paths
+    watched_path = models.CharField(max_length=500, blank=True,null=True)
+    reviews_path = models.CharField(max_length=500, blank=True,null=True)
+    watchlist_path = models.CharField(max_length=500, blank=True,null=True)
+    films_path = models.CharField(max_length=500, blank=True,null=True)
 
     # store whatever counters you want (from your importer)
     movies_created = models.IntegerField(default=0)
     movies_matched = models.IntegerField(default=0)
     rel_created = models.IntegerField(default=0)
     rel_updated = models.IntegerField(default=0)
+    events_created = models.IntegerField(default=0)
 
+    # enrichments
+    tmdb_queued = models.IntegerField(default=0)
+    tmdb_done = models.IntegerField(default=0)
+    tmdb_failed = models.IntegerField(default=0)
+    
     # optional: what files were included
+    had_watched_file = models.BooleanField(default=False)
     had_reviews = models.BooleanField(default=False)
     had_watchlist = models.BooleanField(default=False)
     had_films = models.BooleanField(default=False)

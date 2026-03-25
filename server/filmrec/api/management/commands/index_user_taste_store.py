@@ -22,7 +22,7 @@ class Command(BaseCommand):
         if not jsonl_path.exists():
             raise FileNotFoundError(f"Missing File: {jsonl_path}")
         
-        store_id = getattr(user, "taste__store_id", None)
+        store_id = getattr(user, "taste_vector_store_id", None)
 
         # Create store if missing
         if not store_id:

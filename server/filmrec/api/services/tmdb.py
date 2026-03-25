@@ -236,7 +236,8 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
         raise ValidationError("Movie not found")
     
     # if another movie alr has this tmdb id, don't allow attaching
-    existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(id=movie).first()
+    exclude_id = movie.id if hasattr(movie, "id") else movie
+    existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(pk=exclude_id).first()
     if existing:
         raise ValidationError("That tmdb_id is already attached to another movie")
     

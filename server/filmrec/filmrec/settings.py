@@ -21,6 +21,19 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
+REDIS_URL = os.getenv("REDIS_URL")
+CELERY_BROKER_URL = REDIS_URL
+# optional only set this if we want celery tasks results stored
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "America/New_York"
+
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 60 * 20
+CELERY_TASK_SOFT_TIME_LIMIT = 60 * 18
+
 # --------------------------------------------------
 # Hosts / CORS / CSRF
 # --------------------------------------------------

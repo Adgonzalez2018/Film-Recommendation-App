@@ -196,7 +196,9 @@ def stats_all_time(request):
     )
     recentMovies = [entry.movie for entry in recentEntries]
 
-    totalCount = allMovies.count()
+    #totalCount = allMovies.count() 
+    # bandaid fix for dupe movies atm
+    totalCount = allMovies.values("movie__title", "movie__year").distinct().count()
     decadeCounts = byDecadePayload(allMovies)
 
     # New stat - total lifetime watch time (minutes)

@@ -5,7 +5,7 @@ import "../Auth/Auth.css";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
-import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
+import { CSV_FILES, submitCSVImport, submitRSSSync, pollImportBatch } from "../../api/import";
 import { fetchProfile, saveProfile } from "../../api/profile";
 
 import heroImg from "../../assets/images/la-haine-1.png";
@@ -164,16 +164,27 @@ export default function Profile() {
 
     setRssLoading(true);
     setRssError(null);
-    setRssSuccess(null);
+    setRssSuccess("Linking RSS and starting import...");
 
     try {
       const u = cleanUsername(rssInput);
-      const data = await submitRSSSync(u, accessToken);
+      const queued = await submitRSSSync(u, accessToken);
+      if (!queued?.batch_id){
+        throw new Error("No batch id returned from server.")
+      }
       setSavedRssUsername(u);
       setRssInput(u);
-      setRssSuccess(
-        `RSS linked. Processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
-      );
+
+      const batch = await pollImportBatch(queued.batch_id, accessToken);
+
+      if (batch.status === "completed"){
+        setRssSuccess(
+          `RSS linked. Processed ${batch.entries_processed ?? 0} entries and created ${batch.events_created ?? 0} watch events.`
+        );
+      } else {
+        setRssError(err.message);
+      }
+
     } catch (err) {
       setRssError(err.message);
     } finally {
@@ -187,13 +198,24 @@ export default function Profile() {
 
     setSyncLoading(true);
     setRssError(null);
-    setRssSuccess(null);
+    setRssSuccess("Starting sync...");
 
     try {
-      const data = await submitRSSSync(savedRssUsername, accessToken);
+      const queued = await submitRSSSync(savedRssUsername, accessToken);
+      
+      if (!queued?.batch_id){
+        throw new Error("No batch id returned from the server.");
+      }
+
+      const batch = await pollImportBatch(queued.batch_id, accessToken);
+
+      if (batch.status === "completed") {
       setRssSuccess(
-        `Sync complete - processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
+        `Sync complete — processed ${batch.entries_processed ?? 0} entries and created ${batch.events_created ?? 0} watch events.`
       );
+    } else {
+      setRssError("Sync failed. Please try again.");
+    }
     } catch (err) {
       setRssError(err.message);
     } finally {
