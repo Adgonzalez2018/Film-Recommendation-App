@@ -22,3 +22,8 @@ client/build/
 # ---- Editor ----
 .vscode/
 .idea/
+
+# --- OpenAI ---
+movie_export/
+*.jsonl
+*.txt
