@@ -109,6 +109,13 @@ class Command(BaseCommand):
         disliked = base.filter(rating__lte=DISLIKED_MAX).order_by("-rating", "-watched_date")[:CAP_DISLIKED]
         recent = base.filter(watched_date__isnull=False).order_by("-watched_date")[:CAP_RECENT]
 
+        loved_ids = {mu.movie_id for mu in loved}
+        disliked_ids = {mu.movie_id for mu in disliked}
+        recent = (
+            base.filter(watched_date__isnull=False)
+            .exclude(movie_id__in=loved_ids | disliked_ids)
+            .order_by("-watched_date")[:CAP_RECENT]
+        )
         loved_docs = [mu_to_doc(mu, "loved") for mu in loved]
         disliked_docs = [mu_to_doc(mu, "disliked") for mu in disliked]
         recent_docs = [mu_to_doc(mu, "recent") for mu in recent]
