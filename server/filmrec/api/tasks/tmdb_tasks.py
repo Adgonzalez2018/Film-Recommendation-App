@@ -77,13 +77,17 @@ def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
 @shared_task
 def enrich_movie_chunk(movie_ids, batch_id=None):
     for movie_id in movie_ids:
-        enrich_movie_from_tmdb(movie_id, batch_id=batch_id)
+        enrich_movie_from_tmdb.run(movie_id, batch_id=batch_id)
 
 def enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=None, chunk_size=25):
     unique_ids = sorted(set(movie_ids))
-    for i in range(0, len(unique_ids), chunk_size):
+
+    pending_ids = list(
+        Movie.objects
+        .filter(id__in=unique_ids,tmdb_id__isnull=True)
+        .values_list("id", flat=True)
+    )
+
+    for i in range(0, len(pending_ids), chunk_size):
         chunk = unique_ids[i: i + chunk_size]
-        enrich_movie_chunk.delay(chunk, batch_id=batch_id)
-
-
-        
+        enrich_movie_chunk.apply_async(args=[chunk], kwargs={"batch_id": batch_id}, queue="tmdb")
