@@ -117,7 +117,6 @@ def run_rss_import_job(batch_id: int):
             batch.tmdb_queued = 0
         
         batch.status = "completed"
-        build_and_index_taste.delay(batch.user.id)
         batch.finished_at = timezone.now()
         batch.movies_created = res.movies_created or 0
         batch.rel_created = res.rel_created or 0

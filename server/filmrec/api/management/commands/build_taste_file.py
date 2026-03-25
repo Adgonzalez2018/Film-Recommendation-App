@@ -86,7 +86,7 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
     }
 
 class Command(BaseCommand):
-    help = "Build a capped taste JSONL file for a user."
+    help = "Build a capped taste TXT file for a user."
 
     def add_arguments(self,parser):
         parser.add_argument("--user-id", type=int, required=True)
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         user_id = opts["user_id"]
         out_dir = Path(opts["out"])
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"taste_user_{user_id}.jsonl"
+        out_path = out_dir / f"taste_user_{user_id}.txt"
 
         base = (
             MovieUser.objects
