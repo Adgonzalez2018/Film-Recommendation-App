@@ -250,7 +250,7 @@ class MovieCast(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
     person = models.ForeignKey(Person, on_delete=models.CASCADE)
 
-    character = models.CharField(max_length=64,blank=True, null = True)
+    character = models.CharField(max_length=255,blank=True, null = True)
     order = models.IntegerField(blank=True, null=True)            
     class Meta:
         constraints = [

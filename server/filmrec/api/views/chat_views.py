@@ -73,6 +73,7 @@ def _call_openai_with_retry(
     client, *, model, system, msg, tools=None, text_format=None, timeout=25, max_attempts=2
 ):
     last_exc = None
+    resp = None
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -200,7 +201,7 @@ Rules:
         msg=msg,
         tools=tools,
         text_format=CANDIDATE_EXTRACTION_SCHEMA,
-        timeout=25,
+        timeout=60,
         max_attempts=2,
     )
     
