@@ -7,7 +7,7 @@ Endpoints:
 from collections import Counter
 
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
 
 from rest_framework import status
@@ -20,6 +20,7 @@ from ..models import (
     Genre,
     Person,
     WatchEvent,
+    Movie
     )
 from ..utils.dates import week_window_sunday_anchor
 
@@ -200,14 +201,19 @@ def stats_all_time(request):
     # bandaid fix for dupe movies atm
     totalCount = allMovies.values("movie__title", "movie__year").distinct().count()
     decadeCounts = byDecadePayload(allMovies)
+    distinct_movie_ids = (
+        allMovies
+        .values("movie_id")
+        .distinct()
+        .values_list("movie_id", flat = True)
+    )
 
     # New stat - total lifetime watch time (minutes)
-    agg = allMovies.aggregate(
-        total_minutes=Coalesce(Sum("movie__runtime"),0),
-        runtime_movies = models.Count(
-            "movie_id",
-            filter=models.Q(movie__runtime__isnull=False),
-            distinct=True,
+    agg = Movie.objects.filter(id__in=distinct_movie_ids).aggregate(
+        total_minutes=Coalesce(Sum("runtime"), 0),
+        runtime_movies=models.Count(
+            "id",
+            filter=models.Q(runtime__isnull=False),
         ),
     )
     total_minutes = int(agg["total_minutes"] or 0)
