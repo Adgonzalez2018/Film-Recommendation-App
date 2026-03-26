@@ -128,6 +128,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "filmrec.wsgi.application"
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("REDIS_URL"),
+    }
+}
+
 # --------------------------------------------------
 # Database
 # --------------------------------------------------
