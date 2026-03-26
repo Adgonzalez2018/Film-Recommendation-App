@@ -21,7 +21,9 @@ from rest_framework import status
 from ..utils.unifiedImportHelper import extract_letterboxd_username, build_letterboxd_rss_url
 from ..tasks.import_tasks import enqueue_rss_import
 from ..services.csvImport import run_letterboxd_import
+from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
+from ..tasks.import_tasks import build_and_index_taste
 
 from ..models import ImportBatch, WatchEvent
 
@@ -135,27 +137,6 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     
-    # guard: don't start a 2nd RSS sync while one is active 
-    existing = ImportBatch.objects.filter(
-        user=request.user,
-        source="rss",
-        status__in=["queued", "running"],
-    ).order_by("-created_at").first()
-
-    if existing:
-        return Response(
-            {
-                "status": existing.status,
-                "batch_id":existing.id,
-                "source": existing.source,
-                "rss_url": rss_url,
-                "tmdb_queued": existing.tmdb_queued,
-                "tmdb_done": existing.tmdb_done,
-                "tmdb_failed": existing.tmdb_failed,
-            },
-            status=status.HTTP_202_ACCEPTED
-        )
-    
     # save username when they link RSS
     username = extract_letterboxd_username(rss_input) or extract_letterboxd_username(rss_url)
     if username:
@@ -171,20 +152,84 @@ def import_rss(request):
         rss_input=rss_input,
     )
 
-    enqueue_rss_import(batch.id)
+    try:
+        res = sync_user_rss_watches(request.user, rss_input=rss_input)
+        if res.error:
+            raise ValueError(
+                "Could not read that RSS feed. Make sure the profile is public and the input is correct."
+            )
+        
+        movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
+        tmdb_queued = len(set(movie_ids))
 
-    return Response(
-        {
-            "status": "queued",
-            "batch_id":batch.id,
-            "source": batch.source,
-            "rss_url": rss_url,
-            "tmdb_queued": batch.tmdb_queued,
-            "tmdb_done": batch.tmdb_done,
-            "tmdb_failed": batch.tmdb_failed,
-        },
-        status=status.HTTP_202_ACCEPTED,
-    )
+        if movie_ids:
+            enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
+
+        batch.status = "completed"
+        batch.finished_at = timezone.now()
+        batch.movies_created = res.movies_created or 0
+        batch.rel_created = res.rel_created or 0
+        batch.rel_updated = res.rel_updated or 0
+        batch.events_created = res.events_created or 0
+        batch.tmdb_queued = tmdb_queued
+        batch.save(
+            update_fields=[
+                "status",
+                "finished_at",
+                "movies_created",
+                "rel_created",
+                "events_created",
+                "tmdb_queued",
+            ]
+        )
+
+        request.user.rss_import_count = (request.user.rss_import_count or 0) + 1
+        request.user.last_sync = timezone.now()
+        request.user.save(update_fields=[
+            "rss_import_count",
+            "last_sync"
+        ])
+
+        if (
+            (res.events_created or 0) > 0
+            or (res.rel_created or 0) > 0
+            or (res.rel_updated or 0) > 0
+        ):
+            build_and_index_taste.delay(request.user.id)
+        
+        return Response(
+                    {
+                        "status": "completed",
+                        "batch_id": batch.id,
+                        "source": batch.source,
+                        "rss_url": rss_url,
+                        "movies_created": batch.movies_created,
+                        "rel_created": batch.rel_created,
+                        "rel_updated": batch.rel_updated,
+                        "events_created": batch.events_created,
+                        "tmdb_queued": batch.tmdb_queued,
+                        "tmdb_done": batch.tmdb_done,
+                        "tmdb_failed": batch.tmdb_failed,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+    except Exception as e:
+        batch.status = "failed"
+        batch.error_message = str(e)
+        batch.finished_at = timezone.now()
+        batch.save(update_fields=[
+            "status",
+            "error_message",
+            "finished_at",
+        ])
+
+        return Response(
+            {"error": str(e), "batch_id": batch.id},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -252,3 +297,29 @@ def skip_onboarding(request):
         },
         status=status.HTTP_200_OK
     )
+
+
+
+"""
+For asnyc RSS job
+    # guard: don't start a 2nd RSS sync while one is active 
+    existing = ImportBatch.objects.filter(
+        user=request.user,
+        source="rss",
+        status__in=["queued", "running"],
+    ).order_by("-created_at").first()
+
+    if existing:
+        return Response(
+            {
+                "status": existing.status,
+                "batch_id":existing.id,
+                "source": existing.source,
+                "rss_url": rss_url,
+                "tmdb_queued": existing.tmdb_queued,
+                "tmdb_done": existing.tmdb_done,
+                "tmdb_failed": existing.tmdb_failed,
+            },
+            status=status.HTTP_202_ACCEPTED
+        )
+"""

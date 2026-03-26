@@ -22,7 +22,7 @@ def build_movie_text(movie, genres, directors, cast_names):
     ]
 
     if genres:
-        parts.append(f"Genres: {', '.join(genres)}")
+        parts.append(f"Genres:{', '.join(genres)}")
     if directors:
         parts.append(f"Director:{', '.join(directors)}")
     if cast_names:
