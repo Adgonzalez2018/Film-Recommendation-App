@@ -36,13 +36,58 @@ def manual_import(request):
     films_upload = request.FILES.get("films")
     likes_upload = request.FILES.get("likes")
     films_file = films_upload or likes_upload
-    
-    if not watched_file and not reviews_file and not watchlist_file and not films_file:
+
+    uploads = [watched_file, reviews_file, watchlist_file, films_file]
+
+    if not any(uploads):
         return Response(
             {"error": "No files provided. Upload at least one of: watched, reviews, watchlist, films."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # guard rails for spam importing
+    existing = ImportBatch.objects.filter(
+        user=request.user,
+        source="csv",
+        status__in=["queued", "running"],
+    ).order_by("-created_at").first()
+
+    if existing:
+        return Response(
+            {
+                "status": existing.status,
+                "batch_id":existing.id,
+                "source": existing.source,
+                "message": "A CSV import is already in progress.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    
+    # Additional guard rails
+    for f in uploads:
+        # if incorrect file type
+        if f and not f.name.lower().endswith(".csv"):
+            return Response(
+                {"error": f"Invalid file type for {f.name}. Please upload CSV files only."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # if file is empty
+        if f and f.size == 0:
+            return Response(
+                {"error": f"{f.name} is empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    # guard rail for large size files
+    total_size = sum(f.size for f in uploads if f)
+    if total_size > 2 * 1024 * 1024: #2 MB
+        return Response(
+            {
+                "error": "This import is too large for direct processing right now."
+            },
+            status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        )
+    
     # log batch
     batch = ImportBatch.objects.create(
         user=request.user,
@@ -92,6 +137,12 @@ def manual_import(request):
         request.user.last_sync = timezone.now()
         request.user.save(update_fields=["manual_import_count", "last_sync"])
 
+        if (
+            counters.get("events_created", 0) > 0
+            or counters.get("rel_created", 0) > 0
+            or counters.get("rel_updated", 0) > 0
+        ):
+            build_and_index_taste.delay(request.user.id)
         return Response(
             {
                 "status": "completed",
