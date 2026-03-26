@@ -5,6 +5,7 @@ RAG-based recommender using OpenAI API + File search
 import os
 import logging
 import time
+import json
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -32,8 +33,31 @@ def _safe_parsed_response(resp):
     parsed = getattr(resp, "output_parsed", None)
     if isinstance(parsed, dict):
         return parsed
-    raise ValueError("Structured output was not parsed into a dict.")
+    if hasattr(parsed, "model_dump"):
+        dumped = parsed.model_dump()
+        if isinstance(dumped, dict):
+            return dumped
 
+    out_text = getattr(resp, "output_text", None)
+    if out_text:
+        try:
+            clean = out_text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```", 2)[1]
+                if "\n" in clean:
+                    clean = clean[clean.index("\n"):].strip()
+                if clean.endswith("```"):
+                    clean = clean[:-3].strip()
+            data = json.loads(clean)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    raise ValueError(
+        f"Structured output was not parsed into a dict. "
+        f"output_text={getattr(resp, 'output_text', None)!r}"
+    )
 def _is_valid_movie(mv) -> bool:
     return bool(
         mv
@@ -124,21 +148,7 @@ def _movie_payload(mv, why: str = "") -> dict:
         "why": why,
     }
 
-def _build_candidate_block(candidates: list[dict]) -> str:
-    lines = []
-    for idx, c in enumerate(candidates, start=1):
-        title = c.get("title", "Unknown Title")
-        year = c.get("year")
-        tmdb_id = c.get("tmdb_id")
-        hint = c.get("reason_hint", "")
-
-        year_text = f" ({year})" if year else ""
-        lines.append(
-            f"{idx}. {title}{year_text} | TMDB_ID={tmdb_id} | Hint={hint}"
-        )
-    return "\n".join(lines)
-
-def _retrieve_candidates(client, *, model, msg, movies_store_id, taste_store_id, excluded_str):
+def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, excluded_str):
     tools = [
         {
             "type": "file_search",
@@ -146,82 +156,28 @@ def _retrieve_candidates(client, *, model, msg, movies_store_id, taste_store_id,
             "max_num_results": 8,
         }
     ]
-    system = f"""
-You are a candidate generator for a movie recommender.
-
-You will receive retrieved context from:
-1. a movie corpus vector store
-2. optionally a user taste-summary vector store
-
-Rules:
-- Use the taste-summary only to understand the user's preferences.
-- Use the movie corpus to identify actual movie candidates.
-- Do NOT invent movies.
-- Do NOT invent TMDB ids.
-- Return between 8 and 20 candidate movies if possible.
-- Do NOT include any movie whose TMDB id is in this excluded list:
-  [{excluded_str}]
-- Each candidate should include a short reason_hint based on the user's taste and prompt.
-""".strip()
-    
-    data = _call_openai_with_retry(
-        client,
-        model=model,
-        system=system,
-        msg=msg,
-        tools=tools,
-        text_format=CANDIDATE_EXTRACTION_SCHEMA,
-        timeout=25,
-        max_attempts=1,
-    )
-    
-    candidates = data.get("candidates", [])
-    return candidates if isinstance(candidates, list) else []
-
-def _rank_candidates(client, *, model, msg, candidate_block, taste_store_exists, excluded_str):
     taste_line = (
-        "A user taste summary exists and was already used during candidate generation."
-        if taste_store_exists
-        else "No stored user taste summary exists, so rank based on the user's current prompt only."
+        "A user taste summary is available in the vector store - use it to personalize."
+        if taste_store_id
+        else "No taste summary available, rely only on the user's prompt."
     )
     system = f"""
-You are the ranking stage for a movie recommender.
-
-You are given a pre-filtered candidate list.
-Choose the strongest recommendations from ONLY that list.
-
-Rules:
-- Recommend between 3 and 6 distinct movies.
-- Put the strongest 3 first.
-- Use only the provided candidates.
-- Do NOT invent movies.
-- Do NOT invent TMDB ids.
-- Do NOT recommend any movie whose TMDB id is in this excluded list:
-  [{excluded_str}]
-- Keep each "why" concise and specific.
-
+Movie recommender. Use retrieved context to find and rank real candidates only.
+Return 3-5 movies, strongest first. No invented titles or TMDB IDs.
+Exclude TMDB IDs: [{excluded_str}]
 {taste_line}
-""".strip()
-
-    user_text = f"""
-User request:
-{msg}
-
-Candidate list:
-{candidate_block}
 """.strip()
 
     return _call_openai_with_retry(
         client,
         model=model,
         system=system,
-        msg=user_text,
-        tools=None,
+        msg=msg,
+        tools=tools,
         text_format=CHAT_RESPONSE_SCHEMA,
-        timeout=25,
-        max_attempts=2,
+        timeout=60,
+        max_attempts=1,
     )
-
 
 def _build_contextual_query(msg: str, user) -> str:
     parts = [msg.strip()]
@@ -286,49 +242,6 @@ CHAT_RESPONSE_SCHEMA = {
     },
 }
 
-
-CANDIDATE_EXTRACTION_SCHEMA = {
-    "type": "json_schema",
-    "name": "film_candidate_extraction",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "candidates": {
-                "type": "array",
-                "minItems": 0,
-                "maxItems": 10,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "tmdb_id": {
-                            "type": "integer",
-                            "minimum": 1,
-                        },
-                        "title": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 120,
-                        },
-                        "year": {
-                            "type": ["integer", "null"],
-                        },
-                        "reason_hint": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 180,
-                        },
-                    },
-                    "required": ["tmdb_id", "title", "year", "reason_hint"],
-                },
-            },
-        },
-        "required": ["candidates"],
-    },
-}
-
 # MAIN ENDPOINT:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -364,9 +277,9 @@ def chat_recommend(request):
     # pick cheap model by default (override via env)
     model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
     client = OpenAI()
-    
+
     try:
-        candidates = _retrieve_candidates(
+        data = _retrieve_and_rank(
             client,
             model=model,
             msg=contextual_msg,
@@ -374,41 +287,10 @@ def chat_recommend(request):
             taste_store_id=taste_store_id,
             excluded_str=excluded_str,
         )
-
-    except Exception:
-        logger.exception(
-            "Candidate retrieval failed user=%s",
-            request.user.id,
-        )
+    except Exception as e:
+        logger.exception("chat_recommend retrieval failed user=%s", request.user.id)
         return Response(
-            {"error":"Recommendation service is temporarily unavailable."},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-    
-    if not candidates:
-        return Response(
-            {
-                "type": "clarify",
-                "assistant": "Tell me a bit more about what you want.",
-                "recommendations": [],
-            },
-        status=status.HTTP_200_OK,
-        )
-    
-    candidate_block = _build_candidate_block(candidates)
-    try: 
-        data = _rank_candidates(
-            client,
-            model=model,
-            msg=msg,
-            candidate_block=candidate_block,
-            taste_store_exists=bool(taste_store_id),
-            excluded_str=excluded_str,
-        )
-    except Exception:
-        logger.exception("candidate ranking failed user=%s", request.user.id)
-        return Response(
-            {"error": "Recommendation service is temporarily unavailable.",},
+            {"error": "Recommendation service is temporarily unavailable."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     
