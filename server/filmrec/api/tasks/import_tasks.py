@@ -176,6 +176,8 @@ def build_and_index_taste(user_id):
         # build file
         call_command("build_taste_file", user_id=user_id, out=tmp_dir)
 
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Taste file was not created: {file_path}")
         # index said file
         call_command(
             "index_user_taste_store",
