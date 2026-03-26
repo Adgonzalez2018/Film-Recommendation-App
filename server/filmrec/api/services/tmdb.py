@@ -148,7 +148,8 @@ def _enrich_movie_relations_from_tmdb(*, movie: Movie, data: Dict[str, Any], cas
         MovieCast.objects.create(
             movie=movie,
             person=person_obj,
-            character=c.get("character"),
+            # truncate whatever character is given to 255 
+            character=c.get("character" or "").strip()[:255] or None,
             order=c.get("order"),
         )
 
