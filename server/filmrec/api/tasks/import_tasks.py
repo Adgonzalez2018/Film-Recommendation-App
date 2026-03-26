@@ -1,3 +1,10 @@
+"""
+Import Tasks runs 
+    - CSV/RSS import jobs synchronously
+    - Build User Taste Summaries Asynchronously ONLY if user actually made new events
+
+"""
+
 import os
 import logging
 
@@ -48,6 +55,8 @@ def run_csv_import_job(batch_id: int):
                 films_file=films_f,
             )
             movie_ids = counters.get("movies_to_enrich", [])
+
+            # Asynchronously enrich movies if they don't have any TMDB Data
             if movie_ids:
                 enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
                 batch.tmdb_queued = len(set(movie_ids))
@@ -71,6 +80,9 @@ def run_csv_import_job(batch_id: int):
             ]
         )
 
+
+        # If any of new stuff has been created we build and index the user's taste summary
+        # this mitigates any overlap between running the inital onboarding rss and csv import
         if (
             counters.get("events_created", 0) > 0
             or counters.get("rel_created", 0) > 0
@@ -109,6 +121,7 @@ def run_rss_import_job(batch_id: int):
         if res.error:
             raise ValueError("Could not read that RSS feed. Make sure the profile is public and the input is correct.")
         
+        # Asynchronously enrich movies if they don't have any TMDB Data
         movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
         if movie_ids:
             enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
@@ -117,7 +130,6 @@ def run_rss_import_job(batch_id: int):
             batch.tmdb_queued = 0
         
         batch.status = "completed"
-        build_and_index_taste.delay(batch.user.id)
         batch.finished_at = timezone.now()
         batch.movies_created = res.movies_created or 0
         batch.rel_created = res.rel_created or 0
@@ -136,6 +148,8 @@ def run_rss_import_job(batch_id: int):
             user.last_sync = timezone.now()
             user.save(update_fields=["rss_import_count", "last_sync"])
 
+        # If any of new stuff has been created we build and index the user's taste summary
+        # this mitigates any overlap between running the inital onboarding rss and csv import
         if (
         (res.events_created or 0) > 0
         or (res.rel_created or 0) > 0
@@ -167,6 +181,7 @@ def build_and_index_taste(user_id):
         file=file_path,
     )
 
+# only used if async?
 def enqueue_csv_import(batch_id: int):
     run_csv_import_job.delay(batch_id)
 
