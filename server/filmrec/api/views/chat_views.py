@@ -16,8 +16,8 @@ from openai import OpenAI
 from ..models import (
     FilmBank,
     MovieUser,
+    Movie
 )
-from ..services.tmdb import upsert_tmdb_movie  
 from ..serializer import ChatRequestSerializer
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ def _retrieve_candidates(client, *, model, msg, movies_store_id, taste_store_id,
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 40,
+            "max_num_results": 8,
         }
     ]
     system = f"""
@@ -172,7 +172,7 @@ Rules:
         tools=tools,
         text_format=CANDIDATE_EXTRACTION_SCHEMA,
         timeout=25,
-        max_attempts=2,
+        max_attempts=1,
     )
     
     candidates = data.get("candidates", [])
@@ -233,7 +233,7 @@ def _build_contextual_query(msg: str, user) -> str:
             watch_status="Watched",
         )
         .select_related("movie")
-        .order_by("-watched_date", "-id")[:5]
+        .order_by("-watched_date", "-id")[:3] # recent watch pull ups
     )
 
     if recent_movies:
@@ -263,7 +263,7 @@ CHAT_RESPONSE_SCHEMA = {
             "recommendations": {
                 "type": "array",
                 "minItems": 0,
-                "maxItems": 6,  # 3 + 3 backups
+                "maxItems": 5,  # 3 + 2 backups
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -298,7 +298,7 @@ CANDIDATE_EXTRACTION_SCHEMA = {
             "candidates": {
                 "type": "array",
                 "minItems": 0,
-                "maxItems": 20,
+                "maxItems": 10,
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -359,7 +359,7 @@ def chat_recommend(request):
     
     excluded_tmdb_ids = _get_excluded_tmdb_ids(request.user)
     excluded_set = set(excluded_tmdb_ids)
-    excluded_str = ", ".join(map(str, excluded_tmdb_ids[:400])) # cap prompt size
+    excluded_str = ", ".join(map(str, excluded_tmdb_ids[:150])) # cap prompt size
 
     # pick cheap model by default (override via env)
     model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
@@ -451,6 +451,7 @@ def chat_recommend(request):
     for r in recs:
         tmdb_id = r.get("tmdb_id")
         why = _clean_why(r.get("why"))
+
         # hard exclude safety check
         try:
             tmdb_id_int = int(tmdb_id)
@@ -458,28 +459,21 @@ def chat_recommend(request):
             continue
 
         # ensure movie exists in DB
-        if tmdb_id_int in excluded_set:
-            continue
+        if tmdb_id_int in excluded_set or tmdb_id_int in seen_tmdb_ids:
+            continue    
 
-        if tmdb_id_int in seen_tmdb_ids:
-            continue
+        # just look up no tmdb api call
+        mv = Movie.objects.filter(tmdb_id=tmdb_id_int).first()
 
-        try:
-            mv = upsert_tmdb_movie(tmdb_id_int)
-        except Exception:
-            logger.warning(
-                "upsert_tmdb_movie failed user=%s tmdb_id=%s",
-                request.user.id,
-                tmdb_id_int,
+        if not mv:
+            # movie not in db yet - skip rather than blocking on TMDB fetch
+            logger.info(
+                "Chat_recommend skipping unknown tmdb_id=%s user=%s",
+                tmdb_id_int, request.user.id,
             )
             continue
 
         if not _is_valid_movie(mv):
-            logger.warning(
-                "Invalid movie after upsert user=%s tmdb_id=%s",
-                request.user.id,
-                tmdb_id_int,
-            )
             continue
     
         seen_tmdb_ids.add(tmdb_id_int)
