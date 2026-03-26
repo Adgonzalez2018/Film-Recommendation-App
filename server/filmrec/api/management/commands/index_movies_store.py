@@ -16,9 +16,9 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         client = OpenAI()
 
-        jsonl_path = Path(opts["file"])
-        if not jsonl_path.exists():
-            raise FileNotFoundError(f"Missing File: {jsonl_path}")
+        file_path = Path(opts["file"])
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing File: {file_path}")
         
         store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
 
@@ -35,7 +35,7 @@ class Command(BaseCommand):
 
         # upload + poll until indexed
         try:
-            with jsonl_path.open("rb") as f:
+            with file_path.open("rb") as f:
                 client.vector_stores.files.upload_and_poll(
                     vector_store_id=store_id,
                     file=f,
@@ -43,5 +43,5 @@ class Command(BaseCommand):
         except Exception as e:
             raise RuntimeError(f"Upload Failed: {e}")
 
-        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {jsonl_path}"))
+        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {file_path}"))
         self.stdout.write(self.style.SUCCESS(f"Movies Store ID: {store_id}"))

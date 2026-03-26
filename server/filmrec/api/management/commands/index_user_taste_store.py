@@ -18,9 +18,9 @@ class Command(BaseCommand):
         client = OpenAI()
 
         user = User.objects.get(id=opts["user-id"])
-        jsonl_path = Path(opts["file"])
-        if not jsonl_path.exists():
-            raise FileNotFoundError(f"Missing File: {jsonl_path}")
+        file_path = Path(opts["file"])
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing File: {file_path}")
         
         store_id = getattr(user, "taste_vector_store_id", None)
 
@@ -35,10 +35,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Using taste vector store: {store_id}"))
 
         # upload + poll until indexed
-        with jsonl_path.open("rb") as f:
+        with file_path.open("rb") as f:
             client.vector_stores.files.upload_and_poll(
                 vector_store_id = store_id,
                 file=f,
             )
-        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {jsonl_path}"))
+        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {file_path}"))
         self.stdout.write(self.style.SUCCESS(f"user.taste.vector_store_id={store_id}"))
