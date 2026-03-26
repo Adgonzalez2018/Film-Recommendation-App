@@ -13,6 +13,7 @@ from celery import shared_task
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.management import call_command
 
 from ..models import ImportBatch
@@ -29,6 +30,13 @@ def _cleanup_file(path: str):
             os.remove(path)
         except Exception:
             logger.warning("Could not delete temp import file: %s", path)
+
+def _should_rebuild_taste(user_id: int, cooldown_seconds:int=3600) -> bool:
+    key = f"taste_rebuild_lock: {user_id}"
+    if cache.get(key):
+        return False
+    cache.set(key, True, timeout=cooldown_seconds)
+    return True
 
 @shared_task
 def run_csv_import_job(batch_id: int):
@@ -89,7 +97,10 @@ def run_csv_import_job(batch_id: int):
             or counters.get("rel_created", 0) > 0
             or counters.get("rel_updated", 0) > 0
         ):
-            build_and_index_taste.delay(batch.user.id)
+            if _should_rebuild_taste(batch.user.id):
+                build_and_index_taste.delay(batch.user.id)
+            else:
+                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
 
         user = batch.user
         user.manual_import_count = (user.manual_import_count or 0) + 1
@@ -156,7 +167,11 @@ def run_rss_import_job(batch_id: int):
         or (res.rel_created or 0) > 0
         or (res.rel_updated or 0) > 0
         ):
-            build_and_index_taste.delay(batch.user.id)
+            if _should_rebuild_taste(batch.user.id):
+                build_and_index_taste.delay(batch.user.id)
+            else:
+                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
+                
 
     except Exception as e:
         logger.exception("RSS import failed batch_id=%s", batch_id)
