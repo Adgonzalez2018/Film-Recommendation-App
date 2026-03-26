@@ -1,4 +1,14 @@
 # api/services/rss_sync.py
+"""
+Dependent on Unified Import Helper Service File
+    - has many functions that are utilized here and for CSV Imports
+
+RSS Import
+    - used in RSS_Import api endpoint
+    - takes users RSS username if they don't have it alr
+    - Only does ~50 movies (Or last known watch date)
+    - Used for Weekly Syncs
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

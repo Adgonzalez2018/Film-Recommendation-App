@@ -1,4 +1,10 @@
-# For movie enrichment
+"""
+TMDB Tasks
+    - Runs asynchronously 
+    - Only used for any ingested movies that DO NOT have any TMDB data
+    - Any movies marked for enrichment call this job
+    
+"""
 from django.utils import timezone
 from django.db.models import F
 from django.core.exceptions import ValidationError
