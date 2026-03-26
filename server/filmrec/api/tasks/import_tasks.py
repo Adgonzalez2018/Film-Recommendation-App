@@ -6,6 +6,7 @@ Import Tasks runs
 """
 
 import os
+import tempfile
 import logging
 
 from celery import shared_task
@@ -167,19 +168,20 @@ def run_rss_import_job(batch_id: int):
 
 @shared_task
 def build_and_index_taste(user_id):
-    out_dir = "taste_out"
-    filename = f"taste_user_{user_id}.txt"
-    file_path = f"{out_dir}/{filename}"
+    with tempfile.TemporaryDirectory() as tmp_dir:
 
-    # build file
-    call_command("build_taste_file", user_id=user_id, out=out_dir)
+        filename = f"taste_user_{user_id}.txt"
+        file_path = os.path.join(tmp_dir, filename)
 
-    # index said file
-    call_command(
-        "index_user_taste_store",
-        user_id=user_id,
-        file=file_path,
-    )
+        # build file
+        call_command("build_taste_file", user_id=user_id, out=tmp_dir)
+
+        # index said file
+        call_command(
+            "index_user_taste_store",
+            user_id=user_id,
+            file=file_path,
+        )
 
 # only used if async?
 def enqueue_csv_import(batch_id: int):
