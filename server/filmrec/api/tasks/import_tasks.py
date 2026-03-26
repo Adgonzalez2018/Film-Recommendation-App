@@ -1,4 +1,12 @@
+"""
+Import Tasks runs 
+    - CSV/RSS import jobs synchronously
+    - Build User Taste Summaries Asynchronously ONLY if user actually made new events
+
+"""
+
 import os
+import tempfile
 import logging
 import tempfile
 
@@ -6,6 +14,7 @@ from celery import shared_task
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.management import call_command
 
 from ..models import ImportBatch
@@ -22,6 +31,13 @@ def _cleanup_file(path: str):
             os.remove(path)
         except Exception:
             logger.warning("Could not delete temp import file: %s", path)
+
+def _should_rebuild_taste(user_id: int, cooldown_seconds:int=3600) -> bool:
+    key = f"taste_rebuild_lock: {user_id}"
+    if cache.get(key):
+        return False
+    cache.set(key, True, timeout=cooldown_seconds)
+    return True
 
 @shared_task
 def run_csv_import_job(batch_id: int):
@@ -49,6 +65,8 @@ def run_csv_import_job(batch_id: int):
                 films_file=films_f,
             )
             movie_ids = counters.get("movies_to_enrich", [])
+
+            # Asynchronously enrich movies if they don't have any TMDB Data
             if movie_ids:
                 enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
                 batch.tmdb_queued = len(set(movie_ids))
@@ -72,12 +90,18 @@ def run_csv_import_job(batch_id: int):
             ]
         )
 
+
+        # If any of new stuff has been created we build and index the user's taste summary
+        # this mitigates any overlap between running the inital onboarding rss and csv import
         if (
             counters.get("events_created", 0) > 0
             or counters.get("rel_created", 0) > 0
             or counters.get("rel_updated", 0) > 0
         ):
-            build_and_index_taste.delay(batch.user.id)
+            if _should_rebuild_taste(batch.user.id):
+                build_and_index_taste.delay(batch.user.id)
+            else:
+                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
 
         user = batch.user
         user.manual_import_count = (user.manual_import_count or 0) + 1
@@ -110,6 +134,7 @@ def run_rss_import_job(batch_id: int):
         if res.error:
             raise ValueError("Could not read that RSS feed. Make sure the profile is public and the input is correct.")
         
+        # Asynchronously enrich movies if they don't have any TMDB Data
         movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
         if movie_ids:
             enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
@@ -136,12 +161,18 @@ def run_rss_import_job(batch_id: int):
             user.last_sync = timezone.now()
             user.save(update_fields=["rss_import_count", "last_sync"])
 
+        # If any of new stuff has been created we build and index the user's taste summary
+        # this mitigates any overlap between running the inital onboarding rss and csv import
         if (
         (res.events_created or 0) > 0
         or (res.rel_created or 0) > 0
         or (res.rel_updated or 0) > 0
         ):
-            build_and_index_taste.delay(batch.user.id)
+            if _should_rebuild_taste(batch.user.id):
+                build_and_index_taste.delay(batch.user.id)
+            else:
+                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
+                
 
     except Exception as e:
         logger.exception("RSS import failed batch_id=%s", batch_id)
@@ -161,6 +192,8 @@ def build_and_index_taste(user_id):
         # build file
         call_command("build_taste_file", user_id=user_id, out=tmp_dir)
 
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Taste file was not created: {file_path}")
         # index said file
         call_command(
             "index_user_taste_store",
@@ -168,6 +201,7 @@ def build_and_index_taste(user_id):
             file=file_path,
         )
 
+# only used if async?
 def enqueue_csv_import(batch_id: int):
     run_csv_import_job.delay(batch_id)
 

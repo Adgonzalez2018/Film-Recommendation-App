@@ -34,11 +34,28 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS(f"Using taste vector store: {store_id}"))
 
-        # upload + poll until indexed
-        with file_path.open("rb") as f:
-            client.vector_stores.files.upload_and_poll(
-                vector_store_id = store_id,
-                file=f,
-            )
+        # delete existing files in this user's taste store
+        try:
+            existing = client.vector_stores.files.list(vector_store_id=store_id)
+            for vf in existing.data:
+                client.vector_stores.files.delete(
+                    vector_store_id=store_id,
+                    file_id=vf.id,
+                )
+            self.stdout.write(self.style.SUCCESS("Cleared old taste files from vector store."))
+
+        except Exception as e:
+            raise RuntimeError(f"Failed clearing existing taste store files: {e}")
+        
+        try: 
+            # upload + poll until indexed
+            with file_path.open("rb") as f:
+                client.vector_stores.files.upload_and_poll(
+                    vector_store_id = store_id,
+                    file=f,
+                )
+        except Exception as e:
+            raise RuntimeError(f"Upload failed: {e}")
+        
         self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {file_path}"))
-        self.stdout.write(self.style.SUCCESS(f"user.taste.vector_store_id={store_id}"))
+        self.stdout.write(self.style.SUCCESS(f"user.taste_vector_store_id={store_id}"))
