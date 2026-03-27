@@ -100,7 +100,7 @@ def sync_user_rss_watches(
     user: User,
     *,
     rss_input: Optional[str] = None,
-    cutoff_buffer_days: int = 1,
+    cutoff_buffer_days: int = 7, # give a full week of buffer
 ) -> RSSSyncResult:
     """
     Incremental RSS sync (newest first).
@@ -140,9 +140,10 @@ def sync_user_rss_watches(
         .values_list("event_key", flat=True)
     )
 
+    last_rss = getattr(user, "last_rss_sync", None)
     cutoff_date = None
-    if user.last_sync:
-        cutoff_date = user.last_sync.date() - timedelta(days=cutoff_buffer_days)
+    if last_rss:
+        cutoff_date = user.last_rss.date() - timedelta(days=cutoff_buffer_days)
 
     for entry in getattr(feed, "entries", []) or []:
         link = (getattr(entry, "link", "") or "").strip()

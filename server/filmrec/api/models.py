@@ -97,8 +97,12 @@ class User(AbstractUser):
 
     #letterboxd
     letterboxd_username = models.CharField(max_length=64,blank=True,null=True)
+    
+    # import & onboarding
     manual_import_count = models.PositiveIntegerField(default=0)
     rss_import_count = models.PositiveIntegerField(default=0)
+    last_manual_sync = models.DateTimeField(null=True, blank=True)
+    last_rss_sync = models.DateTimeField(null=True, blank=True)
     # RAG - store id for vector store -> goes to LM (for taste summary)
     taste_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 

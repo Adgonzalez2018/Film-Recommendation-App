@@ -134,7 +134,12 @@ def manual_import(request):
         )
         request.user.manual_import_count = (request.user.manual_import_count or 0) + 1
         request.user.last_sync = timezone.now()
-        request.user.save(update_fields=["manual_import_count", "last_sync"])
+        request.user.last_manual_sync = timezone.now()
+        request.user.save(update_fields=[
+            "manual_import_count", 
+            "last_sync", 
+            "last_manual_sync",
+        ])
 
         # build taste summary if events are made
         if (
@@ -237,9 +242,11 @@ def import_rss(request):
 
         request.user.rss_import_count = (request.user.rss_import_count or 0) + 1
         request.user.last_sync = timezone.now()
+        request.user.last_rss_sync = timezone.now()
         request.user.save(update_fields=[
             "rss_import_count",
-            "last_sync"
+            "last_sync",
+            "last_rss_sync",
         ])
 
         # build taste summary if events are made
