@@ -143,7 +143,7 @@ def sync_user_rss_watches(
     last_rss = getattr(user, "last_rss_sync", None)
     cutoff_date = None
     if last_rss:
-        cutoff_date = user.last_rss.date() - timedelta(days=cutoff_buffer_days)
+        cutoff_date = user.last_rss_sync.date() - timedelta(days=cutoff_buffer_days)
 
     for entry in getattr(feed, "entries", []) or []:
         link = (getattr(entry, "link", "") or "").strip()
