@@ -252,7 +252,7 @@ def stats_all_time(request):
         total_minutes=Coalesce(Sum("movie__runtime"), 0),
         runtime_watches=models.Count(
             "id",
-            filter=models.Q(runtime__isnull=False),
+            filter=models.Q(movie__runtime__isnull=False),
         ),
     )
     # minutes to hours and days conversion
@@ -260,7 +260,7 @@ def stats_all_time(request):
     total_hours = total_minutes // 60
     days = total_hours // 24
     hours = total_hours % 24
-    runtime_movies = int(agg["runtime_movies"] or 0)
+    runtime_watches = int(agg["runtime_watches"] or 0)
     return Response(
         {
             "totalWatches": totalCount,
@@ -271,8 +271,8 @@ def stats_all_time(request):
                 "hours": hours,
             },
             "runtimeCoverage":{
-                "withRuntime": runtime_movies,
-                "withoutRuntime": max(totalCount - runtime_movies, 0),
+                "withRuntime": runtime_watches,
+                "withoutRuntime": max(totalCount - runtime_watches, 0),
             },
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
