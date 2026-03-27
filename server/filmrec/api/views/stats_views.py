@@ -249,8 +249,8 @@ def stats_all_time(request):
 
     # New stat - total lifetime watch time (minutes)
     agg = allEvents.aggregate(
-        total_minutes=Coalesce(Sum("runtime"), 0),
-        runtime_movies=models.Count(
+        total_minutes=Coalesce(Sum("movie__runtime"), 0),
+        runtime_watches=models.Count(
             "id",
             filter=models.Q(runtime__isnull=False),
         ),
