@@ -151,73 +151,41 @@ export default function Profile() {
   // ── RSS link handler ───────────────────────────────────
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
-
-    if (!rssInput.trim()) {
-      setRssError("Enter your Letterboxd username or URL.");
-      return;
-    }
-
-    if (!accessToken) {
-      setRssError("Not authenticated.");
-      return;
-    }
+    if (!rssInput.trim()) { setRssError("Enter your Letterboxd username or URL."); return; }
+    if (!accessToken) { setRssError("Not authenticated."); return; }
 
     setRssLoading(true);
     setRssError(null);
-    setRssSuccess("Linking RSS and starting import...");
+    setRssSuccess("Linking RSS and syncing...");
 
     try {
       const u = cleanUsername(rssInput);
-      const queued = await submitRSSSync(u, accessToken);
-      if (!queued?.batch_id){
-        throw new Error("No batch id returned from server.")
-      }
+      const result = await submitRSSSync(u, accessToken);
       setSavedRssUsername(u);
       setRssInput(u);
-
-      const batch = await pollImportBatch(queued.batch_id, accessToken);
-
-      if (batch.status === "completed"){
-        setRssSuccess(
-          `RSS linked. Processed ${batch.entries_processed ?? 0} entries and created ${batch.events_created ?? 0} watch events.`
-        );
-      } else {
-        setRssError(err.message);
-      }
-
+      setRssSuccess(
+        `RSS linked. Created ${result.events_created ?? 0} watch events.`
+      );
     } catch (err) {
-      setRssError(err.message);
+      setRssError(err?.message || "RSS link failed.");
     } finally {
       setRssLoading(false);
     }
   };
 
-  // ── Resync handler ─────────────────────────────────────
   const handleResync = async () => {
     if (!savedRssUsername || !accessToken) return;
-
     setSyncLoading(true);
     setRssError(null);
-    setRssSuccess("Starting sync...");
+    setRssSuccess("Syncing...");
 
     try {
-      const queued = await submitRSSSync(savedRssUsername, accessToken);
-      
-      if (!queued?.batch_id){
-        throw new Error("No batch id returned from the server.");
-      }
-
-      const batch = await pollImportBatch(queued.batch_id, accessToken);
-
-      if (batch.status === "completed") {
+      const result = await submitRSSSync(savedRssUsername, accessToken);
       setRssSuccess(
-        `Sync complete — processed ${batch.entries_processed ?? 0} entries and created ${batch.events_created ?? 0} watch events.`
+        `Sync complete — ${result.events_created ?? 0} new watch events.`
       );
-    } else {
-      setRssError("Sync failed. Please try again.");
-    }
     } catch (err) {
-      setRssError(err.message);
+      setRssError(err?.message || "Sync failed. Please try again.");
     } finally {
       setSyncLoading(false);
     }

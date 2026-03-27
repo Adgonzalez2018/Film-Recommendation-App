@@ -103,12 +103,10 @@ export default function LetterboxdConnect() {
 
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
-
     if (!rssInput.trim()) {
       setRssError("Please enter your Letterboxd username or profile URL.");
       return;
     }
-
     if (!accessToken) {
       setRssError("Not authenticated. Please sign in again.");
       return;
@@ -119,11 +117,9 @@ export default function LetterboxdConnect() {
     setRssSuccess(null);
 
     try {
-      const queued = await submitRSSSync(rssInput, accessToken);
-      setRssSuccess("Processing your data... this may take a moment.");
-      const result = await pollImportBatch(queued.batch_id, accessToken);
+      const result = await submitRSSSync(rssInput, accessToken);
 
-      if (result.status === "failed"){
+      if (result.status === "failed") {
         throw new Error(result.error_message || "RSS sync failed.");
       }
 
