@@ -90,12 +90,17 @@ def getDecadeLabel(year: int) -> str:
 # pulling from watchevents instead of movieuser
 def byDecadePayloadFromEvents(event_qs):
     counts = Counter()
-    
+    seen_movie_ids = set()
     for event in event_qs:
         movie = getattr(event, "movie", None)
-        year = getattr(movie," year", None)
+        year = getattr(movie,"year", None)
+        if not movie:
+            continue
         if year is None:
             continue
+        if movie.id in seen_movie_ids:
+            continue
+        seen_movie_ids.add(movie.id)
         counts[getDecadeLabel(int(year))] += 1
 
     return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
@@ -202,6 +207,7 @@ def stats_payload(request):
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
     user = request.user
+    # NON UNIQUE
     allEvents = (
         WatchEvent.objects
         .filter(user=user)
@@ -243,7 +249,7 @@ def stats_all_time(request):
 
     # totalCount = allMovies.count() 
     # bandaid fix for dupe movies atm
-    totalCount = allEvents.count()
+    totalCount = allEvents.values("movie_id").distinct().count()
     decadeCounts = byDecadePayloadFromEvents(allEvents)
 
 
