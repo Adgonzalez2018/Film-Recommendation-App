@@ -166,8 +166,10 @@ def stats_payload(request):
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
     allMovies = loadAllTime(request.user)   # Query Set -> MovieUser
-    all_movie_ids = allMovies.values_list("movie_id", flat=True).distinct()
-
+    all_movie_ids = list(
+        allMovies.values_list("movie_id", flat=True)
+        .distinct()
+    )
     topDirectors = (
         Person.objects.filter(
             moviecrew__movie_id__in=all_movie_ids,
@@ -196,7 +198,7 @@ def stats_all_time(request):
     )
     recentMovies = [entry.movie for entry in recentEntries]
 
-    #totalCount = allMovies.count() 
+    # totalCount = allMovies.count() 
     # bandaid fix for dupe movies atm
     totalCount = allMovies.values("movie__title", "movie__year").distinct().count()
     decadeCounts = byDecadePayload(allMovies)
