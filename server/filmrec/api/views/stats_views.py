@@ -42,6 +42,30 @@ from ..utils.dates import week_window_sunday_anchor
 
 DECADE_ORDER = ["Pre-1960s", "60s", "70s", "80s", "90s", "00s", "10s", "20s"]
 
+def movie_user_Count(allMovies):
+    return allMovies.values("movie__title", "movie__year").distinct().count()
+
+def getMovieUser_stats(user):
+    allMovies = loadAllTime(user)
+    totalCount = movie_user_Count(allMovies)
+    decadeCounts = byDecadePayload(allMovies)
+    runtime_cov = allMovies.aggregate(
+    runtime_movies=models.Count("id", filter=models.Q(movie__runtime__isnull=False))
+    )
+    return totalCount, decadeCounts, runtime_cov
+
+
+def byDecadePayload(movieuser_qs):
+    years = movieuser_qs.values_list("movie__year", flat=True)
+
+    counts = Counter()
+    for y in years:
+        if y is None:
+            continue
+        counts[getDecadeLabel(int(y))] += 1
+
+    return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
+
 def loadAllTime(user):
     return MovieUser.objects.filter(
         user=user,
@@ -67,7 +91,7 @@ def calculatePerDay(entries, start_date):
     start = start_date.date() if hasattr(start_date, "date") else start_date
 
     for entry in entries:
-        wd = entry.posted_date or entry.posted_date
+        wd = entry.posted_date or entry.watched_date
         if wd is None:
             continue
 
@@ -135,8 +159,6 @@ def stats_payload(request):
     thisWeekArr = calculatePerDay(thisWeekEvents, thisWeekStart)
     lastWeekArr = calculatePerDay(lastWeekEvents, lastWeekStart)
 
-    week_movie_ids = thisWeekEvents.values_list("movie_id", flat=True)
-
     # Top 5 Directors Watched - Distinct
     topDirectors = (
         Person.objects.filter(
@@ -144,7 +166,6 @@ def stats_payload(request):
             moviecrew__movie__watchevent__user=user,
             moviecrew__movie__watchevent__watched_date__gte=thisWeekStart,
             moviecrew__movie__watchevent__watched_date__lt=thisWeekEnd,
-            moviecrew__movie__watchevent__watch_status="Watched",
             moviecrew__movie__watchevent__movie__isnull=False,
         )
         .annotate(count=models.Count("moviecrew__movie__watchevent"))
@@ -157,7 +178,6 @@ def stats_payload(request):
             moviecast__movie__watchevent__user=user,
             moviecast__movie__watchevent__watched_date__gte=thisWeekStart,
             moviecast__movie__watchevent__watched_date__lt=thisWeekEnd,
-            moviecast__movie__watchevent__watch_status="Watched",
             moviecast__movie__watchevent__movie__isnull=False,
         )
         .annotate(count=models.Count("moviecast__movie__watchevent"))
@@ -170,7 +190,6 @@ def stats_payload(request):
             moviegenre__movie__watchevent__user=user,
             moviegenre__movie__watchevent__watched_date__gte=thisWeekStart,
             moviegenre__movie__watchevent__watched_date__lt=thisWeekEnd,
-            moviegenre__movie__watchevent__watch_status="Watched",
             moviegenre__movie__watchevent__movie__isnull=False,
         )
         .annotate(count=models.Count("moviegenre__movie__watchevent"))
@@ -178,7 +197,7 @@ def stats_payload(request):
     )
 
 
-    recentEntries = thisWeekEvents.order_by("-posted_date")[:5]
+    recentEntries = thisWeekEvents.order_by("-posted_date", "-id")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
 
     thisWeekCount = thisWeekEvents.count()
@@ -249,8 +268,7 @@ def stats_all_time(request):
 
     # totalCount = allMovies.count() 
     # bandaid fix for dupe movies atm
-    totalCount = allEvents.values("movie_id").distinct().count()
-    decadeCounts = byDecadePayloadFromEvents(allEvents)
+    totalCount, decadeCounts, runtime_cov = getMovieUser_stats(user)
 
 
     # New stat - total lifetime watch time (minutes)
@@ -266,7 +284,7 @@ def stats_all_time(request):
     total_hours = total_minutes // 60
     days = total_hours // 24
     hours = total_hours % 24
-    runtime_watches = int(agg["runtime_watches"] or 0)
+    runtime_movies = int(runtime_cov["runtime_movies"] or 0)
     return Response(
         {
             "totalWatches": totalCount,
@@ -277,8 +295,8 @@ def stats_all_time(request):
                 "hours": hours,
             },
             "runtimeCoverage":{
-                "withRuntime": runtime_watches,
-                "withoutRuntime": max(totalCount - runtime_watches, 0),
+                "withRuntime": runtime_movies,
+                "withoutRuntime": max(totalCount - runtime_movies, 0),
             },
             "directors": [{"name": d.name, "count": d.count} for d in topDirectors],
             "actors": [{"name": a.name, "count": a.count} for a in topActors],
