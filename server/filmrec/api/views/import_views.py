@@ -19,7 +19,6 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from ..utils.unifiedImportHelper import extract_letterboxd_username, build_letterboxd_rss_url
-from ..tasks.import_tasks import enqueue_rss_import
 from ..services.csvImport import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
@@ -137,6 +136,7 @@ def manual_import(request):
         request.user.last_sync = timezone.now()
         request.user.save(update_fields=["manual_import_count", "last_sync"])
 
+        # build taste summary if events are made
         if (
             counters.get("events_created", 0) > 0
             or counters.get("rel_created", 0) > 0
@@ -229,6 +229,7 @@ def import_rss(request):
                 "finished_at",
                 "movies_created",
                 "rel_created",
+                "rel_updated",
                 "events_created",
                 "tmdb_queued",
             ]
@@ -241,6 +242,7 @@ def import_rss(request):
             "last_sync"
         ])
 
+        # build taste summary if events are made
         if (
             (res.events_created or 0) > 0
             or (res.rel_created or 0) > 0

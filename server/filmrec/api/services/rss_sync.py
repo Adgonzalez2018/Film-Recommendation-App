@@ -164,6 +164,7 @@ def sync_user_rss_watches(
             res.stopped_early = True
             break
 
+        event_key = None
         parsed_title, parsed_year = _parse_entry_title(title)
         if posted_date and link:
             event_key = makeEventKey(user.id, link, posted_date, entry_ref)
