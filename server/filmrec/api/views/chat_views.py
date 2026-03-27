@@ -19,6 +19,8 @@ from ..models import (
     MovieUser,
     Movie
 )
+
+from ..utils.photoHelper import _build_poster_url
 from ..serializer import ChatRequestSerializer
 
 logger = logging.getLogger(__name__)
@@ -144,7 +146,7 @@ def _movie_payload(mv, why: str = "") -> dict:
         "id": mv.id,
         "title": mv.title,
         "tmdb_id": mv.tmdb_id,
-        "poster_url": getattr(mv, "poster_url", None),
+        "poster_url": _build_poster_url(mv),
         "description": getattr(mv,"overview", None),
         "avg_rating": getattr(mv, "avg_rating", None),
         "year": getattr(mv, "year", None),
