@@ -212,7 +212,7 @@ def stats_all_time(request):
 
     topDirectors = (
         Person.objects.filter(
-            movie_crew__movie__watchevent__user=user,
+            moviecrew__movie__watchevent__user=user,
             moviecrew__job="Director",
         )
         .annotate(count=models.Count("moviecrew__movie__watchevent"))
@@ -221,7 +221,7 @@ def stats_all_time(request):
 
     topActors = (
         Person.objects.filter(
-            movie_cast__movie__watchevent__user=user,
+            moviecast__movie__watchevent__user=user,
         )
         .annotate(count=models.Count("moviecast__movie__watchevent"))
         .order_by("-count")[:5]
