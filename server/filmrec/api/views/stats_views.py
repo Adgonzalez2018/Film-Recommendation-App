@@ -3,6 +3,22 @@ Endpoints:
 - sends stats payloads for:
     - all time stats report
     - weekly stats report
+- Both use WatchEvents rather than MovieUser database
+
+- Both stats payload include:
+    - top 5 directors
+    - top 5 actors
+    - top 5 genres
+    - 5 most recent movies
+    - Movies per Decade
+
+- Weekly Stats include:
+    - Last Week vs This week Graph Chart
+    - Movies tally per day of This Week
+
+- All Time Stats include:
+    - Total hours watched
+    - Total Day/hour conversion
 """
 from collections import Counter
 
@@ -20,7 +36,6 @@ from ..models import (
     Genre,
     Person,
     WatchEvent,
-    Movie
     )
 from ..utils.dates import week_window_sunday_anchor
 
@@ -71,14 +86,17 @@ def getDecadeLabel(year: int) -> str:
     two = decade % 100
     return f"{two:02d}s"
 
-def byDecadePayload(movieuser_qs):
-    years = movieuser_qs.values_list("movie__year", flat=True)
 
+# pulling from watchevents instead of movieuser
+def byDecadePayloadFromEvents(event_qs):
     counts = Counter()
-    for y in years:
-        if y is None:
+    
+    for event in event_qs:
+        movie = getattr(event, "movie", None)
+        year = getattr(movie," year", None)
+        if year is None:
             continue
-        counts[getDecadeLabel(int(y))] += 1
+        counts[getDecadeLabel(int(year))] += 1
 
     return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
 
@@ -95,9 +113,18 @@ def _movie_card(m):
 @permission_classes([IsAuthenticated])
 def stats_payload(request):
     lastWeekStart, lastWeekEnd, thisWeekStart, thisWeekEnd = week_window_sunday_anchor()
+    user = request.user
 
-    thisWeekEvents = loadWeekly(request.user, thisWeekStart, thisWeekEnd)
-    lastWeekEvents = loadWeekly(request.user, lastWeekStart, lastWeekEnd)
+    thisWeekEvents = (
+        loadWeekly(request.user, thisWeekStart, thisWeekEnd)
+        .select_related("movie")
+        .exclude(movie__isnull=True)
+    )
+    lastWeekEvents = (
+        loadWeekly(request.user, lastWeekStart, lastWeekEnd)
+        .select_related("movie")
+        .exclude(movie__isnull=True)
+    )
 
     days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     thisWeekArr = calculatePerDay(thisWeekEvents, thisWeekStart)
@@ -108,43 +135,52 @@ def stats_payload(request):
     # Top 5 Directors Watched - Distinct
     topDirectors = (
         Person.objects.filter(
-            moviecrew__movie_id__in = week_movie_ids,
             moviecrew__job="Director",
+            moviecrew__movie__watchevent__user=user,
+            moviecrew__movie__watchevent__watched_date__gte=thisWeekStart,
+            moviecrew__movie__watchevent__watched_date__lt=thisWeekEnd,
+            moviecrew__movie__watchevent__watch_status="Watched",
+            moviecrew__movie__watchevent__movie__isnull=False,
         )
-        .annotate(count=models.Count("moviecrew__movie", distinct=True))
-        .order_by("-count")[:5]
+        .annotate(count=models.Count("moviecrew__movie__watchevent"))
+        .order_by("-count", "name")[:5]
     )
 
     # Top 5 Actors Watched - Distinct
     topActors = (
         Person.objects.filter(
-            moviecast__movie_id__in = week_movie_ids
+            moviecast__movie__watchevent__user=user,
+            moviecast__movie__watchevent__watched_date__gte=thisWeekStart,
+            moviecast__movie__watchevent__watched_date__lt=thisWeekEnd,
+            moviecast__movie__watchevent__watch_status="Watched",
+            moviecast__movie__watchevent__movie__isnull=False,
         )
-        .annotate(count=models.Count("moviecast__movie", distinct=True))
-        .order_by("-count")[:5]
+        .annotate(count=models.Count("moviecast__movie__watchevent"))
+        .order_by("-count", "name")[:5]
     )
 
     # Top 5 Genres (weekly) - Distinct
     topGenres = (
-        Genre.objects.filter(moviegenre__movie_id__in=week_movie_ids)
-        .annotate(count=models.Count("moviegenre__movie", distinct=True))
-        .order_by("-count")[:5]
+        Genre.objects.filter(
+            moviegenre__movie__watchevent__user=user,
+            moviegenre__movie__watchevent__watched_date__gte=thisWeekStart,
+            moviegenre__movie__watchevent__watched_date__lt=thisWeekEnd,
+            moviegenre__movie__watchevent__watch_status="Watched",
+            moviegenre__movie__watchevent__movie__isnull=False,
+        )
+        .annotate(count=models.Count("moviegenre__movie__watchevent"))
+        .order_by("-count", "name")[:5]
     )
 
 
-    recentEntries = thisWeekEvents.order_by("-watched_date")[:5]
+    recentEntries = thisWeekEvents.order_by("-posted_date")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
 
     thisWeekCount = thisWeekEvents.count()
     lastWeekCount = lastWeekEvents.count()
     percentChange = calc_percentChange(lastWeekCount, thisWeekCount)
 
-    decadeCounts = byDecadePayload(
-        MovieUser.objects.filter(
-            user = request.user,
-            movie_id__in = week_movie_ids,
-        )
-    )
+    decadeCounts = byDecadePayloadFromEvents(thisWeekEvents)
 
     return Response(
         {
@@ -165,53 +201,61 @@ def stats_payload(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
-    allMovies = loadAllTime(request.user)   # Query Set -> MovieUser
-    all_movie_ids = list(
-        allMovies.values_list("movie_id", flat=True)
-        .distinct()
+    user = request.user
+    allEvents = (
+        WatchEvent.objects
+        .filter(user=user)
+        .select_related("movie")
+        .exclude(movie__isnull=True)
     )
+    
+
     topDirectors = (
         Person.objects.filter(
-            moviecrew__movie_id__in=all_movie_ids,
+            movie_crew__movie__watchevent__user=user,
             moviecrew__job="Director",
-        ).annotate(count=models.Count("moviecrew__movie",distinct=True))
+        )
+        .annotate(count=models.Count("moviecrew__movie__watchevent"))
         .order_by("-count")[:5]
     )
 
     topActors = (
         Person.objects.filter(
-            moviecast__movie_id__in=all_movie_ids,
-        ).annotate(count=models.Count("moviecast__movie",distinct=True))
+            movie_cast__movie__watchevent__user=user,
+        )
+        .annotate(count=models.Count("moviecast__movie__watchevent"))
         .order_by("-count")[:5]
     )
 
     topGenres = (
-        Genre.objects.filter(moviegenre__movie_id__in=all_movie_ids)
-        .annotate(count=models.Count("moviegenre__movie",distinct=True))
+        Genre.objects.filter(
+            moviegenre__movie__watchevent__user=user
+        )
+        .annotate(count=models.Count("moviegenre__movie__watchevent"))
         .order_by("-count")[:5]
     )
 
     recentEntries = (
-        allMovies.select_related("movie")
-        .exclude(movie__isnull=True)
-        .order_by("-watched_date", "-id")[:5]
+       allEvents
+       .order_by("-posted_date","-id")[:5]
     )
     recentMovies = [entry.movie for entry in recentEntries]
 
     # totalCount = allMovies.count() 
     # bandaid fix for dupe movies atm
-    totalCount = allMovies.values("movie__title", "movie__year").distinct().count()
-    decadeCounts = byDecadePayload(allMovies)
+    totalCount = allEvents.count()
+    decadeCounts = byDecadePayloadFromEvents(allEvents)
 
 
     # New stat - total lifetime watch time (minutes)
-    agg = Movie.objects.filter(id__in=all_movie_ids).aggregate(
+    agg = allEvents.aggregate(
         total_minutes=Coalesce(Sum("runtime"), 0),
         runtime_movies=models.Count(
             "id",
             filter=models.Q(runtime__isnull=False),
         ),
     )
+    # minutes to hours and days conversion
     total_minutes = int(agg["total_minutes"] or 0)
     total_hours = total_minutes // 60
     days = total_hours // 24
