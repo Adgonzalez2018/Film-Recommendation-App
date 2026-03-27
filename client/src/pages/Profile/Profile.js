@@ -270,7 +270,7 @@ export default function Profile() {
         <button
           type="button"
           className="profile-top-link"
-          onClick={() => navigate("/DirectoryStats")}
+          onClick={() => navigate("/stats")}
         >
           Directory Stats
         </button>
