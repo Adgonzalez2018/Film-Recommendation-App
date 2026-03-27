@@ -166,8 +166,7 @@ def stats_payload(request):
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
     allMovies = loadAllTime(request.user)   # Query Set -> MovieUser
-    all_movie_ids = allMovies.values_list("movie_id", flat=True)
-
+    all_movie_ids = allMovies.values_list("movie_id", flat=True).distinct()
 
     topDirectors = (
         Person.objects.filter(
@@ -201,15 +200,10 @@ def stats_all_time(request):
     # bandaid fix for dupe movies atm
     totalCount = allMovies.values("movie__title", "movie__year").distinct().count()
     decadeCounts = byDecadePayload(allMovies)
-    distinct_movie_ids = (
-        allMovies
-        .values("movie_id")
-        .distinct()
-        .values_list("movie_id", flat = True)
-    )
+
 
     # New stat - total lifetime watch time (minutes)
-    agg = Movie.objects.filter(id__in=distinct_movie_ids).aggregate(
+    agg = Movie.objects.filter(id__in=all_movie_ids).aggregate(
         total_minutes=Coalesce(Sum("runtime"), 0),
         runtime_movies=models.Count(
             "id",
