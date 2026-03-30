@@ -432,5 +432,3 @@ def needToEnrich(movie) -> bool:
         not movie.tmdb_id or 
         getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS
     )
-
-

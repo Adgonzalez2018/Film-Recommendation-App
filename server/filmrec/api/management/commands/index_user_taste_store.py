@@ -17,7 +17,7 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         client = OpenAI()
 
-        user = User.objects.get(id=opts["user-id"])
+        user = User.objects.get(id=opts["user_id"])
         file_path = Path(opts["file"])
         if not file_path.exists():
             raise FileNotFoundError(f"Missing File: {file_path}")

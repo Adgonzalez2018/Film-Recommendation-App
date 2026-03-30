@@ -184,25 +184,40 @@ def run_rss_import_job(batch_id: int):
 
 @shared_task
 def build_and_index_taste(user_id):
-    print(f"[taste task] start user_id={user_id}")
+    logger.info(f"[taste task] starting for user_id={user_id}")
+    try:
+        user = User.objects.get(id=user_id)
+        logger.inf(f"[taste task] found user: {user.username}")
+    except User.DoesNotExist:
+        logger.error(f"[taste task] User {user_id} not found")
+        return
+    
     with tempfile.TemporaryDirectory() as tmp_dir:
         filename = f"taste_user_{user_id}.txt"
         file_path = os.path.join(tmp_dir, filename)
 
-        print(f"[taste task] building file for user_id={user_id} -> {file_path}")
-        call_command("build_taste_file", user_id=user_id, out=tmp_dir)
+        try:
 
-        print(f"[taste task] file exists? {os.path.exists(file_path)}")
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Taste file was not created: {file_path}")
+            logger.info(f"[taste task] building file for user_id={user_id} -> {file_path}")
+            call_command("build_taste_file", user_id=user_id, out=tmp_dir)
+            if not os.path.exists(file_path):
+                logger.error(f"[taste task] File not created: {file_path}")
+                raise FileNotFoundError(f"Taste file was not created: {file_path}")
+            
+            file_size = os.path.getsize(file_path)
+            logger.info(f"[taste task] File created successfully. Size:{file_size} bytes")
 
-        print(f"[taste task] indexing store for user_id={user_id}")
-        call_command(
-            "index_user_taste_store",
-            user_id=user_id,
-            file=file_path,
-        )
-        print(f"[taste task] done user_id={user_id}")
+            logger.info(f"[taste task] Indexing vector store for user_id={user_id}")
+            call_command(
+                "index_user_taste_store",
+                user_id=user_id,
+                file=file_path,
+            )
+            logger.info(f"[taste task] Complete for user_id={user_id}")
+            print(f"[taste task] done user_id={user_id}")
+        except Exception as e:
+            logger.exception(f"[taste task] fialed for user_id={user_id}: {str(e)}")
+            raise
 
 # only used if async?
 def enqueue_csv_import(batch_id: int):

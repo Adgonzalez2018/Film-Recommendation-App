@@ -224,7 +224,7 @@ def import_rss(request):
     elif not old_username and new_username:
         request.user.letterboxd_username = new_username
         request.user.save(update_fields=["letterboxd_username"])
-        
+
     batch = ImportBatch.objects.create(
         user=request.user,
         source="rss",
@@ -403,7 +403,21 @@ def skip_onboarding(request):
         status=status.HTTP_200_OK
     )
 
-
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def rebuild_taste(request):
+    # Manual Trigger for taste building (debug)
+    try:
+        build_and_index_taste.delay(request.user.id)
+        return Response(
+            {"statuts": "queued", "message": "taste rebuild queued. Check Celery logs."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 """
 For asnyc RSS job

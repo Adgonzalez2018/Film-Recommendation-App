@@ -103,7 +103,7 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
     )
 
     avg_disliked_rating = (
-        sum(d.get("rating",0) for d in disliked_docs if d.get("rating")) / len(loved_docs)
+        sum(d.get("rating",0) for d in disliked_docs if d.get("rating")) / len(disliked_docs)
         if disliked_docs else 0
     )
 
@@ -161,7 +161,11 @@ class Command(BaseCommand):
                 MovieUser.objects
                 .filter(user_id=user_id)
                 .select_related("movie")
-                .prefetch_related("movie__moviegenre_set__genre")
+                .prefetch_related(
+                    "movie__moviegenre_set__genre",
+                    "movie__director",
+                    "movie__actors",
+                )
                 )
 
             if not base.exists():
