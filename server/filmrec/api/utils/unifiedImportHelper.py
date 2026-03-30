@@ -24,39 +24,6 @@ class NormalizedMovieCandidate:
 
 
 def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
-    # older version
-    uri = (uri or "").strip()
-    if not uri:
-        return None
-    if uri.startswith("/"):
-        path = uri
-        host = ""
-    elif "://" not in uri:
-        path = "/" not in uri
-        host = ""
-    else:
-        try:
-            parsed = urlparse(uri)
-            host = (parsed.netloc or "").lower()
-            path = parsed.path or ""
-        except Exception:
-            return None
-    
-    parts = [p for p in path.split("/") if p]
-
-    # global film path: /film/<slug>/
-    if len(parts) >= 2 and parts[0] == "film" and parts[1]:
-        return f"https://letterboxd.com/film/{parts[1]}/"
-    # user-scoped RSS item path: /<username>/films/<slug>/
-    if len(parts) >= 3 and parts[1] == "film" and parts[2]:
-        return f"https://letterboxd.com/film/{parts[2]}/"
-    # short boxd.it link
-    if host in {"boxd.it","www.boxd.it"} and len(parts) >= 1 and parts[0]:
-        return f"https://boxd.it/{parts[0]}/"
-    
-    return None
-
-    """
     # Returns canonical uri and weak uri
     # canonical uri is stable film-page uri
     # weak uri are normalized uri that may be useful as a hint but shouldn't be part of movie's primary identity
@@ -68,7 +35,6 @@ def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str],
         return normalized, None
     
     return None, normalized
-    """
 
 def normalize_movie_candidate(title, year, uri=None, tmdb_id=None) -> NormalizedMovieCandidate:
     clean_title = clean_letterboxd_title(title)
@@ -146,11 +112,10 @@ def normalize_letterboxd_uri(uri: str):
         returns a normalized url string, or None if blank/unparseable
 
     """
+    # older version
     uri = (uri or "").strip()
     if not uri:
         return None
-
-    # If it's just a path-ish value, normalize it
     if uri.startswith("/"):
         path = uri
         host = ""
@@ -164,22 +129,17 @@ def normalize_letterboxd_uri(uri: str):
             path = parsed.path or ""
         except Exception:
             return None
-
+    
     parts = [p for p in path.split("/") if p]
 
-    # full letterboxd film path
-    if len(parts) >= 2 and parts[0] == "film" and parts[1]:
-        slug = parts[1]
-        return f"https://letterboxd.com/film/{slug}/"
-    
-    # short boxd.it link from csv exports
-    if host in {"boxd.it","www.boxd.it"}and len(parts) >= 1 and parts[0]:
-        short_id = parts[0]
-        return f"https://boxd.it/{short_id}/"
-    
-    # Raw boxd.it ish without scheme
-    if len(parts) == 1 and parts[0] and "." not in parts[0]:
-        # only use this if we allow bare short IDs
+    # global film path: /film/<slug>/
+    if len(parts) >= 2 and parts[0] == "film":
+        return f"https://letterboxd.com/film/{parts[1]}/"
+    # user-scoped RSS item path: /<username>/films/<slug>/
+    if len(parts) >= 3 and parts[1] == "film":
+        return f"https://letterboxd.com/film/{parts[2]}/"
+    # short boxd.it link
+    if host in {"boxd.it","www.boxd.it"} and parts:
         return f"https://boxd.it/{parts[0]}/"
     
     return None
