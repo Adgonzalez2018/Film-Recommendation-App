@@ -12,19 +12,27 @@ Allows:
 Dependencies: letterboxd_import.py
 """
 from django.utils import timezone
+from datetime import timedelta
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from ..utils.unifiedImportHelper import extract_letterboxd_username, build_letterboxd_rss_url
+from ..utils.unifiedImportHelper import (
+    extract_letterboxd_username,
+    build_letterboxd_rss_url,
+    reset_RSS_userState
+)
 from ..services.csvImport import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
 from ..tasks.import_tasks import build_and_index_taste
 
 from ..models import ImportBatch, WatchEvent
+
+
+RSS_SWITCH_COOLDOWN_HOURS = 24
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -193,14 +201,30 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     
-    # save username when they link RSS
+    now = timezone.now()
+    last_switch = request.user.last_rss_account_switch
     username = extract_letterboxd_username(rss_input) or extract_letterboxd_username(rss_url)
-    if username:
-        prof = request.user
-        if prof.letterboxd_username != username:
-            prof.letterboxd_username = username
-            prof.save(update_fields=["letterboxd_username"])
-    
+
+    old_username = (request.user.letterboxd_username or "").strip().lower()
+    new_username = (username or "").strip().lower()
+    if old_username and new_username and old_username != new_username:
+        if last_switch and now - last_switch < timedelta(hours=RSS_SWITCH_COOLDOWN_HOURS):
+            remaining = timedelta(hours = RSS_SWITCH_COOLDOWN_HOURS) - (now - last_switch)
+            return Response(
+                {
+                    "error": f"You can switch linked Letterboxd accounts again after {remaining}."
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        reset_RSS_userState(request.user)
+        request.user.letterboxd_username = new_username
+        request.user.last_rss_account_switch = now
+        request.user.save(update_fields=["letterboxd_username", "last_rss_account_switch"])
+    elif not old_username and new_username:
+        request.user.letterboxd_username = new_username
+        request.user.save(update_fields=["letterboxd_username"])
+        
     batch = ImportBatch.objects.create(
         user=request.user,
         source="rss",
@@ -225,8 +249,9 @@ def import_rss(request):
             },
         )
         if res.error:
-            raise ValueError(
-                "Could not read that RSS feed. Make sure the profile is public and the input is correct."
+            return Response(
+                {"error": res.error, "batch_id": batch.id},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         
         movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
@@ -270,7 +295,11 @@ def import_rss(request):
             or (res.rel_updated or 0) > 0
         ):
             build_and_index_taste.delay(request.user.id)
-        
+        message = None
+        if (res.entries_seen or 0) == 0:
+            message = (
+                "RSS linked successfully, but this feed has no public diary/review entries yet."
+            )
         return Response(
                     {
                         "status": "completed",
@@ -284,6 +313,8 @@ def import_rss(request):
                         "tmdb_queued": batch.tmdb_queued,
                         "tmdb_done": batch.tmdb_done,
                         "tmdb_failed": batch.tmdb_failed,
+                        "entries_seen": res.entries_seen,
+                        "message": message,
                     },
                     status=status.HTTP_200_OK,
                 )

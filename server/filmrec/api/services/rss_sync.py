@@ -173,7 +173,9 @@ def sync_user_rss_watches(
         return RSSSyncResult(
             user_id=user.id,
             rss_url=rss_url,
-            error="RSS feed returned no entries."
+            entries_seen=0,
+            error=None,
+            movie_ids_to_enrich=[],
         )
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
