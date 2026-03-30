@@ -134,7 +134,7 @@ def sync_user_rss_watches(
     bozo_exc = getattr(feed, "bozo_exception", None)
     entries = getattr(feed, "entries", []) or []
 
-    logger.inf(
+    logger.info(
         "RSS parsed user_id=%s status=%r bozo=%r entries=%s bozo_ex=%r",
         user.id,
         status_code,
