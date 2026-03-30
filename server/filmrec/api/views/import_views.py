@@ -210,6 +210,20 @@ def import_rss(request):
 
     try:
         res = sync_user_rss_watches(request.user, rss_input=rss_input)
+        print(
+            "RSS RESULT",
+            {
+                "user_id": request.user.id,
+                "error": res.error,
+                "entries_seen": res.entries_seen,
+                "movies_created": res.movies_created,
+                "events_created": res.events_created,
+                "rel_created": res.rel_created,
+                "rel_updated": res.rel_updated,
+                "stopped_early": res.stopped_early,
+                "movie_ids_to_enrich": len(res.movie_ids_to_enrich or []),
+            },
+        )
         if res.error:
             raise ValueError(
                 "Could not read that RSS feed. Make sure the profile is public and the input is correct."
