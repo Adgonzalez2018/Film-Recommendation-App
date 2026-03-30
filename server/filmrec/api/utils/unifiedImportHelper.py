@@ -5,9 +5,9 @@ import hashlib
 from datetime import date
 from dataclasses import dataclass
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
-from api.models import Movie, WatchEvent, MovieUser
+from api.models import Movie, WatchEvent, MovieUser, FilmBank
 
 _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
 _USERNAME_SAFE_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -226,6 +226,25 @@ def build_letterboxd_rss_url(raw: str) -> str:
 
     return ""    
     """
+
+
+# --- Resetting User's State (RSS) ---
+def reset_RSS_userState(user):
+    with transaction.atomic():
+        WatchEvent.objects.filter(user=user).delete()
+        MovieUser.objects.filter(user=user).delete()
+        FilmBank.objects.filter(user=user).delete()
+        user.last_rss_sync = None
+        user.last_sync = None
+        user.rss_import_count = 0
+        user.taste_vector_store_id = None
+        user.save(update_fields=[
+            "last_rss_sync",
+            "last_sync",
+            "rss_import_count",
+            "taste_vector_store_id",
+        ])
+
 # --- Unified Import Functions ---
 def parse_year(year_str):
     try:
@@ -413,3 +432,5 @@ def needToEnrich(movie) -> bool:
         not movie.tmdb_id or 
         getattr(movie, "enrichment_status", None) in MUST_ENRICH_STATUS
     )
+
+

@@ -184,22 +184,25 @@ def run_rss_import_job(batch_id: int):
 
 @shared_task
 def build_and_index_taste(user_id):
+    print(f"[taste task] start user_id={user_id}")
     with tempfile.TemporaryDirectory() as tmp_dir:
-
         filename = f"taste_user_{user_id}.txt"
         file_path = os.path.join(tmp_dir, filename)
 
-        # build file
+        print(f"[taste task] building file for user_id={user_id} -> {file_path}")
         call_command("build_taste_file", user_id=user_id, out=tmp_dir)
 
+        print(f"[taste task] file exists? {os.path.exists(file_path)}")
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Taste file was not created: {file_path}")
-        # index said file
+
+        print(f"[taste task] indexing store for user_id={user_id}")
         call_command(
             "index_user_taste_store",
             user_id=user_id,
             file=file_path,
         )
+        print(f"[taste task] done user_id={user_id}")
 
 # only used if async?
 def enqueue_csv_import(batch_id: int):

@@ -42,13 +42,13 @@ def mu_to_doc(mu, doc_type: str) -> dict:
         .values_list('name', flat=True)
     ) if hasattr(mv, 'actors') else []
 
-    text_lines = "\n".join([
+    text_lines = [
         "USER_TASTE_EVIDENCE",
         f"Type: {doc_type}",
         f"Movie: {title}{year_str}",
         f"Rating: {rating}" if rating is not None else "Rating: (unknown)",
         f"Genres: {', '.join(genres)}" if genres else "Genres: (unknown)",
-    ])
+    ]
 
     if directors:
         text_lines.append(f"Director: {','.join(directors)}")
@@ -103,7 +103,7 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
     )
 
     avg_disliked_rating = (
-        sum(d.get("rating",0) for d in loved_docs if d.get("rating")) / len(loved_docs)
+        sum(d.get("rating",0) for d in disliked_docs if d.get("rating")) / len(loved_docs)
         if disliked_docs else 0
     )
 
