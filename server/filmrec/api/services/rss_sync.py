@@ -118,6 +118,8 @@ def sync_user_rss_watches(
 
     feed = feedparser.parse(rss_url)
     status_code = getattr(feed, "status", None)
+    entries = getattr(feed, "entries", []) or []
+
     if status_code and status_code != 200:
         return RSSSyncResult(
             user_id = user.id,
@@ -125,11 +127,11 @@ def sync_user_rss_watches(
             error =f"RSS returned HTTP {status_code}.",
         )
     
-    if getattr(feed, "bozo", False):
+    if not entries:
         return RSSSyncResult(
-            user_id=user.id, 
+            user_id=user.id,
             rss_url=rss_url,
-            error="Could not parse RSS feed (bozo=True)."
+            error="RSS feed returned no entries."
         )
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
@@ -145,7 +147,7 @@ def sync_user_rss_watches(
     if last_rss:
         cutoff_date = user.last_rss_sync.date() - timedelta(days=cutoff_buffer_days)
 
-    for entry in getattr(feed, "entries", []) or []:
+    for entry in entries:
         link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
         entry_ref = (getattr(entry, "id", "") or getattr(entry, "link","") or "").strip()
@@ -171,7 +173,7 @@ def sync_user_rss_watches(
             event_key = makeEventKey(user.id, link, posted_date, entry_ref)
             if event_key in existing_event_keys:
                 res.stopped_early = True
-                break
+                continue
 
         movie, was_created, _ = resolve_movie_one(parsed_title, parsed_year, link)
 
