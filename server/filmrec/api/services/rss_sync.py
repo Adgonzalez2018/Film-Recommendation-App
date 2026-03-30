@@ -129,6 +129,13 @@ def sync_user_rss_watches(
         return RSSSyncResult(user_id=user.id, rss_url="", error="No valid letterboxd username/RSS input.")
 
     feed = feedparser.parse(rss_url)
+    logger.info("RSS feed keys user_id=%s keys=%s", user.id, list(feed.keys()))
+    logger.info("RSS feed href=%r", getattr(feed, "href", None))
+    logger.info("RSS feed version=%r", getattr(feed, "version", None))
+    logger.info("RSS feed status=%r", getattr(feed, "status", None))
+    logger.info("RSS feed headers=%r", getattr(feed, "headers", None))
+    logger.info("RSS feed feed_title=%r", getattr(feed, "feed", {}).get("title") if getattr(feed, "feed", None) else None)
+    logger.info("RSS raw first feed object=%r", feed.feed)
     status_code = getattr(feed, "status", None)
     bozo = getattr(feed, "bozo", False)
     bozo_exc = getattr(feed, "bozo_exception", None)
@@ -210,7 +217,18 @@ def sync_user_rss_watches(
             logger.info("RSS skip no link user_id=%s idx=%s", user.id, idx)
             continue
 
+        logger.info(
+            "RSS raw entry link user_id=%s title=%r raw_link=%r",
+            user.id,
+            title,
+            link,
+        )
         link = normalize_letterboxd_uri(link)
+        logger.info(
+            "RSS normalized entry link user_id=%s normalized_link=%r",
+            user.id,
+            link,
+        )
         if not link:
             logger.info("RSS skip bad normalized link user_id=%s idx=%s", user.id, idx)
             continue
