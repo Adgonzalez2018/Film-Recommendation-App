@@ -27,3 +27,5 @@ client/build/
 movie_export/
 *.jsonl
 *.txt
+
+*.dump
