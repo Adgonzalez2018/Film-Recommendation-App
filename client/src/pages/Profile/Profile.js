@@ -272,7 +272,7 @@ export default function Profile() {
           className="profile-top-link"
           onClick={() => navigate("/stats")}
         >
-          Directory Stats
+          Stats
         </button>
       </div>
       <div className="profile-hero">
