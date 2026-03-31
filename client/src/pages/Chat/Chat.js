@@ -271,6 +271,15 @@ const Chat = () => {
     <div className="chat-container dark-mode">
       <aside className="sidebar">
         <div className="sidebar-header">
+          <div className="sidebar-actions">
+            <button className="sidebar-action-button" onClick={() => setBankOpen(True)}>
+              Film Bank
+              {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
+            </button>
+            <button className="sidebar-action-button" onClick={() => navigate("/stats")}>
+              Stats
+            </button>
+          </div>
           <button className="new-chat-button" onClick={handleNewChat}>
             + New Chat
           </button>
@@ -306,15 +315,6 @@ const Chat = () => {
       <main className="chat-main">
         <header className="chat-header">
           <h1 className="header-title">Film-Recommender v0.1</h1>
-          <div className="chat-header-nav">
-            <button className="stats-button" onClick={() => setBankOpen(true)}>
-              Film Bank
-              {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
-            </button>
-            <button className="stats-button" onClick={() => navigate("/stats")}>
-              Stats
-            </button>
-          </div>
         </header>
 
         <div className="messages-container">
