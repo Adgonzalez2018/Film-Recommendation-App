@@ -22,9 +22,9 @@ def build_movie_text(movie, genres, directors, cast_names):
     ]
 
     if genres:
-        parts.append(f"Genres: {', '.join(genres)}")
+        parts.append(f"Genres:{', '.join(genres)}")
     if directors:
-        parts.append(f"Director : {', '.join(directors)}")
+        parts.append(f"Director:{', '.join(directors)}")
     if cast_names:
         parts.append(f"Cast: {', '.join(cast_names)}")
     if movie.runtime:
@@ -59,19 +59,25 @@ class Command(BaseCommand):
         cast_n = opts["cast_n"]
 
         # prefetch related rows efficiently
-        qs = Movie.objects.all().order_by("id").prefetch_related(
-            Prefetch(
-                "moviegenre_set",
-                queryset=MovieGenre.objects.select_related("genre"),
-            ),
-            Prefetch(
-                "moviecrew_set",
-                queryset=MovieCrew.objects.select_related("person"),
-            ),
-            Prefetch(
-                "moviecast_set",
-                queryset=MovieCast.objects.select_related("person").order_by("order", "id"),
-            ),
+        qs = (Movie.objects
+              .filter(title__isnull=False)
+              .exclude(title__exact="")
+              .filter(tmdb_id__isnull=False)
+              .order_by("id")
+              .prefetch_related(
+                Prefetch(
+                    "moviegenre_set",
+                    queryset=MovieGenre.objects.select_related("genre"),
+                ),
+                Prefetch(
+                    "moviecrew_set",
+                    queryset=MovieCrew.objects.select_related("person"),
+                ),
+                Prefetch(
+                    "moviecast_set",
+                    queryset=MovieCast.objects.select_related("person").order_by("order", "id"),
+                ),
+            )
         )
     
         if limit and limit > 0:
@@ -80,6 +86,20 @@ class Command(BaseCommand):
         count = 0
         with out_path.open("w", encoding="utf-8") as f:
             for m in qs:
+                if not m.title:
+                    continue
+
+                has_signal = (
+                    m.overview
+                    or m.tmdb_id
+                    or m.moviegenre_set.exists()
+                    or m.moviecast_set.exists()
+                    or m.moviecrew_set.exists()
+                )
+
+                if not has_signal:
+                    continue
+
                 genres = [mg.genre.name for mg in m.moviegenre_set.all() if mg.genre_id and mg.genre]
                 directors = [
                     mc.person.name
@@ -97,13 +117,13 @@ class Command(BaseCommand):
                 text = build_movie_text(m, genres, directors, cast)
 
                 doc = {
-                    "id": f"movie: {m.id}",
+                    "id": f"movie:{m.id}",
                     "movie_id": m.id,
                     "tmdb_id": m.tmdb_id,
                     "title": m.title,
                     "year": m.year,
                     "genres": genres,
-                    "director": directors,
+                    "directors": directors,
                     "cast": cast,
                     "runtime": m.runtime,
                     "language": m.language,

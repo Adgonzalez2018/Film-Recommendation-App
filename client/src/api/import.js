@@ -24,52 +24,91 @@ export async function importLetterboxd({ token, watched, reviews, watchlist, lik
     body: fd,
   });
 
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {}
+
   if (!res.ok) {
-    let msg = "Import failed.";
-    try {
-      const data = await res.json();
-      msg = extractErrorMessage(msg,data);
-    } catch {}
-    throw new Error(msg);
+    throw new Error(extractErrorMessage("Import failed.", data));
   }
 
-  return res.json();
+  return data;
 }
 
-export async function submitCSVImport(files, accessToken){
-  return importLetterboxd(
-    {
-      token: accessToken,
-      watched: files?.watched || null,
-      reviews: files?.reviews || null,
-      watchlist: files?.watchlist || null,
-      likes: files?.likes || null,
-    }
-  );
+export async function submitCSVImport(files, accessToken) {
+  return importLetterboxd({
+    token: accessToken,
+    watched: files?.watched || null,
+    reviews: files?.reviews || null,
+    watchlist: files?.watchlist || null,
+    likes: files?.likes || null,
+  });
 }
 
-export async function submitRSSSync(rssInput, accessToken){
-  const res = await apiFetch("/api/import/rss/",{
+export async function submitRSSSync(rssInput, accessToken) {
+  const res = await apiFetch("/api/import/rss/", {
     token: accessToken,
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({rss: (rssInput || "").trim()}),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rss: (rssInput || "").trim() }),
   });
 
-  if (!res.ok){
-    let msg = "RSS Sync Failed.";
-    try {
-      const data = await res.json();
-      msg = extractErrorMessage(msg, data);
-    } catch {}
-    throw new Error(msg);
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {}
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("RSS sync failed.", data));
   }
 
-  return res.json();
+  return data;
 }
 
-export async function getOnboardingStatus(){
-  return apiFetch("/api/onboarding-status/",{
+export async function fetchImportBatch(batchId, token) {
+  const res = await apiFetch(`/api/import-batches/${batchId}/`, {
+    token,
+    method: "GET",
+  });
+
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {}
+
+  if (!res.ok) {
+    throw new Error(extractErrorMessage("Failed to fetch import batch.", data));
+  }
+
+  return data;
+}
+
+export async function pollImportBatch(batchId, token, options = {}) {
+  const intervalMs = options.intervalMs ?? 2000;
+  const timeoutMs = options.timeoutMs ?? 300000;
+  const startedAt = Date.now();
+
+  while (true) {
+    const batch = await fetchImportBatch(batchId, token);
+
+    if (batch.status === "completed" || batch.status === "failed") {
+      return batch;
+    }
+
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("Import is still processing. Please refresh and check again.");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+
+
+// Onboarding Status -----------------------
+export async function getOnboardingStatus() {
+  return apiFetch("/api/onboarding-status/", {
     method: "GET",
   });
 }
@@ -78,8 +117,8 @@ export async function markOnboardingSkipped(accessToken) {
   const res = await apiFetch("/api/onboarding/skip/", {
     token: accessToken,
     method: "POST",
-    headers: { "Content-Type": "application/json"},
-    body: JSON.stringify({ skipped: true}),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ skipped: true }),
   });
 
   if (!res.ok) {
@@ -87,8 +126,9 @@ export async function markOnboardingSkipped(accessToken) {
     try {
       const data = await res.json();
       msg = extractErrorMessage(msg, data);
-    } catch{}
+    } catch {}
     throw new Error(msg);
   }
+
   return res.json();
 }

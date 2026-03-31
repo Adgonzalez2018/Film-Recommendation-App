@@ -29,6 +29,7 @@ from api.views.import_views import(
     import_rss, 
     onboarding_status,
     skip_onboarding,
+    import_batch_detail,
     )
 from api.views.profile_views import profileView
 
@@ -43,7 +44,9 @@ urlpatterns = [
     # --- Authentication ---
     path("api/login/", loginView, name="login"),
     path("api/register/", registerView, name="register"),
-
+    path("api/password-reset/", password_reset_request, name="password-reset"),
+    path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
+    
     # for authentication anything passing the login/registration
     path("api/ping/", ping, name="ping"),
 
@@ -59,10 +62,8 @@ urlpatterns = [
     # --- Data Import ---
     path("api/import/csv/", manual_import, name="import-csv"),
     path("api/import/rss/", import_rss, name="import-rss"),
-    
-    path("api/password-reset/", password_reset_request, name="password-reset"),
-    path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
-    
+    path("api/import-batches/<int:batch_id>/", import_batch_detail, name="import-batch-detail"),
+
     # --- TMDB ---
     path("api/tmdb/search/",tmdb_search, name="tmdb-search"),
     path("api/tmdb/ensure/",tmdb_ensure, name="tmdb-ensure"),

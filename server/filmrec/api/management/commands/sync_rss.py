@@ -23,7 +23,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user_id = options["user_id"]
         limit = int(options["limit"] or 0)
-        stale_hours = int(options["limit"] or 0)
+        stale_hours = int(options["stale_hours"] or 0)
         dry_run = bool(options["dry_run"])
 
         qs = User.objects.filter(letterboxd_username__isnull=False).exclude(letterboxd_username="")

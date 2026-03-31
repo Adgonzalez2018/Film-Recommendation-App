@@ -148,7 +148,8 @@ def _enrich_movie_relations_from_tmdb(*, movie: Movie, data: Dict[str, Any], cas
         MovieCast.objects.create(
             movie=movie,
             person=person_obj,
-            character=c.get("character"),
+            # truncate whatever character is given to 255 
+            character=c.get("character" or "").strip()[:255] or None,
             order=c.get("order"),
         )
 
@@ -236,7 +237,8 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
         raise ValidationError("Movie not found")
     
     # if another movie alr has this tmdb id, don't allow attaching
-    existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(id=movie).first()
+    exclude_id = movie.id if hasattr(movie, "id") else movie
+    existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(pk=exclude_id).first()
     if existing:
         raise ValidationError("That tmdb_id is already attached to another movie")
     
@@ -250,3 +252,40 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
 
     _enrich_movie_relations_from_tmdb(movie=movie, data=data, cast_limit=cast_limit)
     return movie
+
+def find_best_tmdb_movie_match(title: str, year: Optional[int] = None) -> Optional[int]:
+    results = search_movie(title).get("results", [])
+    if not results:
+        return None
+    
+    # prefer exact title-ish matches and matching release year
+    best = None
+    best_score = -1
+
+    for r in results[:10]:
+        score = 0
+        tmdb_title = (r.get("title") or"").strip().lower()
+        q = (title or "").strip().lower()
+
+        if tmdb_title == q:
+            score += 5
+        elif q and q in tmdb_title:
+            score += 2
+        
+        release_date = r.get("release_date") or ""
+        tmdb_year = None
+        if len(release_date) >= 4 and release_date[:4].isdigit():
+            tmdb_year = int(release_date[:4])
+
+        if year is not None and tmdb_year == year:
+            score += 5
+        elif year is not None and tmdb_year is not None and abs(tmdb_year - year) == 1:
+            score += 2
+
+        popularity = r.get("popularity") or 0
+        score += min(popularity / 100.0, 2)
+
+        if score > best_score:
+            best_score = score
+            best = r
+    return best.get("id") if best else None

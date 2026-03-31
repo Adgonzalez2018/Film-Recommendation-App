@@ -5,7 +5,7 @@ import "../Auth/Auth.css";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../hooks/useAuth";
-import { CSV_FILES, submitCSVImport, submitRSSSync } from "../../api/import";
+import { CSV_FILES, submitCSVImport, submitRSSSync, pollImportBatch } from "../../api/import";
 import { fetchProfile, saveProfile } from "../../api/profile";
 
 import heroImg from "../../assets/images/la-haine-1.png";
@@ -151,51 +151,41 @@ export default function Profile() {
   // ── RSS link handler ───────────────────────────────────
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
-
-    if (!rssInput.trim()) {
-      setRssError("Enter your Letterboxd username or URL.");
-      return;
-    }
-
-    if (!accessToken) {
-      setRssError("Not authenticated.");
-      return;
-    }
+    if (!rssInput.trim()) { setRssError("Enter your Letterboxd username or URL."); return; }
+    if (!accessToken) { setRssError("Not authenticated."); return; }
 
     setRssLoading(true);
     setRssError(null);
-    setRssSuccess(null);
+    setRssSuccess("Linking RSS and syncing...");
 
     try {
       const u = cleanUsername(rssInput);
-      const data = await submitRSSSync(u, accessToken);
+      const result = await submitRSSSync(u, accessToken);
       setSavedRssUsername(u);
       setRssInput(u);
       setRssSuccess(
-        `RSS linked. Processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
+        `RSS linked. Created ${result.events_created ?? 0} watch events.`
       );
     } catch (err) {
-      setRssError(err.message);
+      setRssError(err?.message || "RSS link failed.");
     } finally {
       setRssLoading(false);
     }
   };
 
-  // ── Resync handler ─────────────────────────────────────
   const handleResync = async () => {
     if (!savedRssUsername || !accessToken) return;
-
     setSyncLoading(true);
     setRssError(null);
-    setRssSuccess(null);
+    setRssSuccess("Syncing...");
 
     try {
-      const data = await submitRSSSync(savedRssUsername, accessToken);
+      const result = await submitRSSSync(savedRssUsername, accessToken);
       setRssSuccess(
-        `Sync complete - processed ${data.entries_processed ?? 0} entries and created ${data.events_created ?? 0} watch events.`
+        `Sync complete — ${result.events_created ?? 0} new watch events.`
       );
     } catch (err) {
-      setRssError(err.message);
+      setRssError(err?.message || "Sync failed. Please try again.");
     } finally {
       setSyncLoading(false);
     }
@@ -269,6 +259,22 @@ export default function Profile() {
   // ── Render ─────────────────────────────────────────────
   return (
     <div className="profile-page">
+      <div className="profile-top-nav">
+        <button
+          type="button"
+          className="profile-top-link"
+          onClick={() => navigate("/chat")}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          className="profile-top-link"
+          onClick={() => navigate("/stats")}
+        >
+          Directory Stats
+        </button>
+      </div>
       <div className="profile-hero">
         <img src={heroImg} alt="" className="profile-hero-img" />
       </div>

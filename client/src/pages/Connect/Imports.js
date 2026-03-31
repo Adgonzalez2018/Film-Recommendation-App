@@ -14,7 +14,11 @@ import carImg from "../../assets/images/Fargo_car.png";
 import PageFrame from "../../components/layout/PageFrame";
 
 // API
-import { CSV_FILES, submitCSVImport, submitRSSSync, markOnboardingSkipped } from "../../api/import";
+import { CSV_FILES,  
+  submitRSSSync,
+  markOnboardingSkipped,
+  pollImportBatch, 
+  submitCSVImport} from "../../api/import";
 
 export default function LetterboxdConnect() {
   const navigate = useNavigate();
@@ -25,12 +29,6 @@ export default function LetterboxdConnect() {
     onboardingStatus, 
     refreshOnboarding,
   } = useAuth();
-
-  useEffect(() => {
-    if (isOnboarded) {
-      navigate("/chat", { replace: true});
-    }
-  }, [isOnboarded, navigate]);
 
 
   // CSV state
@@ -84,7 +82,14 @@ export default function LetterboxdConnect() {
       throw new Error("Not authenticated. Please sign in again.");
     }
 
-    await submitCSVImport(files, accessToken);
+    const queued = await submitCSVImport(files, accessToken);
+    setCsvSuccess("Processing your data... this may take a moment.");
+    const result = await pollImportBatch(queued.batch_id, accessToken);
+
+    if (result.status === "failed"){
+      throw new Error(result.error_message || "Import failed.");
+    }
+
     await refreshOnboarding();
     setCsvSuccess("Data imported! Your all-time stats and initial weekly report are ready!");
   });
@@ -98,12 +103,10 @@ export default function LetterboxdConnect() {
 
   const handleRSSSubmit = async (e) => {
     e.preventDefault();
-
     if (!rssInput.trim()) {
       setRssError("Please enter your Letterboxd username or profile URL.");
       return;
     }
-
     if (!accessToken) {
       setRssError("Not authenticated. Please sign in again.");
       return;
@@ -114,7 +117,12 @@ export default function LetterboxdConnect() {
     setRssSuccess(null);
 
     try {
-      await submitRSSSync(rssInput, accessToken);
+      const result = await submitRSSSync(rssInput, accessToken);
+
+      if (result.status === "failed") {
+        throw new Error(result.error_message || "RSS sync failed.");
+      }
+
       await refreshOnboarding();
       setRssSuccess("RSS linked! Weekly watch reports will sync automatically.");
     } catch (err) {

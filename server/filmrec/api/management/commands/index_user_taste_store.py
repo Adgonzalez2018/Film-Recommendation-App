@@ -8,21 +8,21 @@ from django.core.management.base import BaseCommand
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = "Create/Update a user's taste vector store from taste_user_id.jsonl"
+    help = "Create/Update a user's taste vector store from taste_user_id.txt"
     def add_arguments(self, parser):
         parser.add_argument("--user-id", type=int, required=True)
-        parser.add_argument("--jsonl", type=str, required=True, help="Path to taste_user_id.jsonl")
+        parser.add_argument("--file", type=str, required=True, help="Path to taste_user_id.txt")
         parser.add_argument("--name-prefix", type=str, default="FilmRec Taste Store")
 
     def handle(self, *args, **opts):
         client = OpenAI()
 
-        user = User.objects.get(id=opts["user-id"])
-        jsonl_path = Path(opts["jsonl"])
-        if not jsonl_path.exists():
-            raise FileNotFoundError(f"Missing File: {jsonl_path}")
+        user = User.objects.get(id=opts["user_id"])
+        file_path = Path(opts["file"])
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing File: {file_path}")
         
-        store_id = getattr(user, "taste__store_id", None)
+        store_id = getattr(user, "taste_vector_store_id", None)
 
         # Create store if missing
         if not store_id:
@@ -34,11 +34,28 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS(f"Using taste vector store: {store_id}"))
 
-        # upload + poll until indexed
-        with jsonl_path.open("rb") as f:
-            client.vector_stores.files.upload_and_poll(
-                vector_store_id = store_id,
-                file=f,
-            )
-        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {jsonl_path}"))
-        self.stdout.write(self.style.SUCCESS(f"user.taste.vector_store_id={store_id}"))
+        # delete existing files in this user's taste store
+        try:
+            existing = client.vector_stores.files.list(vector_store_id=store_id)
+            for vf in existing.data:
+                client.vector_stores.files.delete(
+                    vector_store_id=store_id,
+                    file_id=vf.id,
+                )
+            self.stdout.write(self.style.SUCCESS("Cleared old taste files from vector store."))
+
+        except Exception as e:
+            raise RuntimeError(f"Failed clearing existing taste store files: {e}")
+        
+        try: 
+            # upload + poll until indexed
+            with file_path.open("rb") as f:
+                client.vector_stores.files.upload_and_poll(
+                    vector_store_id = store_id,
+                    file=f,
+                )
+        except Exception as e:
+            raise RuntimeError(f"Upload failed: {e}")
+        
+        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {file_path}"))
+        self.stdout.write(self.style.SUCCESS(f"user.taste_vector_store_id={store_id}"))

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Movie, User, Genre, Person, FilmBank
 from django.contrib.auth import get_user_model
-from api.utils.letterboxd import extract_letterboxd_username
+from .utils.unifiedImportHelper import extract_letterboxd_username
 
 User = get_user_model()
 
@@ -149,7 +149,7 @@ class MovieCardSerializer(serializers.ModelSerializer):
         ]
 
 # --- Person Serializer (Crew/Cast) ---
-class Person(serializers.ModelSerializer):
+class PersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Person
         fields = '__all__'
@@ -166,22 +166,28 @@ class GenreSerializer(serializers.ModelSerializer):
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
 
-class ChatMovieCardSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField()
-    title = serializers.CharField()
-    poster_url = serializers.CharField(allow_null=True, required=False)
-    tmdb_id = serializers.IntegerField(allow_null=True, required=False)
-    
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
-    movie = MovieCardSerializer(read_only=True)
+    id = serializers.IntegerField(source="movie.id")
+    title = serializers.CharField(source="movie.title")
+    tmdb_id = serializers.IntegerField(source="movie.tmdb")
+    year = serializers.IntegerField(source="movie.year", allow_null=True)
+    poster_url = serializers.URLField(source="movie.poster_url", allow_null=True)
+    description = serializers.CharField(source="movie.overview", allow_null=True)
+    avg_rating = serializers.FloatField(source="movie.avg_rating", allow_null=True)
+    why = serializers.CharField(source="reason", allow_null=True)
     class Meta:
         model = FilmBank
         fields = [
             "id",
-            "movie",
+            "title",
+            "tmdb_id",
+            "year",
+            "poster_url",
+            "description",
+            "avg_rating",
+            "why",
             "query_text",
-            "reason",
             "created_at",
             "dismissed_at",
         ]
