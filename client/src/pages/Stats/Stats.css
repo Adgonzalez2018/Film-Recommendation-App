@@ -448,6 +448,28 @@ body {
   background: rgba(226, 221, 212, 0.05);
 }
 
+.profile-corner-btn {
+  position: fixed;
+  left: 20px;
+  bottom: 24px;
+  z-index: 40;
+  background: transparent;
+  border: 1px solid rgba(226, 221, 212, 0.2);
+  color: #e2ddd4;
+  padding: 10px 14px;
+  font-family: "Cinzel", serif;
+  font-size: 1rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.profile-corner-btn:hover {
+  border-color: rgba(226, 221, 212, 0.6);
+  background: rgba(226, 221, 212, 0.05);
+}
+
 /* ════════════════════════════════════════════════════════
    DIRECTORY PAGE (directoryStats.js)
 ════════════════════════════════════════════════════════ */

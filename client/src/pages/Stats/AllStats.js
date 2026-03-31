@@ -133,6 +133,9 @@ export default function AllStats() {
         <button className="ctrl-btn" onClick={toggle}>
           {playing ? "⏸ Pause" : "▶ Roll Credits"}
         </button>
+        <button className="profile-corner-btn" onClick={() => navigate("/profile")}>
+          Profile
+        </button>
       </div>
     </div>
   );
