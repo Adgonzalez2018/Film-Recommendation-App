@@ -106,11 +106,9 @@ export default function WeeklyStats() {
       </div>
 
       <div className="controls">
-        <button className="ctrl-btn" onClick={() => navigate("/stats")}>← Back</button>
+        <button className="ctrl-btn" onClick={() => navigate("/stats")}>Back</button>
         <button className="ctrl-btn" onClick={() => navigate("/chat")}>Chat</button>
-        <button className="ctrl-btn" onClick={toggle}>
-          {playing ? "⏸ Pause" : "▶ Roll Credits"}
-        </button>
+        <button className="play-corner-btn" onClick={toggle}>{playing ? "⏸ Pause" : "▶ Roll Credits"}</button>
         <button className="profile-corner-btn" onClick={() => navigate("/profile")}>Profile</button>
       </div>
     </div>
