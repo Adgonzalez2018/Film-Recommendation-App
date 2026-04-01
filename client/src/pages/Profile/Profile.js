@@ -167,7 +167,11 @@ export default function Profile() {
         `RSS linked. Created ${result.events_created ?? 0} watch events.`
       );
     } catch (err) {
-      setRssError(err?.message || "RSS link failed.");
+      const msg = err?.message || "Sync failed. Please try again.";
+      const formatted = msg.includes(":")
+        ? formatCooldownFromHHMMSS(msg)
+        : msg;
+      setRssError(formatted);
     } finally {
       setRssLoading(false);
     }
@@ -185,7 +189,11 @@ export default function Profile() {
         `Sync complete — ${result.events_created ?? 0} new watch events.`
       );
     } catch (err) {
-      setRssError(err?.message || "Sync failed. Please try again.");
+      const msg = err?.message || "Sync failed. Please try again.";
+      const formatted = msg.includes(":")
+        ? formatCooldownFromHHMMSS(msg)
+        : msg;
+      setRssError(formatted);
     } finally {
       setSyncLoading(false);
     }
@@ -219,6 +227,22 @@ export default function Profile() {
     ? `https://letterboxd.com/${letterboxdUsername}/`
     : "";
 
+  function formatCooldownFromHHMMSS(str) {
+    if (!str || !str.includes(":")) return str;
+    const [h,m,s] = str.split(":").map(Number);
+    
+    if (h >= 24) {
+      const days = Math.floor(h / 24);
+      return `Try again in ${days} days${days > 1 ? "s" : ""}`;
+    }
+
+    if (h > 0 && m > 0) return `Try again in ${h}h ${m}m}`;
+    if (h > 0) return `Try again in ${h} hours${h > 1 ? "s" : ""}`;
+    if (m > 0) return `Try again in ${m} min`;
+
+    return "Try again soon";
+  }
+ 
   // ── Auth guards ────────────────────────────────────────
   if (isAuthenticating || profileLoading) {
     return (
