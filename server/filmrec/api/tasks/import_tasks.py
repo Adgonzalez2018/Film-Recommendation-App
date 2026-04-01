@@ -187,7 +187,7 @@ def build_and_index_taste(user_id):
     logger.info(f"[taste task] starting for user_id={user_id}")
     try:
         user = User.objects.get(id=user_id)
-        logger.inf(f"[taste task] found user: {user.username}")
+        logger.info(f"[taste task] found user: {user.username}")
     except User.DoesNotExist:
         logger.error(f"[taste task] User {user_id} not found")
         return
