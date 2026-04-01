@@ -27,7 +27,7 @@ from ..utils.unifiedImportHelper import (
 from ..services.csvImport import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
-from ..tasks.import_tasks import build_and_index_taste
+from ..tasks.import_tasks import build_and_index_taste, _should_rebuild_taste
 
 from ..models import ImportBatch, WatchEvent
 
@@ -155,7 +155,8 @@ def manual_import(request):
             or counters.get("rel_created", 0) > 0
             or counters.get("rel_updated", 0) > 0
         ):
-            build_and_index_taste.delay(request.user.id)
+            if _should_rebuild_taste(request.user.id):
+                build_and_index_taste.delay(request.user.id)
         return Response(
             {
                 "status": "completed",
@@ -201,6 +202,15 @@ def import_rss(request):
             status=status.HTTP_400_BAD_REQUEST,
             )
     
+    existing = ImportBatch.objects.filter(
+        user=request.user,
+        source="rss",
+        status="running",
+    ).exists()
+
+    if existing:
+        return Response({"error": "A sync is already in progress."}, status=status.HTTP_409_CONFLICT)
+        
     now = timezone.now()
     last_switch = request.user.last_rss_account_switch
     username = extract_letterboxd_username(rss_input) or extract_letterboxd_username(rss_url)
@@ -296,7 +306,8 @@ def import_rss(request):
             or (res.rel_created or 0) > 0
             or (res.rel_updated or 0) > 0
         ):
-            build_and_index_taste.delay(request.user.id)
+            if _should_rebuild_taste(request.user.id):
+                build_and_index_taste.delay(request.user.id)
         message = None
         if (res.entries_seen or 0) == 0:
             message = (
