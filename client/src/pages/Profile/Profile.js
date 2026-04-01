@@ -236,7 +236,7 @@ export default function Profile() {
       return `Try again in ${days} days${days > 1 ? "s" : ""}`;
     }
 
-    if (h > 0 && m > 0) return `Try again in ${h}h ${m}m}`;
+    if (h > 0 && m > 0) return `Try again in ${h}h ${m}m`;
     if (h > 0) return `Try again in ${h} hours${h > 1 ? "s" : ""}`;
     if (m > 0) return `Try again in ${m} min`;
 
