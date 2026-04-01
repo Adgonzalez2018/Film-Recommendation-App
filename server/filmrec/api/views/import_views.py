@@ -210,9 +210,11 @@ def import_rss(request):
     if old_username and new_username and old_username != new_username:
         if last_switch and now - last_switch < timedelta(hours=RSS_SWITCH_COOLDOWN_HOURS):
             remaining = timedelta(hours = RSS_SWITCH_COOLDOWN_HOURS) - (now - last_switch)
+            totalSeconds = int(remaining.total_seconds())
             return Response(
                 {
-                    "error": f"You can switch linked Letterboxd accounts again after {remaining}."
+                    "error": "cooldown_active",
+                    "cooldown_seconds": totalSeconds,
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
