@@ -33,7 +33,7 @@ def _cleanup_file(path: str):
             logger.warning("Could not delete temp import file: %s", path)
 
 def _should_rebuild_taste(user_id: int, cooldown_seconds:int=3600) -> bool:
-    key = f"taste_rebuild_lock: {user_id}"
+    key = f"taste_rebuild_lock:{user_id}"
     if cache.get(key):
         return False
     cache.set(key, True, timeout=cooldown_seconds)

@@ -33,14 +33,19 @@ def mu_to_doc(mu, doc_type: str) -> dict:
 
     # directors
     directors = list(
-        mv.director.name if hasattr(mv, 'director') and mv.director else []
+        mv.moviecrew_set
+        .filter(job="Director")
+        .select_related("person")
+        .values_list("person__name", flat=True)
     )
 
     # actors - top 3
     actors = list(
-        mv.actors.order_by('movieactor__cast_order')[:3]
-        .values_list('name', flat=True)
-    ) if hasattr(mv, 'actors') else []
+        mv.moviecast_set
+        .select_related("person")
+        .order_by("order")[:3]
+        .values_list("person__name", flat=True)
+    )
 
     text_lines = [
         "USER_TASTE_EVIDENCE",
@@ -163,8 +168,8 @@ class Command(BaseCommand):
                 .select_related("movie")
                 .prefetch_related(
                     "movie__moviegenre_set__genre",
-                    "movie__director",
-                    "movie__actors",
+                    "movie__moviecrew_set__person",
+                    "movie__movecast_set__person",
                 )
                 )
 
@@ -178,6 +183,13 @@ class Command(BaseCommand):
             disliked = base.filter(rating__lte=DISLIKED_MAX).order_by("-rating", "-watched_date")[:CAP_DISLIKED]
             recent = base.filter(watched_date__isnull=False).order_by("-watched_date")[:CAP_RECENT]
 
+            loved_ids = {mu.movie_id for mu in loved}
+            disliked_ids = {mu.movie_id for mu in disliked}
+            recent = (
+                base.filter(watched_date__isnull=False)
+                .exclude(movie_id__in=loved_ids | disliked_ids)
+                .order_by("-watched_date")[:CAP_RECENT]
+            )
             loved_docs = [mu_to_doc(mu, "loved") for mu in loved]
             disliked_docs = [mu_to_doc(mu, "disliked") for mu in disliked]
             recent_docs = [mu_to_doc(mu, "recent") for mu in recent]
