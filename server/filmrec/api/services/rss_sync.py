@@ -33,11 +33,28 @@ from api.utils.unifiedImportHelper import (
     upsert_watch_event,
     resolve_movie_one,
     makeEventKey,
+    parse_rating,
+    parse_review,
+    parse_rewatch,
     )
 
 logger = logging.getLogger(__name__)
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
 
+def _entry_text(entry) -> str:
+    parts = []
+
+    summary = getattr(entry, "summary", None)
+    if summary:
+        parts.append(summary)
+
+    content = getattr(entry, "content", None) or []
+    for c in content:
+        val = c.get("value") if isinstance(c, dict) else getattr(c, "value", None)
+        if val:
+            parts.append(val)
+
+    return "\n".join(parts)
 
 def _parse_published_date(entry) -> date | None:
     """
@@ -206,6 +223,11 @@ def sync_user_rss_watches(
         link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
         entry_ref = (getattr(entry, "id", "") or getattr(entry, "link","") or "").strip()
+        entry_text = _entry_text(entry)
+        rating = parse_rating(entry_text or title)
+        review = parse_review(entry_text)
+        rewatch = parse_rewatch(entry_text or title)
+        
         logger.warning(
             "RSS entry start user_id=%s idx=%s raw_title=%r raw_link=%r entry_ref=%r",
             user.id,
@@ -334,6 +356,12 @@ def sync_user_rss_watches(
         defaults = {"watch_status": "Watched"}
         if posted_date:
             defaults["watched_date"] = posted_date
+        if rating is not None:
+            defaults["rating"] = rating
+        if review:
+            defaults["review"] = review
+        if rewatch:
+            defaults["rewatch"] = True
         try:
             _, created_mu, changed_mu = upsert_movieuser_snapshot(user, movie, defaults)
         except IntegrityError:

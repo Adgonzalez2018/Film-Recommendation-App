@@ -3,6 +3,7 @@ import re
 from typing import Optional
 import hashlib
 from datetime import date
+from html import unescape
 from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
@@ -12,6 +13,17 @@ from api.models import Movie, WatchEvent, MovieUser, FilmBank
 _USERNAME_RE = re.compile(r"^/([^/]+)/?$")
 _USERNAME_SAFE_RE = re.compile(r"^[A-Za-z0-9_]+$")
 MUST_ENRICH_STATUS = ["pending", "queued", "failed", "not_found"]
+_RATING_PATTERNS = [
+    re.compile(r"★½"),
+    re.compile(r"★"),
+]
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+STAR_VALUE_MAP = {
+    "★": 1.0,
+    "½": 0.5,
+}
 
 @dataclass
 class NormalizedMovieCandidate:
@@ -22,6 +34,35 @@ class NormalizedMovieCandidate:
     weak_uri: Optional[str]
     tmdb_id: Optional[int] = None
 
+def strip_html(text: str | None) -> str:
+    s = unescape(text or "")
+    s = _TAG_RE.sub(" ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def parse_rating(value: str | None) -> float | None:
+    s = unescape((value or "").strip())
+    if not s:
+        return None
+    
+    # extract sequences
+    m = re.search(r"[★½]+", s)
+    if not m:
+        return None
+    
+    stars = m.group(0)
+    total = 0.0
+    for ch in stars:
+        total += STAR_VALUE_MAP.get(ch, 0.0)
+    return total if total > 0 else None
+
+def parse_review(value: str | None) -> str:
+    s = strip_html(value)
+    return s or ""
+
+def parse_rewatch(value: str | None) -> bool:
+    s = (value or "").lower()
+    return "rewatch" in s
 
 def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
     # Returns canonical uri and weak uri

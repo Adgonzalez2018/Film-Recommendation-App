@@ -9,7 +9,9 @@ from ..utils.unifiedImportHelper import (
     makeEventKey,
     resolve_movies_bulk,
     normalize_movie_candidate,
-    needToEnrich
+    needToEnrich,
+    parse_rating,
+    parse_review,
 )
 
 from ..utils.dates import parse_iso_date
@@ -71,8 +73,8 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "uri": row.get("Letterboxd URI"),
                     "posted_date": parse_iso_date(row.get("Date")),
                     "watched_date": parse_iso_date(row.get("Watched Date")),
-                    "rating": parse_float(row.get("Rating")),
-                    "review": (row.get("Review") or "").strip(),
+                    "rating": parse_rating(row.get("Rating")) or parse_float(row.get("Rating")),
+                    "review": parse_review(row.get("Review")),
                     "rewatch": ((row.get("Rewatch") or "").strip().lower() == "yes"),
                     "liked": False,
                     "in_watchlist": False,
