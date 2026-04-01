@@ -68,17 +68,15 @@ async function deleteFilmBankMovie(movieId, token) {
 }
 
 function normalizeFilmBankItem(item) {
-  const movie = item?.movie || {};
-
   return {
     id: item?.id,
-    movieId: movie?.id,
-    title: movie?.title || "Untitled",
-    year: movie?.year ?? null,
-    poster: movie?.poster_url || null,
-    tmdbId: movie?.tmdb_id ?? null,
-    description: movie?.description || "",
-    avgRating: movie?.avg_rating ?? null,
+    movieId: item?.id,
+    title: item?.title || "Untitled",
+    year: item?.year ?? null,
+    poster: item?.poster_url || null,
+    tmdbId: item?.tmdb_id ?? null,
+    description: item?.description || "",
+    avgRating: item?.avg_rating ?? null,
     reason: item?.reason || "",
     queryText: item?.query_text || "",
     createdAt: item?.created_at || null,
@@ -272,7 +270,7 @@ const Chat = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-actions">
-            <button className="sidebar-action-button" onClick={() => setBankOpen(True)}>
+            <button className="sidebar-action-button" onClick={() => setBankOpen(true)}>
               Film Bank
               {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
             </button>
