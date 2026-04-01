@@ -21,6 +21,9 @@ function extractErrorMessage(fallback, data) {
   return fallback;
 }
 
+const STORAGE_KEY = "filmrec_chats"
+
+
 async function sendChatMessage(message, token) {
   const res = await apiFetch("/api/chat/recommend/", {
     token,
@@ -111,9 +114,8 @@ const Chat = () => {
 
   const [messages, setMessages] = useState([INITIAL_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState("");
-  const [chatHistory, setChatHistory] = useState([
-    { id: 1, title: "New conversation", date: "Today", active: true },
-  ]);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [filmBank, setFilmBank] = useState([]);
@@ -157,6 +159,45 @@ const Chat = () => {
     loadFilmBank();
   }, [accessToken]);
 
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setChatHistory(parsed.chats || []);
+      setActiveChatId(parsed.activeChatId);
+
+      const activeChat = parsed.chats?.find(c => c.id == parsed.activeChatId);
+      setMessages(activeChat?.messages || [INITIAL_ASSISTANT_MESSAGE]);
+    } else {
+      // first time user
+      const initialChat = {
+        id: Date.now(),
+        title: "New Conversation",
+        messages: [INITIAL_ASSISTANT_MESSAGE],
+        createdAt: new Date(),
+      };
+      setChatHistory([initialChat]);
+      setActiveChatId(initialChat.id);
+      setMessages(initialChat.messages);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    
+    const updatedChats = chatHistory.map(chat =>
+      chat.id === activeChatId ? { ...chat, messages } : chat
+    );
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        chats: updatedChats,
+        activeChatId,
+      })
+    );
+
+  }, [messages, chatHistory, activeChatId]);
   const handleRemoveFromBank = async (movieId) => {
     if (!movieId || !accessToken) return;
 
@@ -189,6 +230,13 @@ const Chat = () => {
     setInput("");
     setIsLoading(true);
 
+    setChatHistory(prev => 
+      prev.map(chat =>
+        chat.id === activeChatId && chat.title === "New conversation"
+        ? { ...chat, title: trimmed.slice(0,30) }
+        : chat
+      )
+    );
     try {
       const data = await sendChatMessage(trimmed, accessToken);
 
@@ -227,19 +275,23 @@ const Chat = () => {
 
   const handleNewChat = () => {
     const newChat = {
-      id: chatHistory.length + 1,
-      title: "New conversation",
-      date: "Today",
-      active: true,
+      id: Date.now(),
+      title: "New Conversation",
+      messages: [INITIAL_ASSISTANT_MESSAGE],
+      createdAt: new Date(),
     };
 
-    setChatHistory([newChat, ...chatHistory.map((c) => ({ ...c, active: false }))]);
-    setMessages([INITIAL_ASSISTANT_MESSAGE]);
-    setInput("");
+    setChatHistory(prev => [newChat, ...prev]);
+    setActiveChatId(newChat.id);
+    setMessages(newChat.messages);
   };
 
   const handleChatSelect = (chatId) => {
-    setChatHistory((prev) => prev.map((c) => ({ ...c, active: c.id === chatId })));
+    const selected = chatHistory.find(c => c.id === chatId);
+    if (!selected) return;
+
+    setActiveChatId(chatId);
+    setMessages(selected.messages);
   };
 
   if (isAuthenticating) {
