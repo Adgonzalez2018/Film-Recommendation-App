@@ -227,13 +227,22 @@
 }
 
 /* Profile bottom */
-.profile-section {
+.sidebar .profile-section {
   margin-top: auto;
-  padding: 8px 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
   border-top: 1px solid var(--border-color);
+  padding: 8px 6px;
+  cursor: pointer;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.sidebar .profile-section:hover {
+  opacity: 0.9;
 }
 
 .profile-avatar {
