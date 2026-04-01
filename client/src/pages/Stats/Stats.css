@@ -70,16 +70,17 @@ body {
 .stage {
   max-width: 500px;
   margin: 0 auto;
-  padding: 100vh 24px 100vh;
+  padding: 24px 24px 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
 }
 
 /* ── SECTION 1: big watch count ── */
 .s-watches {
-  padding: 0 0 90px;
+  padding: 0 0 48px;
   display: flex;
   flex-direction: column;
   align-items: center;
