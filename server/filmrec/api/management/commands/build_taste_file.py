@@ -13,9 +13,9 @@ LOVED_MIN = 4.0
 DISLIKED_MAX = 2.5
 
 # Wide range of users have a cap based on size of movie list
-CAP_LOVED = 250
-CAP_DISLIKED = 150
-CAP_RECENT = 75
+CAP_LOVED = 100
+CAP_DISLIKED = 60
+CAP_RECENT = 20
 
 def mu_to_doc(mu, doc_type: str) -> dict:
     mv = mu.movie
