@@ -76,7 +76,7 @@ def tmdb_get(path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, An
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(
-            f"TMDB HTTP error {r.status_code}: {url}"
+            f"TMDB HTTP error {r.status_code}: {url} - {r.text[:200]}"
         ) from e
     
     return r.json()
@@ -347,6 +347,7 @@ def _bulk_upsert_persons(tmdb_ids: list, name_url_by_tmdb_id: dict) -> None:
     to_update = []
     for tmdb_pid in tmdb_ids:
         name, profile_url = name_url_by_tmdb_id[tmdb_pid]
+        changed = False
         if tmdb_pid in existing:
             p = existing[tmdb_pid]
             if p.name != name:

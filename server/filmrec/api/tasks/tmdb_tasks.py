@@ -111,7 +111,7 @@ def enrich_movie_chunk(movie_ids: list, batch_id=None):
             # log and continue - one bad movie doesn't abort chunk
             # mark it's failure
             logger.exception("Chunk: movie_id=%s failed, continuing", movie_id)
-            time.sleep(_INTER_MOVIE_DELAY)
+        time.sleep(_INTER_MOVIE_DELAY)
 
 
 def enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=None, chunk_size: int = 25):
@@ -132,7 +132,7 @@ def enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=None, chunk_size: int
     # BUG FIX: original chunked from unique ids after filtering to pending ids
     # # so alr enriched movies re entered the queue. 
     for i in range(0, len(pending_ids), chunk_size):
-        chunk = unique_ids[i: i + chunk_size]
+        chunk = pending_ids[i: i + chunk_size]
         enrich_movie_chunk.apply_async(args=[chunk], kwargs={"batch_id": batch_id}, queue="tmdb")
 
 # --- internal helpers ---
@@ -149,4 +149,4 @@ def _inc_batch(batch_id, *, done: bool):
     if done:
         ImportBatch.objects.filter(id=batch_id).update(tmdb_done=F("tmdb_done")+1)
     else:
-        ImportBatch.objects.filter(id=batch_id).update(tmdb_failed=F("tmdb_failed)")+1)
+        ImportBatch.objects.filter(id=batch_id).update(tmdb_failed=F("tmdb_failed")+1)
