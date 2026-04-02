@@ -321,7 +321,8 @@ def import_rss(request):
             or (res.rel_updated or 0) > 0
         ):
             if _should_rebuild_taste(request.user.id):
-                build_and_index_taste.delay(request.user.id)
+                result = build_and_index_taste.delay(request.user.id)
+                print("TASTE TASK ENQUEUED", {"task_id": result.id, "user_id": request.user.id})
         message = None
         if (res.entries_seen or 0) == 0:
             message = (

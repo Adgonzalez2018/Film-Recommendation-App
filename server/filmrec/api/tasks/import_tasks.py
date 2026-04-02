@@ -32,7 +32,7 @@ def _cleanup_file(path: str):
         except Exception:
             logger.warning("Could not delete temp import file: %s", path)
 
-def _should_rebuild_taste(user_id: int, cooldown_seconds:int=3600) -> bool:
+def _should_rebuild_taste(user_id: int, cooldown_seconds:int=5) -> bool:
     key = f"taste_rebuild_lock:{user_id}"
     if cache.get(key):
         return False
@@ -184,6 +184,8 @@ def run_rss_import_job(batch_id: int):
 
 @shared_task
 def build_and_index_taste(user_id):
+    print("[taste task] START ...", flush=True)
+    logger.warning("[taste task] START ...")
     logger.info(f"[taste task] starting for user_id={user_id}")
     try:
         user = User.objects.get(id=user_id)
