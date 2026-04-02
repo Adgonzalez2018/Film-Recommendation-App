@@ -14,7 +14,7 @@ from celery import shared_task
 from ..models import Movie, ImportBatch
 from ..services.tmdb import upsert_tmdb_movie, attach_tmdb_to_movie, find_best_tmdb_movie_match
 
-@shared_task
+@shared_task(queue="tmdb")
 def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
     movie = Movie.objects.get(id=movie_id)
 
@@ -80,7 +80,7 @@ def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
             ImportBatch.objects.filter(id=batch_id).update(tmdb_failed=F('tmdb_failed') + 1)
         raise
 
-@shared_task
+@shared_task(queue="tmdb")
 def enrich_movie_chunk(movie_ids, batch_id=None):
     for movie_id in movie_ids:
         enrich_movie_from_tmdb.run(movie_id, batch_id=batch_id)
