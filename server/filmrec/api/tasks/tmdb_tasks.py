@@ -35,7 +35,7 @@ _INTER_MOVIE_DELAY = .3
         # Don't autoretry on Validation Error - those are perma failures
         dont_autoretry_for=(ValidationError,),
 )
-def enrich_movie_from_tmdb(movie_id: int, batch_id=None):
+def enrich_movie_from_tmdb(self, movie_id: int, batch_id=None):
     try:
         movie = Movie.objects.get(id=movie_id)
     except Movie.DoesNotExist:
