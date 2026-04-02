@@ -212,17 +212,13 @@
   color: var(--text-secondary);
 
   display: -webkit-box;
-  display: box; /* optional fallback */
-
   -webkit-box-orient: vertical;
-  box-orient: vertical;
-
   -webkit-line-clamp: 5;
-  line-clamp: 5;
 
   overflow: hidden;
+  text-align: left;
+  margin-top: 4px;
 }
-
 /* mobile */
 @media (max-width: 900px) {
   .chat-recommendations-grid {
