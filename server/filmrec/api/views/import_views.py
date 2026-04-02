@@ -27,8 +27,10 @@ from ..utils.unifiedImportHelper import (
 from ..services.csvImport import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
-from ..tasks.import_tasks import build_and_index_taste, _should_rebuild_taste
-
+from ..tasks.import_tasks import (
+    build_and_index_taste,
+    enqueue_taste_rebuild,
+)
 from ..models import ImportBatch, WatchEvent
 
 
@@ -148,15 +150,8 @@ def manual_import(request):
             "last_sync", 
             "last_manual_sync",
         ])
-
         # build taste summary if events are made
-        if (
-            counters.get("events_created", 0) > 0
-            or counters.get("rel_created", 0) > 0
-            or counters.get("rel_updated", 0) > 0
-        ):
-            if _should_rebuild_taste(request.user.id):
-                build_and_index_taste.delay(request.user.id)
+        taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, counters)
         return Response(
             {
                 "status": "completed",
@@ -170,8 +165,10 @@ def manual_import(request):
                 "tmdb_queued": batch.tmdb_queued,
                 "tmdb_done": batch.tmdb_done,
                 "tmdb_failed": batch.tmdb_failed,
+                "taste_rebuild_queued": taste_rebuild_queued,
+                "taste_rebuild_reason": taste_reason
             },
-            status=status.HTTP_202_ACCEPTED,
+            status=status.HTTP_200_OK,
         )
     except Exception as e:
         batch.status = "failed"
@@ -220,9 +217,11 @@ def import_rss(request):
     if old_username and new_username and old_username != new_username:
         if last_switch and now - last_switch < timedelta(hours=RSS_SWITCH_COOLDOWN_HOURS):
             remaining = timedelta(hours = RSS_SWITCH_COOLDOWN_HOURS) - (now - last_switch)
+            cooldown_seconds = max(0, int(remaining.total_seconds()))
             return Response(
                 {
-                    "error": f"You can switch linked Letterboxd accounts again after {remaining}."
+                    "error": "cooldown_active",
+                    "cooldown_seconds": cooldown_seconds,
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
@@ -238,7 +237,7 @@ def import_rss(request):
     batch = ImportBatch.objects.create(
         user=request.user,
         source="rss",
-        status="queued",
+        status="running",
         rss_input=rss_input,
     )
 
@@ -299,13 +298,7 @@ def import_rss(request):
         ])
 
         # build taste summary if events are made
-        if (
-            (res.events_created or 0) > 0
-            or (res.rel_created or 0) > 0
-            or (res.rel_updated or 0) > 0
-        ):
-            if _should_rebuild_taste(request.user.id):
-                build_and_index_taste.delay(request.user.id)
+        taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, res, is_res=True)
         message = None
         if (res.entries_seen or 0) == 0:
             message = (
@@ -325,6 +318,8 @@ def import_rss(request):
                         "tmdb_done": batch.tmdb_done,
                         "tmdb_failed": batch.tmdb_failed,
                         "entries_seen": res.entries_seen,
+                        "taste_rebuild_queued": taste_rebuild_queued,
+                        "taste_rebuild_reason": taste_reason,
                         "message": message,
                     },
                     status=status.HTTP_200_OK,
@@ -419,9 +414,14 @@ def skip_onboarding(request):
 def rebuild_taste(request):
     # Manual Trigger for taste building (debug)
     try:
-        build_and_index_taste.delay(request.user.id)
+        result = build_and_index_taste.delay(request.user.id)
         return Response(
-            {"statuts": "queued", "message": "taste rebuild queued. Check Celery logs."},
+            {
+                "status": "queued", 
+                "task": "taste_rebuild",
+                "task_id": result.id,
+                "message": "taste rebuild queued. Check Celery logs."
+            },
             status=status.HTTP_202_ACCEPTED,
         )
     except Exception as e:

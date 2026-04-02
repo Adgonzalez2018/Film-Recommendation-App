@@ -25,27 +25,20 @@ def mu_to_doc(mu, doc_type: str) -> dict:
     rating = getattr(mu, "rating", None)
 
     # Genres
-    genres = list(
-        mv.moviegenre_set
-        .select_related("genre")
-        .values_list("genre__name", flat=True)
-    )
-
+    genres = [mg.genre.name for mg in mv.moviegenre_set.all() if mg.genre_id]
     # directors
-    directors = list(
-        mv.moviecrew_set
-        .filter(job="Director")
-        .select_related("person")
-        .values_list("person__name", flat=True)
-    )
+    directors = [
+        mc.person.name
+        for mc in mv.moviecrew_set.all()
+        if mc.job == "Director" and mc.person_id
+    ]
 
     # actors - top 3
-    actors = list(
-        mv.moviecast_set
-        .select_related("person")
-        .order_by("order")[:3]
-        .values_list("person__name", flat=True)
-    )
+    actors = [
+        mc.person.name
+        for mc in sorted(mv.moviecast_set.all(), key=lambda x: x.order)[:3]
+        if mc.person_id
+    ]
 
     text_lines = [
         "USER_TASTE_EVIDENCE",
@@ -161,8 +154,10 @@ class Command(BaseCommand):
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"taste_user_{user_id}.txt"
 
+        # optimizeation: single queryset with all prefetches - evaluated once,
+        # then sliced in Python. Eliminates the 3 separate DB round-trips.
         try:
-            base = (
+            all_rated = list(
                 MovieUser.objects
                 .filter(user_id=user_id)
                 .select_related("movie")
@@ -171,28 +166,29 @@ class Command(BaseCommand):
                     "movie__moviecrew_set__person",
                     "movie__moviecast_set__person",
                 )
-                )
-
-            if not base.exists():
-                self.stdout.write(
-                    self.style.WARNING(f"User {user_id} has no rated movies.")
-                )
-                return
-            
-            loved = base.filter(rating__gte=LOVED_MIN).order_by("-rating", "-watched_date")[:CAP_LOVED]
-            disliked = base.filter(rating__lte=DISLIKED_MAX).order_by("-rating", "-watched_date")[:CAP_DISLIKED]
-            recent = base.filter(watched_date__isnull=False).order_by("-watched_date")[:CAP_RECENT]
-
-            loved_ids = {mu.movie_id for mu in loved}
-            disliked_ids = {mu.movie_id for mu in disliked}
-            recent = (
-                base.filter(watched_date__isnull=False)
-                .exclude(movie_id__in=loved_ids | disliked_ids)
-                .order_by("-watched_date")[:CAP_RECENT]
+                .order_by("-rating", "-watched_date")
+                [: CAP_LOVED + CAP_DISLIKED + CAP_RECENT + 50] # small headroom
             )
-            loved_docs = [mu_to_doc(mu, "loved") for mu in loved]
-            disliked_docs = [mu_to_doc(mu, "disliked") for mu in disliked]
-            recent_docs = [mu_to_doc(mu, "recent") for mu in recent]
+
+            if not all_rated:
+                self.stdout.write(self.style.WARNING(f"User {user_id} has no rated movies."))
+                return
+
+            loved_mus = [mu for mu in all_rated if (mu.rating or 0) >= LOVED_MIN][:CAP_LOVED]
+            disliked_mus = [mu for mu in all_rated if (mu.rating or 0) <= DISLIKED_MAX][:CAP_DISLIKED]
+
+            loved_ids = {mu.movie_id for mu in loved_mus}
+            disliked_ids = {mu.movie_id for mu in disliked_mus}
+            excluded = loved_ids | disliked_ids
+            recent_mus = sorted(
+                [mu for mu in all_rated if mu.watched_date and mu.movie_id not in excluded],
+                key=lambda mu:mu.watched_date,
+                reverse=True
+            )[:CAP_RECENT]
+
+            loved_docs = [mu_to_doc(mu, "loved") for mu in loved_mus]
+            disliked_docs = [mu_to_doc(mu, "disliked") for mu in disliked_mus]
+            recent_docs = [mu_to_doc(mu, "recent") for mu in recent_mus]
 
             summary_doc = build_summary(loved_docs, disliked_docs, recent_docs)
 
