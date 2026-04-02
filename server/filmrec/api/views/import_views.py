@@ -149,6 +149,13 @@ def manual_import(request):
             "last_manual_sync",
         ])
 
+        print("TASTE GATE", {
+            "user_id": request.user.id,
+            "events_created": counters.get("events_created", 0),
+            "rel_created": counters.get("rel_created", 0),
+            "rel_updated": counters.get("rel_updated", 0),
+            "should_rebuild": _should_rebuild_taste(request.user.id),
+        })
         # build taste summary if events are made
         if (
             counters.get("events_created", 0) > 0
@@ -300,6 +307,13 @@ def import_rss(request):
             "last_rss_sync",
         ])
 
+        print("TASTE GATE RSS", {
+            "user_id": request.user.id,
+            "events_created": res.events_created or 0,
+            "rel_created": res.rel_created or 0,
+            "rel_updated": res.rel_updated or 0,
+            "should_rebuild": _should_rebuild_taste(request.user.id),
+        })
         # build taste summary if events are made
         if (
             (res.events_created or 0) > 0

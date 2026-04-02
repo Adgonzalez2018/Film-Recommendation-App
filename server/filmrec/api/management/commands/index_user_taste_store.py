@@ -26,7 +26,8 @@ class Command(BaseCommand):
 
         # Create store if missing
         if not store_id:
-            vs = client.vector_stores.create(name=f"{opts['name-prefix']} (user={user.id})")
+            name_prefix = opts.get("name_prefix", "FilmRec Taste Store")
+            vs = client.vector_stores.create(name=f"{name_prefix} (user={user.id})")
             store_id = vs.id
             user.taste_vector_store_id = store_id
             user.save(update_fields=["taste_vector_store_id"])

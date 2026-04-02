@@ -216,7 +216,7 @@ def build_and_index_taste(user_id):
             logger.info(f"[taste task] Complete for user_id={user_id}")
             print(f"[taste task] done user_id={user_id}")
         except Exception as e:
-            logger.exception(f"[taste task] fialed for user_id={user_id}: {str(e)}")
+            logger.exception(f"[taste task] failed for user_id={user_id}: {str(e)}")
             raise
 
 # only used if async?
