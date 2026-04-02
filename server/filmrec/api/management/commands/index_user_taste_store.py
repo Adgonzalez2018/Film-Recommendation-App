@@ -1,11 +1,20 @@
 # Vector store per Movie
 from pathlib import Path
 from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 User = get_user_model()
+# tune based on your OpenAI rate limits. 10 is a safe default;
+# raise to 20 if you're on a higher tier
+DELETE_WORKERS = 10
+
+def _delete_file(client: OpenAI, store_id: str, file_id: str) -> str:
+    # Delete a single vector store file. Returns file_id on success
+    client.vector_stores.files.delete(vector_store_id=store_id,file_id=file_id)
+    return file_id
 
 class Command(BaseCommand):
     help = "Create/Update a user's taste vector store from taste_user_id.txt"
@@ -35,16 +44,34 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS(f"Using taste vector store: {store_id}"))
 
-        # delete existing files in this user's taste store
+        # delete ALL existing files in parallel instead of serially
+        # with 10 works and ~50 old files this goes from ~50s -> 50s
         try:
             existing = client.vector_stores.files.list(vector_store_id=store_id)
-            for vf in existing.data:
-                client.vector_stores.files.delete(
-                    vector_store_id=store_id,
-                    file_id=vf.id,
-                )
-            self.stdout.write(self.style.SUCCESS("Cleared old taste files from vector store."))
+            file_ids = [vf.id for vf in existing.data]
+            if file_ids:
+                failed = []
+                with ThreadPoolExecutor(max_workers=DELETE_WORKERS) as pool:
+                    futures = {
+                        pool.submit(_delete_file, client, store_id, fid): fid
+                        for fid in file_ids
+                    }
+                    for future in as_completed(futures):
+                        fid = futures[future]
+                        try:
+                            future.result()
+                        except Exception as exc:
+                            failed.append((fid, str(exc)))
 
+                    if failed:
+                        raise RuntimeError(
+                            f"Failed to delete {len(failed)} file(s): {failed}"
+                        )
+                    self.stdout.write(
+                        self.style.SUCCESS(f"Delete {len(file_ids)} old file(s) in parallel")
+                    )
+            else:
+                self.stdout.write(self.style.SUCCESS("No existing files to clear."))
         except Exception as e:
             raise RuntimeError(f"Failed clearing existing taste store files: {e}")
         

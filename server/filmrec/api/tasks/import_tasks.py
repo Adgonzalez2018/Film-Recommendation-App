@@ -8,7 +8,6 @@ Import Tasks runs
 import os
 import tempfile
 import logging
-import tempfile
 
 from celery import shared_task
 
@@ -25,6 +24,11 @@ from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+# Optimization: Raised from 5s to 30s
+# tasks (e.g. onboarding RSS + CSV) could both slip through if the scheduler
+# queues them more than 5 s apart. 30 s gives real protection.
+_TASTE_REBUILD_COOLDOWN = 30
+
 def _cleanup_file(path: str):
     if path and os.path.exists(path):
         try:
@@ -32,12 +36,82 @@ def _cleanup_file(path: str):
         except Exception:
             logger.warning("Could not delete temp import file: %s", path)
 
-def _should_rebuild_taste(user_id: int, cooldown_seconds:int=5) -> bool:
+def should_rebuild_taste(user_id: int) -> bool:
     key = f"taste_rebuild_lock:{user_id}"
-    if cache.get(key):
-        return False
-    cache.set(key, True, timeout=cooldown_seconds)
-    return True
+    # add_* is atomic in all Django cache backends; returns True only when
+    # the key was absent (i.e. this is the first caller within the window)
+    return cache.add(key, True, timeout=_TASTE_REBUILD_COOLDOWN)
+
+def has_new_data(counters_or_res, *, is_res=False) -> bool:
+    # return true if the import produced anything worht re-indexing
+    if is_res:
+        return (
+        (counters_or_res.events_created or 0) > 0
+        or (counters_or_res.rel_created or 0) > 0
+        or (counters_or_res.rel_updated or 0) > 0
+        )
+    return (
+        counters_or_res.get("events_created", 0) > 0
+        or counters_or_res.get("rel_created", 0) > 0
+        or counters_or_res.get("rel_updated", 0) > 0
+    )
+
+def enqueue_taste_rebuild(user_id: int, result, *, is_res=False) -> bool:
+    # rebuild if needed
+    if not has_new_data(result, is_res=is_res):
+        logger.info("taste rebuild skipped (no new data) user=%s", user_id)
+        return False, "no_new_data"
+    if not should_rebuild_taste(user_id):
+        logger.info("taste rebuild skipped (cooldown) user=%s", user_id)
+        return False, "cooldown"
+    
+    build_and_index_taste.delay(user_id)
+    logger.info("taste rebuild queued user=%s", user_id)
+    return True, "queued"
+
+        
+@shared_task(queue="taste")
+def build_and_index_taste(user_id):
+    logger.warning(f"[taste task] starting for user_id={user_id}")
+    try:
+        user = User.objects.get(id=user_id)
+        logger.info(f"[taste task] found user: {user.username}")
+    except User.DoesNotExist:
+        logger.error(f"[taste task] User {user_id} not found")
+        return
+    
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        filename = f"taste_user_{user_id}.txt"
+        file_path = os.path.join(tmp_dir, filename)
+
+        try:
+            logger.info(f"[taste task] building file for user_id={user_id} -> {file_path}")
+            call_command("build_taste_file", user_id=user_id, out=tmp_dir)
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Taste file was not created: {file_path}")
+            
+            file_size = os.path.getsize(file_path)
+            logger.info(f"[taste task] File created successfully. Size:{file_size} bytes")
+
+            logger.info(f"[taste task] Indexing vector store for user_id={user_id}")
+            call_command(
+                "index_user_taste_store",
+                user_id=user_id,
+                file=file_path,
+            )
+            logger.info(f"[taste task] Complete for user_id={user_id}")
+            print(f"[taste task] done user_id={user_id}")
+        except Exception as e:
+            logger.exception(f"[taste task] failed for user_id={user_id}: {str(e)}")
+            raise
+
+# only used if async?
+def enqueue_csv_import(batch_id: int):
+    run_csv_import_job.delay(batch_id)
+
+def enqueue_rss_import(batch_id: int):
+    run_rss_import_job.delay(batch_id)
+
 
 @shared_task
 def run_csv_import_job(batch_id: int):
@@ -93,20 +167,13 @@ def run_csv_import_job(batch_id: int):
 
         # If any of new stuff has been created we build and index the user's taste summary
         # this mitigates any overlap between running the inital onboarding rss and csv import
-        if (
-            counters.get("events_created", 0) > 0
-            or counters.get("rel_created", 0) > 0
-            or counters.get("rel_updated", 0) > 0
-        ):
-            if _should_rebuild_taste(batch.user.id):
-                build_and_index_taste.delay(batch.user.id)
-            else:
-                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
-
+        if has_new_data(counters):
+            enqueue_taste_rebuild(batch.user.id)
         user = batch.user
         user.manual_import_count = (user.manual_import_count or 0) + 1
         user.last_sync = timezone.now()
-        user.save(update_fields=["manual_import_count", "last_sync"])
+        user.last_manual_sync = timezone.now()
+        user.save(update_fields=["manual_import_count", "last_sync", "last_manual_sync"])
 
     except Exception as e:
         logger.exception("CSV import failed batch_id=%s", batch_id)
@@ -159,20 +226,13 @@ def run_rss_import_job(batch_id: int):
             user = batch.user
             user.rss_import_count = (user.rss_import_count or 0) + 1
             user.last_sync = timezone.now()
-            user.save(update_fields=["rss_import_count", "last_sync"])
+            user.last_rss_sync = timezone.now()
+            user.save(update_fields=["rss_import_count", "last_sync","last_rss_sync"])
 
         # If any of new stuff has been created we build and index the user's taste summary
         # this mitigates any overlap between running the inital onboarding rss and csv import
-        if (
-        (res.events_created or 0) > 0
-        or (res.rel_created or 0) > 0
-        or (res.rel_updated or 0) > 0
-        ):
-            if _should_rebuild_taste(batch.user.id):
-                build_and_index_taste.delay(batch.user.id)
-            else:
-                logger.info("taste rebuild skipped (cooldown) user=%s", batch.user.id)
-                
+        if has_new_data(res):
+            enqueue_taste_rebuild(batch.user.id)
 
     except Exception as e:
         logger.exception("RSS import failed batch_id=%s", batch_id)
@@ -180,50 +240,3 @@ def run_rss_import_job(batch_id: int):
         batch.finished_at = timezone.now()
         batch.error_message = str(e)
         batch.save(update_fields=["status", "finished_at", "error_message"])
-
-
-@shared_task
-def build_and_index_taste(user_id):
-    print("[taste task] START ...", flush=True)
-    logger.warning("[taste task] START ...")
-    logger.info(f"[taste task] starting for user_id={user_id}")
-    try:
-        user = User.objects.get(id=user_id)
-        logger.info(f"[taste task] found user: {user.username}")
-    except User.DoesNotExist:
-        logger.error(f"[taste task] User {user_id} not found")
-        return
-    
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        filename = f"taste_user_{user_id}.txt"
-        file_path = os.path.join(tmp_dir, filename)
-
-        try:
-
-            logger.info(f"[taste task] building file for user_id={user_id} -> {file_path}")
-            call_command("build_taste_file", user_id=user_id, out=tmp_dir)
-            if not os.path.exists(file_path):
-                logger.error(f"[taste task] File not created: {file_path}")
-                raise FileNotFoundError(f"Taste file was not created: {file_path}")
-            
-            file_size = os.path.getsize(file_path)
-            logger.info(f"[taste task] File created successfully. Size:{file_size} bytes")
-
-            logger.info(f"[taste task] Indexing vector store for user_id={user_id}")
-            call_command(
-                "index_user_taste_store",
-                user_id=user_id,
-                file=file_path,
-            )
-            logger.info(f"[taste task] Complete for user_id={user_id}")
-            print(f"[taste task] done user_id={user_id}")
-        except Exception as e:
-            logger.exception(f"[taste task] failed for user_id={user_id}: {str(e)}")
-            raise
-
-# only used if async?
-def enqueue_csv_import(batch_id: int):
-    run_csv_import_job.delay(batch_id)
-
-def enqueue_rss_import(batch_id: int):
-    run_rss_import_job.delay(batch_id)
