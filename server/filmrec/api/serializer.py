@@ -168,14 +168,14 @@ class ChatRequestSerializer(serializers.Serializer):
 
 # --- FilmBank Serializer ---
 class FilmBankSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(source="movie.id")
-    title = serializers.CharField(source="movie.title")
-    tmdb_id = serializers.IntegerField(source="movie.tmdb")
-    year = serializers.IntegerField(source="movie.year", allow_null=True)
-    poster_url = serializers.URLField(source="movie.poster_url", allow_null=True)
-    description = serializers.CharField(source="movie.overview", allow_null=True)
-    avg_rating = serializers.FloatField(source="movie.avg_rating", allow_null=True)
-    why = serializers.CharField(source="reason", allow_null=True)
+    id = serializers.IntegerField(source="movie.id", read_only=True)
+    title = serializers.CharField(source="movie.title", read_only=True)
+    tmdb_id = serializers.IntegerField(source="movie.tmdb_id", read_only=True)
+    year = serializers.IntegerField(source="movie.year", allow_null=True, read_only=True)
+    poster_url = serializers.URLField(source="movie.poster_url", allow_null=True, read_only=True)
+    description = serializers.CharField(source="movie.overview", allow_null=True, read_only=True)
+    avg_rating = serializers.FloatField(source="movie.avg_rating", allow_null=True, read_only=True)
+    why = serializers.CharField(source="reason", allow_null=True, read_only=True)
     class Meta:
         model = FilmBank
         fields = [
