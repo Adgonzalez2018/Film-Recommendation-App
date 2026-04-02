@@ -106,7 +106,7 @@ def enrich_movie_chunk(movie_ids: list, batch_id=None):
     """
     for movie_id in movie_ids:
         try:    
-            enrich_movie_from_tmdb.run(movie_id, batch_id=batch_id)
+            enrich_movie_from_tmdb.run(movie_id=movie_id, batch_id=batch_id)
         except Exception:
             # log and continue - one bad movie doesn't abort chunk
             # mark it's failure
