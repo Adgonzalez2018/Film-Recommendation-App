@@ -169,7 +169,7 @@ class Command(BaseCommand):
                 .prefetch_related(
                     "movie__moviegenre_set__genre",
                     "movie__moviecrew_set__person",
-                    "movie__movecast_set__person",
+                    "movie__moviecast_set__person",
                 )
                 )
 
