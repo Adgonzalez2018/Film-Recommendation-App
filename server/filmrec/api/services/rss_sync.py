@@ -9,10 +9,7 @@ RSS Import
     - Only does ~50 movies (Or last known watch date)
     - Used for Weekly Syncs
 """
-
-
 from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import timedelta, date, datetime
 from email.utils import parsedate_to_datetime
@@ -37,7 +34,6 @@ from api.utils.unifiedImportHelper import (
 
 logger = logging.getLogger(__name__)
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
-
 
 def _parse_published_date(entry) -> date | None:
     """
@@ -98,7 +94,6 @@ class RSSSyncResult:
     stopped_early: bool = False
     error: Optional[str] = None
     movie_ids_to_enrich: list[int] | None = None
-
 
 def sync_user_rss_watches(
     user: User,
@@ -179,7 +174,6 @@ def sync_user_rss_watches(
         )
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
-
     # unique set of event keys alr in user's watchevent table
     existing_event_keys = set(
         WatchEvent.objects.filter(user=user, source="rss")
@@ -202,6 +196,7 @@ def sync_user_rss_watches(
         cutoff_date,
         cutoff_buffer_days,
     )
+
     for idx, entry in enumerate(entries, start=1):
         link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
@@ -218,27 +213,16 @@ def sync_user_rss_watches(
         if not link:
             logger.info("RSS skip no link user_id=%s idx=%s", user.id, idx)
             continue
+        logger.info("RSS raw entry link user_id=%s title=%r raw_link=%r", user.id, title, link,)
 
-        logger.info(
-            "RSS raw entry link user_id=%s title=%r raw_link=%r",
-            user.id,
-            title,
-            link,
-        )
         link = normalize_letterboxd_uri(link)
-        logger.info(
-            "RSS normalized entry link user_id=%s normalized_link=%r",
-            user.id,
-            link,
-        )
+        logger.info("RSS normalized entry link user_id=%s normalized_link=%r", user.id, link,)
         if not link:
             logger.info("RSS skip bad normalized link user_id=%s idx=%s", user.id, idx)
             continue
         
         res.entries_seen += 1
-
         posted_date = _parse_published_date(entry)  # date | None
-
         logger.info(
             "RSS entry parsed user_id=%s, idx=%s title=%r norm_link=%r posted_date=%r",
             user.id,
@@ -247,6 +231,7 @@ def sync_user_rss_watches(
             link,
             posted_date
         )
+        
         # stop on cutoff (entries are newest first)
         if cutoff_date and posted_date and posted_date <= cutoff_date:
             res.stopped_early = True

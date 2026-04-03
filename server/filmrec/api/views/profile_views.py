@@ -2,7 +2,9 @@
 """
 Endpoints for Profile.js
 Loads Profile Info
-Allows user to set letterboxd rss link
+
+Gives User another chance to Manually Import Or Add their RSS Link
+Allows User to give Birthday, and First Name
 """
 import logging
 from rest_framework.decorators import api_view, permission_classes
@@ -19,18 +21,15 @@ logger = logging.getLogger(__name__)
 @permission_classes([IsAuthenticated])
 def profileView(request):
     user = request.user
-
     try:
         if request.method == "GET":
            logger.info("PROFILE GET User=%s", user.id)
            data = ProfileSerializer(user).data
            logger.info("PROFILE GET success user=%s", user.id)
            return Response(data, status=status.HTTP_200_OK)
-      
-      
+        
         # PATCH
         logger.info("PROFILE PATCH user=%s payload =%s", user.id, request.data)
-      
         # if update then reset last sync and their taste summer store id
         if "rss" in request.data:
             logger.info("PROFILE PATCH rss reset user=%s", user.id)

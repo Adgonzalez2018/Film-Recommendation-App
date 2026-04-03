@@ -34,8 +34,6 @@ def week_window_sunday_anchor(now=None):
     )
 
     curr_end = curr_start + timedelta(days=7)
-
     prev_start = curr_start - timedelta(days=7)
     prev_end = curr_start
-
     return prev_start, prev_end, curr_start, curr_end

@@ -1,9 +1,10 @@
+# api/views/stats_views.py
 """
-Endpoints:
+Endpoints - WeeklyStats, AllTimeStats
 - sends stats payloads for:
     - all time stats report
     - weekly stats report
-- Both use WatchEvents rather than MovieUser database
+- Uses both WatchEvents and MovieUser
 
 - Both stats payload include:
     - top 5 directors
@@ -32,13 +33,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import (
-    MovieUser, 
-    Genre,
-    Person,
-    WatchEvent,
+    MovieUser,  # For All Time Stats - Total (Unique) Movies Watched
+    Genre,      # For Top 5 Genres
+    Person,     # For Top 5 Directors/Actors
+    WatchEvent, # Used for Total (Non-Unique) Frequency of Genres, Directors, Actors, and Movies
     )
 from ..utils.dates import week_window_sunday_anchor
-
 
 DECADE_ORDER = ["Pre-1960s", "60s", "70s", "80s", "90s", "00s", "10s", "20s"]
 
@@ -54,18 +54,7 @@ def getMovieUser_stats(user):
     )
     return totalCount, decadeCounts, runtime_cov
 
-
-def byDecadePayload(movieuser_qs):
-    years = movieuser_qs.values_list("movie__year", flat=True)
-
-    counts = Counter()
-    for y in years:
-        if y is None:
-            continue
-        counts[getDecadeLabel(int(y))] += 1
-
-    return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
-
+# Get all movies watched by User from MovieUser
 def loadAllTime(user):
     return MovieUser.objects.filter(
         user=user,
@@ -73,6 +62,8 @@ def loadAllTime(user):
         watched_date__isnull=False,
     )
 
+# Load all movies watched by User from a weekly-time frame
+# Used for last week and the previous week
 def loadWeekly(user, start_date, end_date):
     return WatchEvent.objects.filter(
         user=user,
@@ -81,23 +72,43 @@ def loadWeekly(user, start_date, end_date):
         watched_date__lt=end_date,
     )
 
+# Gets all movies that were watched by user and takes it's year
+# counts each year and tallies it and puts it into specific decade
+# returns the dict for DecadePayload - AllTime & Weekly Stats Payload
+def byDecadePayload(movieuser_qs):
+    years = movieuser_qs.values_list("movie__year", flat=True)
+    counts = Counter()
+    for y in years:
+        if y is None:
+            continue
+        counts[getDecadeLabel(int(y))] += 1
+    return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
+
+# Get's percentage difference between previous week's movie watch and the week prior's percentage
+# ONLY FOR WEEKLY STATS REPORT
 def calc_percentChange(old, new):
     if old == 0:
         return None
     return ((new - old) / abs(old)) * 100
 
+# Total tally of movies watched per day for LAST WEEK
+# Uses watched_date
+# ONLY FOR WEEKLY STATS REPORT
 def calculatePerDay(entries, start_date):
+    # Make arr - SUN-SAT
     weekData = [0] * 7
+    # Movies From the given start date (LAST SUNDAY) grab them and we tally per day
     start = start_date.date() if hasattr(start_date, "date") else start_date
-
     for entry in entries:
+        # grab movie's posted date (date logged) or watched date (date watched)
         wd = entry.posted_date or entry.watched_date
         if wd is None:
             continue
-
+        # If the movie has a date then we pinpoint what day it was watched
         wd = wd.date() if hasattr(wd, "date") else wd
         delta = (wd - start).days
 
+        # if on X day then increment that day's tally
         if 0 <= delta < 7:
             weekData[delta] += 1
     
@@ -109,7 +120,6 @@ def getDecadeLabel(year: int) -> str:
     decade = (year // 10) * 10
     two = decade % 100
     return f"{two:02d}s"
-
 
 # pulling from watchevents instead of movieuser
 def byDecadePayloadFromEvents(event_qs):
@@ -129,6 +139,7 @@ def byDecadePayloadFromEvents(event_qs):
 
     return [{"label": lab, "count": counts.get(lab, 0)} for lab in DECADE_ORDER]
 
+# Just in case we want to show posters
 def _movie_card(m):
     return {
         "id": m.id,
@@ -138,6 +149,17 @@ def _movie_card(m):
         "tmdb_id": getattr(m, "tmdb_id", None),
     }
 
+"""
+- Weekly Stats include:
+    - Total Watches (THIS WEEK)
+    - Last Week vs This week Graph Chart
+    - Movies tally per day of This Week
+    - top 5 directors
+    - top 5 actors
+    - top 5 genres
+    - 5 most recent movies
+    - Movies per Decade
+"""
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stats_payload(request):
@@ -196,14 +218,14 @@ def stats_payload(request):
         .order_by("-count", "name")[:5]
     )
 
-
     recentEntries = thisWeekEvents.order_by("-posted_date", "-id")[:5]
     recentMovies = [entry.movie for entry in recentEntries]
 
+    # Get total tally
     thisWeekCount = thisWeekEvents.count()
     lastWeekCount = lastWeekEvents.count()
     percentChange = calc_percentChange(lastWeekCount, thisWeekCount)
-
+    # total tally for perDecade
     decadeCounts = byDecadePayloadFromEvents(thisWeekEvents)
 
     return Response(
@@ -222,6 +244,17 @@ def stats_payload(request):
         status=status.HTTP_200_OK,
     )
 
+"""
+- All Time Stats include:
+    - Total Movies Watched (UNIQUE)
+    - Total hours watched (NON-UNIQUE)
+    - Total Day/hour conversion
+    - top 5 directors
+    - top 5 actors
+    - top 5 genres
+    - 5 most recent movies
+    - Movies per Decade
+"""
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stats_all_time(request):
@@ -233,8 +266,7 @@ def stats_all_time(request):
         .select_related("movie")
         .exclude(movie__isnull=True)
     )
-    
-
+    # ALL DIRECTORS NON-UNIQUE FREQUENCY
     topDirectors = (
         Person.objects.filter(
             moviecrew__movie__watchevent__user=user,
@@ -243,7 +275,7 @@ def stats_all_time(request):
         .annotate(count=models.Count("moviecrew__movie__watchevent"))
         .order_by("-count")[:5]
     )
-
+    # ALL ACTORS NON-UNIQUE FREQUENCY
     topActors = (
         Person.objects.filter(
             moviecast__movie__watchevent__user=user,

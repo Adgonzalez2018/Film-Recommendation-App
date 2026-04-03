@@ -69,7 +69,6 @@ def enqueue_taste_rebuild(user_id: int, result, *, is_res=False) -> bool:
     logger.info("taste rebuild queued user=%s", user_id)
     return True, "queued"
 
-        
 @shared_task(queue="taste")
 def build_and_index_taste(user_id):
     logger.warning(f"[taste task] starting for user_id={user_id}")
@@ -111,7 +110,6 @@ def enqueue_csv_import(batch_id: int):
 
 def enqueue_rss_import(batch_id: int):
     run_rss_import_job.delay(batch_id)
-
 
 @shared_task
 def run_csv_import_job(batch_id: int):
@@ -163,7 +161,6 @@ def run_csv_import_job(batch_id: int):
                 "rel_created", "rel_updated", "events_created",
             ]
         )
-
 
         # If any of new stuff has been created we build and index the user's taste summary
         # this mitigates any overlap between running the inital onboarding rss and csv import

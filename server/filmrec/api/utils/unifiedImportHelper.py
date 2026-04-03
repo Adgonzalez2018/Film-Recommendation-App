@@ -22,7 +22,6 @@ class NormalizedMovieCandidate:
     weak_uri: Optional[str]
     tmdb_id: Optional[int] = None
 
-
 def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
     # Returns canonical uri and weak uri
     # canonical uri is stable film-page uri
@@ -200,32 +199,33 @@ def build_letterboxd_rss_url(raw: str) -> str:
         return ""
     return f"https://letterboxd.com/{username}/rss/"
 
-    """    
-    s = (raw or "").strip()
-    if not s:
-        return ""
-    
-    if s.startswith("letterboxd.com/"):
-        s = "https://" + s
-    
-    if s.startswith("http://") or s.startswith("https://"):
-        s_clean = s.rstrip("/")
-        if s_clean.endswith("/rss"):
-            return s_clean + "/"
-        
-        m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s_clean)
-        if m:
-            username = m.group(1)
-            return f"https://letterboxd.com/{username}/rss/"
+"""    
+LEGACY CODE
+s = (raw or "").strip()
+if not s:
+    return ""
 
-        return ""
+if s.startswith("letterboxd.com/"):
+    s = "https://" + s
 
-    username = extract_letterboxd_username(s)
-    if username:
+if s.startswith("http://") or s.startswith("https://"):
+    s_clean = s.rstrip("/")
+    if s_clean.endswith("/rss"):
+        return s_clean + "/"
+    
+    m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s_clean)
+    if m:
+        username = m.group(1)
         return f"https://letterboxd.com/{username}/rss/"
 
-    return ""    
-    """
+    return ""
+
+username = extract_letterboxd_username(s)
+if username:
+    return f"https://letterboxd.com/{username}/rss/"
+
+return ""    
+"""
 
 
 # --- Resetting User's State (RSS) ---

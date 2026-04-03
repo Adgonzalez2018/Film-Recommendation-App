@@ -1,38 +1,3 @@
-"""
-Models for Database:
-User - base user
-Attr:
-    - first_name
-    - email
-    - password
-    - birthday
-    - last sync (for letterboxd data)
-    - letterboxd username
-    - rss/manual import count
-    
-Movie - Attr:
-    - id
-    - title
-    - year
-    - overview
-    - language
-    - budget
-    - runtime
-    - revenue
-    - country
-    - poster/letterboxd url
-
-Person - Director/Actor
-    - id
-    - name 
-    - birth_date
-    - profile url
-    - biography
-
-Genre 
-    - name/id
-"""
-
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
@@ -43,10 +8,27 @@ WATCH_STATUS_CHOICES = [
     ("Not Interested", "Not Interested"),
 ]   
 
+
+
 """
-Models:
+=========================================================================================
+================================== MODELS ===============================================
+=========================================================================================
+
+--- MOVIE MODEL ---
+Attributes:
+    - tmdb id
+    - title
+    - year (release date)
+    - overview (synopsis)
+    - language (that it's in)
+    - budget   (how much it cost)
+    - runtime
+    - revenue
+    - country  (where it was made)
+    - poster/letterboxd url
+    - Vector store id (index)
 """
-# --- Movie Model ---
 class Movie(models.Model):
     title = models.CharField(max_length=255)
 
@@ -88,8 +70,22 @@ class Movie(models.Model):
 
     def __str__(self):
         return self.title
+    
+"""
+--- USER MODEL ---
 
-# --- User Model ---
+Attr:
+    - first_name
+    - email
+    - password
+    - birthday
+    - General last sync (for letterboxd data) 
+    - manual last sync
+    - rss last sync
+    - letterboxd username
+    - rss/manual import count
+    - taste vector store id for user taste summary
+"""
 class User(AbstractUser):
     last_sync = models.DateTimeField(blank=True,null=True)         # Track when the user last synced their data
     birthday = models.DateField(blank=True,null=True)
@@ -104,12 +100,29 @@ class User(AbstractUser):
     last_manual_sync = models.DateTimeField(null=True, blank=True)
     last_rss_sync = models.DateTimeField(null=True, blank=True)
     last_rss_account_switch = models.DateTimeField(null=True, blank=True)
+
     # RAG - store id for vector store -> goes to LM (for taste summary)
     taste_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
 
     def __str__(self):
         return self.username
     
+"""
+--- IMPORT BATCH FOR RSS/CSV & TMDB ENRICHMENT JOBS --- 
+
+Such that any user can import using async/synchronous jobs
+status updates, source (rss/manual)
+csv file paths, rss input
+time started/finished
+errors (if any)
+
+How many movies created, updated
+how many WATCHEVENTS created
+
+This also does TMDB enrichment. Once movies are injected into DB through MovieUser/WatchEvent
+movies not in our main movie Corpus are marked for enrichment
+if marked for enrichment then (asynrchonously) a worker does the enrichment and finds tmdb data on letterboxd found movies
+"""
 class ImportBatch(models.Model):
     SOURCE_CHOICES = [
         ("csv", "CSV"),
@@ -157,8 +170,22 @@ class ImportBatch(models.Model):
     def __str__(self):
         return f"ImportBatch<{self.user_id}:{self.source}:{self.created_at}>"
 
-# --- Person Model ---
-# joins Actor & Director model
+
+"""
+--- PERSON MODEL ---    
+
+joins Actor & Director model
+Person - Director/Actor
+    - id
+    - name 
+    - birth_date
+    - profile url
+    - biography
+
+Separated by job/crew
+Directors are in moviecrew
+Actors are in moviecast
+"""
 class Person(models.Model):
     tmdb_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     name = models.CharField(max_length=255)
@@ -170,7 +197,14 @@ class Person(models.Model):
         return self.name
     
 
+
+"""
 # --- Genre Model ---
+Only a small finite amount of Genres with
+    - name
+    - id
+but if new ones are found in the database they get added
+"""
 class Genre(models.Model):
     tmdb_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     name = models.CharField(max_length=100, unique=True)
@@ -180,6 +214,16 @@ class Genre(models.Model):
 
 
 # --- Watch Event Model ---
+"""
+--- WATCH EVENTS ---
+works hand in hand with Import Batches
+finds where the source is coming from
+focuses on specifics of when the user watched it 
+utilized heavily in STATS FEATURE
+
+Ties user, movie, and watch-date/posted_date together
+ties the entry and checks if it's a rewatch
+"""
 class WatchEvent(models.Model):
     SOURCE_CHOICES = [("rss","RSS"),("csv","CSV"), ("manual","MANUAL")]
 
@@ -193,9 +237,6 @@ class WatchEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     event_key = models.CharField(max_length=40, db_index=True)
     rewatch = models.BooleanField(default=False)
-    # best dedupde key if you can get it
-
-
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=[
@@ -203,11 +244,48 @@ class WatchEvent(models.Model):
             ], name="unique_watch_event_user_event_key")
         ]
 
+"""
+--- FILMBANK MODEL ---
+Only get the bare essentials for the films recommended
+Attributes:
+    - when it was created
+    - User that the movie was given to
+    - Movie that was recommended
+    - If it's in User's FilmBank
+    - If removed by User
+    - Film Recommender's Reasoning
+"""
+class FilmBank(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="film_bank")
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="recommended_to")
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default="active")
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    # tiny audit trail
+    query_text = models.TextField(blank=True, null=True)
+    reason = models.TextField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "movie"], name="uniq_reco_user_movie")
+        ]
 
 """
-Relationships:
+=========================================================================================
+============================ RELATIONSHIPS ==============================================
+=========================================================================================
+
+--- MOVIEUSER RELATIONSHIP ---
+ties Movie and User with the specifics
+Attributes:
+    - watched the movie
+    - user's rating
+    - user's review
+    - watch status
+    - watched date
+    - if in user's watchlist
+    - user rewatched True/False
 """
-# --- Movie-User Relationship ---
 class MovieUser(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="user_links")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="movie_links")
@@ -232,7 +310,15 @@ class MovieUser(models.Model):
             models.Index(fields=["user","watch_status","watched_date"]),
         ]
         
-# --- Movie-Director Relationship ---
+"""
+--- MOVIECREW RELATIONSHIP ---
+more specifically for Directors
+Attributes:
+    - Director's Movie
+    - Director's name/record
+    - their job title == "Director"
+    - department == "Directing"
+"""
 class MovieCrew(models.Model):
     # Crew Roles: TMDB credits.crew
     # Director is just job = "Director"
@@ -249,7 +335,15 @@ class MovieCrew(models.Model):
                 )
         ]
 
-# --- Movie-Actor Relationship ---
+"""
+--- MOVIECAST RELATIONSHIP ---
+More specifically for Actors
+Attributes:
+    - Actor's Movie
+    - Actor's name/record
+    - Actor's Character name
+    - Actor's Order
+"""
 class MovieCast(models.Model):
     # Cast = actors -> TMDB credits.cast
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
@@ -264,7 +358,10 @@ class MovieCast(models.Model):
                 )
         ]
 
-# --- Movie-Genre Relationship ---
+"""
+--- MOIVIEGENRE RELATIONSHIP ---
+Genres that Movies have
+"""
 class MovieGenre(models.Model):
     movie = models.ForeignKey("Movie", on_delete=models.CASCADE)
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE)
@@ -274,21 +371,4 @@ class MovieGenre(models.Model):
             models.UniqueConstraint(
                 fields=['movie', 'genre'], name='uniq_movie_genre'
                 )
-        ]
-
-
-# --- Film Bank for Recommended Films ---
-class FilmBank(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="film_bank")
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="recommended_to")
-    created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, default="active")
-    dismissed_at = models.DateTimeField(null=True, blank=True)
-    # tiny audit trail
-    query_text = models.TextField(blank=True, null=True)
-    reason = models.TextField(blank=True, null=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["user", "movie"], name="uniq_reco_user_movie")
         ]

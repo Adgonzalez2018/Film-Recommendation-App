@@ -8,8 +8,9 @@ Allows:
     - (letterboxd/username)
     - for weekly stat reports
     - Also saves their username to model
+    - And Resync their data if they just uploaded something new
 
-Dependencies: letterboxd_import.py
+Dependencies: UnifiedImportHelper.py
 """
 from django.utils import timezone
 from datetime import timedelta
@@ -33,9 +34,24 @@ from ..tasks.import_tasks import (
 )
 from ..models import ImportBatch, WatchEvent
 
-
+# Prevent user from switching or syncing to heavily
 RSS_SWITCH_COOLDOWN_HOURS = 24
 
+"""
+CSV/MANUAL IMPORT
+ALL-TIME STATS works off this import
+Asks for 
+    - watched file
+    - reviews file
+    - films file (in likes folder)
+
+GUARD RAILS:
+    - Prevents user from spamming import now button too many times
+    - Incorrect file type
+    - Too large of files (has to be very large)
+    - If files are empty
+
+"""
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def manual_import(request):
@@ -97,7 +113,7 @@ def manual_import(request):
             status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
         )
     
-    # log batch
+    # log the batch of movies and run SYNCHRONOUSLY
     batch = ImportBatch.objects.create(
         user=request.user,
         source="csv",
@@ -108,6 +124,7 @@ def manual_import(request):
         had_films=bool(films_file),
     )
     try:
+        # If everything checks out then we run the actual manual import
         counters = run_letterboxd_import(
             user=request.user,
             watched_file=watched_file,
@@ -115,13 +132,14 @@ def manual_import(request):
             watchlist_file=watchlist_file,
             films_file=films_file,
         )
-        
+        # MARK any movie that isn't in our movie database
         movie_ids = counters.get("movies_to_enrich", [])
         tmdb_queued = len(set(movie_ids))
-
+        # if any movie ids are marked for enrichment then we queue a job to the TMDB worker (async)
         if movie_ids:
             enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
-
+        
+        # Send out response that it's done
         batch.status = "completed"
         batch.movies_created = counters.get("movies_created", 0)
         batch.movies_matched = counters.get("movies_matched", 0)
@@ -142,6 +160,12 @@ def manual_import(request):
                 "finished_at",
             ]
         )
+        """
+        Update user's
+            - manual import count
+            - general last sync
+            - last manual sync
+        """
         request.user.manual_import_count = (request.user.manual_import_count or 0) + 1
         request.user.last_sync = timezone.now()
         request.user.last_manual_sync = timezone.now()
@@ -150,14 +174,17 @@ def manual_import(request):
             "last_sync", 
             "last_manual_sync",
         ])
-
+        
+        # Debugging info (for Railways)
         print("TASTE GATE", {
             "user_id": request.user.id,
             "events_created": counters.get("events_created", 0),
             "rel_created": counters.get("rel_created", 0),
             "rel_updated": counters.get("rel_updated", 0),
         })
-        # build taste summary if events are made
+        
+        # Checks if any events, are updated or created, if so then we rebuild taste summary
+        # if user doesn't have one then we also build a user taste summary
         taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, counters)
         return Response(
             {
@@ -177,6 +204,7 @@ def manual_import(request):
             },
             status=status.HTTP_200_OK,
         )
+    # Debugging info if Manual Import Failed (railways logging)
     except Exception as e:
         batch.status = "failed"
         batch.error_message = str(e)
@@ -189,7 +217,26 @@ def manual_import(request):
         )
 
 
-# --- RSS Import Endpoint ---
+"""
+RSS IMPORT
+If user doesn't want manually import their csv files this is the next best thing
+Also Important for weekly stats report
+Can also be used for ALLTIME STATS if user doesn't import manually
+Asks for 
+    - letterboxd username
+
+Get's username off of link or base letterboxd name
+builds it and stores the username
+syncs it through rss 
+dependent on rss_sync service file
+
+updates 
+    - last rss sync
+    - last general sync
+    - letterboxd username
+GUARD RAILS:
+    - cooldown sets if user links/syncs for 24 hours
+"""
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def import_rss(request):
@@ -249,6 +296,8 @@ def import_rss(request):
     )
 
     try:
+        # tries running main rss import job (synchronusly) (if nothing for user usually gets 50 movies)
+        # Somewhat slow, thinking of moving to an asynchronous job or trying to optimize
         res = sync_user_rss_watches(request.user, rss_input=rss_input)
         print(
             "RSS RESULT",
@@ -270,9 +319,11 @@ def import_rss(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
+        # Marks movies for enrichment if not in movie corpus
         movie_ids = getattr(res, "movie_ids_to_enrich", []) or []
         tmdb_queued = len(set(movie_ids))
-
+        
+        # if movie_ids (set for enrichment) exist -> asynchronusly run a job to enrich these movies
         if movie_ids:
             enqueue_tmdb_enrichment_for_movies(movie_ids, batch_id=batch.id)
 
@@ -295,6 +346,7 @@ def import_rss(request):
             ]
         )
 
+        # update rss_import count, general last sync, last rss sync
         request.user.rss_import_count = (request.user.rss_import_count or 0) + 1
         request.user.last_sync = timezone.now()
         request.user.last_rss_sync = timezone.now()
@@ -304,13 +356,14 @@ def import_rss(request):
             "last_rss_sync",
         ])
 
+        # debugging info (railways)
         print("TASTE GATE RSS", {
             "user_id": request.user.id,
             "events_created": res.events_created or 0,
             "rel_created": res.rel_created or 0,
             "rel_updated": res.rel_updated or 0,
         })
-        # build taste summary if events are made
+        # build taste summary if events are made or if no user taste summary exists
         taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, res, is_res=True)
         message = None
         if (res.entries_seen or 0) == 0:
@@ -353,8 +406,9 @@ def import_rss(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-
-
+"""
+Debugging purposes
+"""
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def import_batch_detail(request, batch_id: int):
@@ -382,9 +436,15 @@ def import_batch_detail(request, batch_id: int):
         },
         status=status.HTTP_200_OK,
     )
-# Check if user has data
-# if yes direct to Chat page
-# else continue with Import page
+
+"""
+Onboarding Status
+Check if user has imported either RSS/CSV
+if User has then skip /Connect Import page
+if User hasn't (initial step) -> go to Import Page
+
+Checks for import counts, watch data and onboarding skipped status
+"""
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def onboarding_status(request):
@@ -404,6 +464,10 @@ def onboarding_status(request):
             or user.has_skipped_onboarding)
     })
 
+"""
+Set onboarding status
+if user imports then the skip onboarding turns on and we update the user's record to be True
+"""
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def skip_onboarding(request):
@@ -421,6 +485,7 @@ def skip_onboarding(request):
         },
         status=status.HTTP_200_OK
     )
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

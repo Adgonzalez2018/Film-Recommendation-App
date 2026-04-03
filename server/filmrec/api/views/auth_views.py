@@ -30,14 +30,18 @@ def get_user_tokens(user):
     refresh = tokens.RefreshToken.for_user(user)
     return {"access_token": str(refresh.access_token), "refresh": str(refresh)}
 
-# Log in
+# LOGIN VIEW
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def loginView(request):
+    # Get login data
     serializer = LoginSerializer(data=request.data)
+    # validate data
     serializer.is_valid(raise_exception=True)
+    # validate email & password
     email = (serializer.validated_data["email"] or "").strip().lower()
     password = serializer.validated_data["password"]
+    # authenticate (django)
     user = authenticate(request, username=email, password=password)
 
     if user is None:
@@ -45,17 +49,18 @@ def loginView(request):
 
     return Response(get_user_tokens(user), status=status.HTTP_200_OK)
 
-
 # Registration
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def registerView(request):
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    # Save user's data and push it to db
     user = serializer.save()
     return Response(get_user_tokens(user), status=status.HTTP_201_CREATED)
 
 # Ping for Token Authentication
+# Used consistently to traverse the website
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def ping(request):
@@ -68,7 +73,7 @@ def ping(request):
         }, 
         status=status.HTTP_200_OK)
 
-# Pass Reset Request
+# Pass Reset Request - Not Implemented Yet
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def password_reset_request(request):

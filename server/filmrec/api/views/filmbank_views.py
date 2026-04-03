@@ -1,3 +1,4 @@
+# api/views/filmbank_views.py
 # endpoint for Film Bank 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -7,6 +8,13 @@ from rest_framework import status
 from ..models import FilmBank
 from ..serializer import FilmBankSerializer
 
+"""
+Upon pressing the FilmBank Button on /Chat
+it loads the whole collection of Films recommended to you
+
+NEXT STEPS:
+    - Add User Feedback
+"""
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def film_bank_list(request):
@@ -45,6 +53,9 @@ def film_bank_list(request):
         status=status.HTTP_200_OK,
     )
 
+"""
+If User wants to remove theres a small X button
+"""
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def film_bank_delete(request, movie_id: int):

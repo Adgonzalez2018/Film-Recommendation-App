@@ -25,6 +25,7 @@ from ..serializer import ChatRequestSerializer
 
 logger = logging.getLogger(__name__)
 
+# Get the reasoning as to why Film Recommender gave you the movie
 def _clean_why(value: str) -> str:
     text = " ".join((value or "").split()).strip()
     if not text:

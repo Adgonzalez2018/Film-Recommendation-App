@@ -1,5 +1,6 @@
-# Service Py File for (letterboxd_views)
-# Import Page (LetterboxdConnect) 
+# api/services/csvImport.py
+# Service Py File for (import_views)
+# Import Page (Used to be LetterboxdConnect) 
 # & Profile Page
 import csv
 import io
@@ -17,7 +18,6 @@ from ..utils.dates import parse_iso_date
 def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchlist_file=None, films_file=None):
     """
     Optimized business logic import
-
     same return shape as before
     """
     movies_to_enrich = set()
@@ -32,6 +32,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         text = io.TextIOWrapper(file_obj.file, encoding="utf-8-sig")
         return csv.DictReader(text)
         
+    # For User's Rating
     def parse_float(s):
         s = (s or "").strip()
         if not s:
@@ -255,13 +256,11 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             continue
         
         movie_id = movie.id
-
         if movie_id not in snapshot_state:
             snapshot_state[movie_id] = base_state_for_movie(movie_id)
         
         state = snapshot_state[movie_id]
         before = dict(state)
-
         if r["kind"] == "watched":
             updates = {
                 "watch_status": "Watched",
@@ -309,7 +308,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
     new_mu_objects = []
     update_mu_objects = []
-
     for movie_id, state in snapshot_state.items():
         if not state["_exists"]:
             new_mu_objects.append(
@@ -325,6 +323,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     rewatch=state["rewatch"],
                 )
             )
+            
         elif movie_id in snapshot_changed:
             mu = existing_mu_map[movie_id]
             mu.rating = state["rating"]

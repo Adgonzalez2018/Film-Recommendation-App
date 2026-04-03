@@ -1,5 +1,10 @@
+# api/services/tmdb.py
 """
 TMDB Service Layer
+
+TMDB ENRICHMENT
+used for Asynchronous jobs
+If user gives FilmRecommender a movie that we DONT KNOW -> Find it and enrich it inside our DB
 
 Responsibilites:
     - TMDB API wrapper (w/ retries)
@@ -25,7 +30,6 @@ from urllib3.util.retry import Retry
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
-
 
 from ..models import (
     Movie,
@@ -90,7 +94,9 @@ def search_movie(query: str) -> Dict[str, Any]:
 def get_movie_details(tmdb_id: int) -> Dict[str, Any]:
     return tmdb_get(f"/movie/{tmdb_id}", {"append_to_response":"credits"})
 
-# HELPER FUNCTIONS
+"""
+--- HELPER FUNCTIONS ---
+"""
 def _parse_year_from_release_date(release_date: Optional[str]) -> Optional[int]:
     if not release_date:
         return None
@@ -116,8 +122,6 @@ def _enrich_movie_relations_from_tmdb(*, movie: Movie, data: Dict[str, Any], cas
         credits = data.get("credits") or {}
         _sync_cast(movie, (credits.get("cast") or [])[:cast_limit])
         _sync_crew(movie, credits.get("crew") or [])
-
-    
     
 def _upsert_movie_fields_from_tmdb(*, tmdb_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
     release_date = data.get("release_date")
@@ -162,7 +166,6 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
     """
     Attach TMDB id to existing movie row and enrich it with TMDB fields + credits.
     """
-
     try:
         tmdb_id_int = int(tmdb_id)
         movie_id_int = int(movie_id)
@@ -178,15 +181,14 @@ def attach_tmdb_to_movie(*, movie_id: int, tmdb_id: int, cast_limit: int=12) -> 
     existing = Movie.objects.filter(tmdb_id= tmdb_id_int).exclude(pk=exclude_id).first()
     if existing:
         raise ValidationError("That tmdb_id is already attached to another movie")
-    
     data = get_movie_details(tmdb_id_int)
     fields = _upsert_movie_fields_from_tmdb(tmdb_id=tmdb_id_int, data=data)
 
     # update the existing movie (preserve letterboxd_ur)
     for k, v in fields.items():
         setattr(movie, k, v)
-    movie.save()
 
+    movie.save()
     _enrich_movie_relations_from_tmdb(movie=movie, data=data, cast_limit=cast_limit)
     return movie
 
@@ -225,6 +227,7 @@ def find_best_tmdb_movie_match(title: str, year: Optional[int] = None) -> Option
         if score > best_score:
             best_score = score
             best = r
+
     return best.get("id") if best else None
 
 
