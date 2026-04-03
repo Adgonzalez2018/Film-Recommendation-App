@@ -19,7 +19,7 @@ export async function sendChatMessage(message, token) {
 }
 
 export async function fetchFilmBank(token, page = 1, pageSize = 20){
-    const res = await apiFetch(`/api/film-bank/?page=?{page}&page_size=${pageSize}`,{
+    const res = await apiFetch(`/api/film-bank/?page=${page}&page_size=${pageSize}`,{
         token,
         method:"GET",
     });

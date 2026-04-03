@@ -96,6 +96,7 @@ function normalizeRecommendation(movie) {
     tmdbId: movie?.tmdb_id ?? null,
     description: movie?.description || "",
     avgRating: movie?.avg_rating ?? null,
+    why: movie?.why || "",
   };
 }
 
@@ -398,6 +399,17 @@ const Chat = () => {
                         {film.year && <div className="film-card-year">{film.year}</div>}
                         {!!film.description && (
                           <div className="film-card-description">{film.description}</div>
+                        )}
+                        {!!film.why && (
+                          <ul className="film-card-why">
+                            {film.why
+                              .split(/[.•]\s+|(?<=\.)\s+/)
+                              .map((point) => point.trim())
+                              .filter(Boolean)
+                              .map((point, idx) => (
+                                <li key={idx}>{point}</li>
+                              ))}
+                          </ul>
                         )}
                       </div>
                     </div>

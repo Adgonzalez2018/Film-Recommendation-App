@@ -219,6 +219,7 @@
   text-align: left;
   margin-top: 4px;
 }
+
 /* mobile */
 @media (max-width: 900px) {
   .chat-recommendations-grid {
@@ -236,6 +237,28 @@
   }
 
 
+}
+
+/* WHY (bullet reasoning) */
+.chat-recommendations-grid .film-card-why {
+  margin-top: 6px;
+  padding-left: 14px;
+
+  font-size: 0.65rem;
+  line-height: 1.45;
+  color: rgba(184, 255, 204, 0.75);
+
+  list-style-type: "▸ ";
+}
+
+.chat-recommendations-grid .film-card-why li {
+  margin-bottom: 3px;
+  opacity: 0.9;
+}
+
+/* subtle glow on hover (matches card hover feel) */
+.chat-recommendations-grid .film-card:hover .film-card-why li {
+  color: rgba(184, 255, 204, 0.9);
 }
 /* Sidebar */
 .sidebar {
