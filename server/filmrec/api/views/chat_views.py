@@ -255,6 +255,7 @@ def chat_recommend(request):
     ser = ChatRequestSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     msg = ser.validated_data["message"].strip()
+    # If message is too short -> ask for clarification
     if len(msg) < 3:
         return Response(
             {
@@ -267,15 +268,16 @@ def chat_recommend(request):
     contextual_msg = _build_contextual_query(msg, request.user)
     
     movies_store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
+    # if VECTOR STORAGE DOWN -> send http 500 request
     if not movies_store_id:
         return Response(
             {"error": "Missing OPENAI_MOVIES_VECTOR_STORE_ID env var (global movies vector store not configured)."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-    # taste store may not exist yet (new user)
+    # Find taste summary in storage 
     taste_store_id = getattr(request.user, "taste_vector_store_id", None)
-    
+    # Exclude tmdbs from watchlist
     excluded_tmdb_ids = _get_excluded_tmdb_ids(request.user)
     excluded_set = set(excluded_tmdb_ids)
     excluded_str = ", ".join(map(str, excluded_tmdb_ids[:150])) # cap prompt size
