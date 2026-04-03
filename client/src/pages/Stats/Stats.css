@@ -68,9 +68,9 @@ body {
 
 /* inner stage */
 .stage {
-  max-width: 500px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 24px 24px 500vh;
+  padding: 400px 12px 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;

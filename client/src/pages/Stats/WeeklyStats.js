@@ -17,7 +17,7 @@ export default function WeeklyStats() {
   const portRef = useRef(null);
   const rafRef  = useRef(null);
   const [playing, setPlaying] = useState(false);
-  const speed = 0.55;
+  const speed = 2.5;
 
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
