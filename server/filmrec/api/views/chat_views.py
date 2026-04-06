@@ -22,8 +22,10 @@ from ..models import (
 
 from ..utils.photoHelper import _build_poster_url
 from ..serializer import ChatRequestSerializer
-
+from ..services.tmdb import upsert_tmdb_movie
 logger = logging.getLogger(__name__)
+
+MIN_RECS = 1
 
 # Get the reasoning as to why Film Recommender gave you the movie
 def _clean_why(value: str) -> str:
@@ -257,6 +259,9 @@ CHAT_RESPONSE_SCHEMA = {
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def chat_recommend(request):
+    logger.warning(
+        "chat_recommend HIT user=%s", request.user.id,
+    )
     ser = ChatRequestSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     msg = ser.validated_data["message"].strip()
