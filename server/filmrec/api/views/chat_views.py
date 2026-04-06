@@ -375,6 +375,7 @@ def chat_recommend(request):
     # now we create the payload 
     movies_payload = []
     seen_tmdb_ids = set()
+    film_bank_entries = []
 
     for r in recs:
         tmdb_id = r.get("tmdb_id")
@@ -397,41 +398,24 @@ def chat_recommend(request):
 
         # just look up no tmdb api call
         mv = Movie.objects.filter(tmdb_id=tmdb_id_int).first()
-
         if not mv:
-            # movie not in db yet - skip rather than blocking on TMDB fetch
-            logger.info(
-                "Chat_recommend skipping unknown tmdb_id=%s user=%s",
-                tmdb_id_int, request.user.id,
-            )
-            continue
+            try:
+                mv = upsert_tmdb_movie(tmdb_id_int)
+            except:
+                continue
 
         if not _is_valid_movie(mv):
             logger.debug("Skipping tmdb_id=%s reason=invalid_movie", tmdb_id_int)
             continue
     
         seen_tmdb_ids.add(tmdb_id_int)
-
-        # persist recommendation in filmbank
-        FilmBank.objects.update_or_create(
-            user = request.user,
-            movie=mv,
-            defaults={
-                "query_text":msg,
-                "reason": why,
-            },
-        )
-        logger.debug(
-            "FilmBank upsert user=%s movie_id=%s",
-            request.user.id,
-            mv.id,
-        )
         movies_payload.append(_movie_payload(mv, why=why))
+        film_bank_entries.append((mv, why))
 
         if len(movies_payload) == 3:
             break
 
-    if  len(movies_payload) != 3:
+    if  len(movies_payload) < 1:
         logger.info(
             "chat_recommend clarify after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
             request.user.id,
@@ -449,6 +433,21 @@ def chat_recommend(request):
             status=status.HTTP_200_OK,
         )
     
+    for mv, why in film_bank_entries:
+        # persist recommendation in filmbank
+        FilmBank.objects.update_or_create(
+            user = request.user,
+            movie=mv,
+            defaults={
+                "query_text":msg,
+                "reason": why,
+            },
+        )
+        logger.debug(
+            "FilmBank upsert user=%s movie_id=%s",
+            request.user.id,
+            mv.id,
+        )
     logger.info(
         "chat_recommend success user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s duration=%.2fs",
         request.user.id,
