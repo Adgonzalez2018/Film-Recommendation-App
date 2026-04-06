@@ -206,6 +206,11 @@
   letter-spacing: 0.08em;
 }
 
+.film-card {
+  text-decoration: none;
+  color: inherit;
+}
+
 .chat-recommendations-grid .film-card-description {
   font-size: 0.68rem;
   line-height: 1.5;
@@ -237,6 +242,12 @@
   }
 
 
+}
+
+.film-card-source {
+  font-size: 0.55rem;
+  opacity: 0.5;
+  margin-top: 2px;
 }
 
 /* WHY (bullet reasoning) */

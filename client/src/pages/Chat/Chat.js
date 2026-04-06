@@ -22,7 +22,11 @@ function extractErrorMessage(fallback, data) {
 }
 
 const STORAGE_KEY = "filmrec_chats"
-
+function normalizeLetterboxd(url) {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  return `https://letterboxd.com${url}`;
+}
 
 async function sendChatMessage(message, token) {
   const res = await apiFetch("/api/chat/recommend/", {
@@ -78,12 +82,27 @@ function normalizeFilmBankItem(item) {
     year: item?.year ?? null,
     poster: item?.poster_url || null,
     tmdbId: item?.tmdb_id ?? null,
+    letterboxd_uri: item?.letterboxd_uri || item?.letterboxd || null,
     description: item?.description || "",
     avgRating: item?.avg_rating ?? null,
     reason: item?.reason || "",
     queryText: item?.query_text || "",
     createdAt: item?.created_at || null,
   };
+}
+
+function getMovieLink(film) {
+  // 1. Letterboxd FIRST
+  if (film?.letterboxd_uri){
+    return normalizeLetterboxd(film.letterboxd_uri);
+  }
+
+  // 2. Fallback -> TMDB
+  if (film?.tmdbId){
+    return `https://www.themoviedb.org/movie/${film.tmdbId}`
+  }
+
+  return null;
 }
 
 function normalizeRecommendation(movie) {
@@ -97,6 +116,7 @@ function normalizeRecommendation(movie) {
     description: movie?.description || "",
     avgRating: movie?.avg_rating ?? null,
     why: movie?.why || "",
+    letterboxd_uri: movie?.letterboxd_uri || movie?.letterboxd || null,
   };
 }
 
@@ -378,12 +398,11 @@ const Chat = () => {
 
               {m.role === "assistant" && Array.isArray(m.recommendations) && m.recommendations.length > 0 && (
                 <div className="chat-recommendations-grid">
-                  {m.recommendations.map((film) => (
-                    <div
-                      key={film.id}
-                      className="film-card"
-                      title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
-                    >
+                 {m.recommendations.map((film) => {
+                  const movieLink = getMovieLink(film);
+
+                  const card = (
+                    <>
                       <div className="film-card-poster">
                         {film.poster ? (
                           <img src={film.poster} alt={film.title} />
@@ -412,8 +431,30 @@ const Chat = () => {
                           </ul>
                         )}
                       </div>
+                    </>
+                  );
+
+                  return movieLink ? (
+                    <a
+                      key={film.id}
+                      href={movieLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="film-card"
+                      title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
+                    >
+                      {card}
+                    </a>
+                  ) : (
+                    <div
+                      key={film.id}
+                      className="film-card"
+                      title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
+                    >
+                      {card}
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>
