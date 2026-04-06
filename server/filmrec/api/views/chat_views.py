@@ -97,8 +97,12 @@ def _call_openai_with_retry(
                 kwargs["text"] = {"format": text_format}
 
             resp = client.responses.create(**kwargs)
+            logger.debug(
+                "OpenAi raw response: %s",
+                getattr(resp, "output_text", None)
+            )
             return _safe_parsed_response(resp)
-
+    
         except Exception as e:
             last_exc = e
             logger.warning(
@@ -147,6 +151,7 @@ def _movie_payload(mv, why: str = "") -> dict:
         "id": mv.id,
         "title": mv.title,
         "tmdb_id": mv.tmdb_id,
+        "letterboxd": getattr(mv, "letterboxd_uri", None),
         "poster_url": _build_poster_url(mv),
         "description": getattr(mv,"overview", None),
         "avg_rating": getattr(mv, "avg_rating", None),
@@ -255,6 +260,13 @@ def chat_recommend(request):
     ser = ChatRequestSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     msg = ser.validated_data["message"].strip()
+    start_time = time.time()
+    logger.info(
+        "chat_recommend start user=%s msg_len=%s",
+        request.user.id,
+        len(msg),
+    )
+
     # If message is too short -> ask for clarification
     if len(msg) < 3:
         return Response(
@@ -266,7 +278,12 @@ def chat_recommend(request):
             status=status.HTTP_200_OK
         )
     contextual_msg = _build_contextual_query(msg, request.user)
-    
+    logger.debug(
+        "chat_recommend contextual_msg user=%s msg=%s",
+        request.user.id,
+        contextual_msg,
+    )
+
     movies_store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
     # if VECTOR STORAGE DOWN -> send http 500 request
     if not movies_store_id:
@@ -285,8 +302,19 @@ def chat_recommend(request):
     # pick cheap model by default (override via env)
     model = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
     client = OpenAI()
-
+    logger.info(
+        "chat_recommend setup user=%s movies_store=%s taste_store=%s excluded_movies=%s",
+        request.user.id,
+        bool(movies_store_id),
+        bool(taste_store_id),
+        len(excluded_tmdb_ids),
+    )
     try:
+        logger.info(
+            "chat_recommend calling_openai user=%s model=%s",
+            request.user.id,
+            model,
+        )
         data = _retrieve_and_rank(
             client,
             model=model,
@@ -295,8 +323,13 @@ def chat_recommend(request):
             taste_store_id=taste_store_id,
             excluded_str=excluded_str,
         )
+        logger.debug(
+            "chat_recommend parsed_response user=%s data=%s",
+            request.user.id,
+            data,
+        )
     except Exception as e:
-        logger.exception("chat_recommend retrieval failed user=%s", request.user.id)
+        logger.exception("chat_recommend retrieval failed user=%s msg=%s", request.user.id, msg)
         return Response(
             {"error": "Recommendation service is temporarily unavailable."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -349,8 +382,13 @@ def chat_recommend(request):
             continue
 
         # ensure movie exists in DB
-        if tmdb_id_int in excluded_set or tmdb_id_int in seen_tmdb_ids:
-            continue    
+        if tmdb_id_int in excluded_set:
+            logger.debug("Skipping tmdb_id=%s reason=excluded", tmdb_id_int)
+            continue
+
+        if tmdb_id_int in seen_tmdb_ids:
+            logger.debug("Skipping tmdb_id=%s reason=duplicate", tmdb_id_int)
+            continue
 
         # just look up no tmdb api call
         mv = Movie.objects.filter(tmdb_id=tmdb_id_int).first()
@@ -364,6 +402,7 @@ def chat_recommend(request):
             continue
 
         if not _is_valid_movie(mv):
+            logger.debug("Skipping tmdb_id=%s reason=invalid_movie", tmdb_id_int)
             continue
     
         seen_tmdb_ids.add(tmdb_id_int)
@@ -377,7 +416,11 @@ def chat_recommend(request):
                 "reason": why,
             },
         )
-
+        logger.debug(
+            "FilmBank upsert user=%s movie_id=%s",
+            request.user.id,
+            mv.id,
+        )
         movies_payload.append(_movie_payload(mv, why=why))
 
         if len(movies_payload) == 3:
@@ -402,12 +445,13 @@ def chat_recommend(request):
         )
     
     logger.info(
-        "chat_recommend success user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
+        "chat_recommend success user=%s taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s duration=%.2fs",
         request.user.id,
         bool(taste_store_id),
         len(excluded_tmdb_ids),
         len(recs) if isinstance(recs,list) else None,
         len(movies_payload),
+        time.time() - start_time,
     )
     return Response(
         {
