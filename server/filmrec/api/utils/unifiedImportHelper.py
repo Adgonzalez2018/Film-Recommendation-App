@@ -213,7 +213,7 @@ if s.startswith("http://") or s.startswith("https://"):
     if s_clean.endswith("/rss"):
         return s_clean + "/"
     
-    m = re.match(r"^https?://letterboxd\.com/([^/]+)/?$", s_clean)
+    m = re.match(r"^https?://letterboxd/.com/([^/]+)/?$", s_clean)
     if m:
         username = m.group(1)
         return f"https://letterboxd.com/{username}/rss/"
@@ -226,7 +226,6 @@ if username:
 
 return ""    
 """
-
 
 # --- Resetting User's State (RSS) ---
 def reset_RSS_userState(user):
@@ -371,6 +370,7 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
         resolved = new_resolved
 
     return resolved
+
 # --- Unified Event key for both Manual & RSS Imports ---
 def makeEventKey(user_id:int, uri: str, posted_date: Optional[date], entry_url: str | None = None) -> str:
     date_part = posted_date.isoformat() if posted_date else "nodate"

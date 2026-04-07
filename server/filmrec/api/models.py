@@ -263,6 +263,21 @@ class FilmBank(models.Model):
     query_text = models.TextField(blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
 
+    # USER FEEDBACK SYSTEM
+    feedback_rating = models.CharField(
+        max_length=10,
+        choices=[
+            ("good", "Good"),
+            ("neutral", "Neutral"),
+            ("bad", "Bad"),
+        ],
+        null=True,
+        blank=True,
+    )
+
+    feedback_watched= models.BooleanField(null=True, blank=True)
+    feedback_text = models.TextField(blank=True, default="")
+    feedback_submitted_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["user", "movie"], name="uniq_reco_user_movie")

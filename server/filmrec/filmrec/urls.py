@@ -36,7 +36,7 @@ from api.views.profile_views import profileView
 from api.views.tmdb_views import tmdb_search, tmdb_ensure
 
 from api.views.chat_views import chat_recommend
-from api.views.filmbank_views import film_bank_delete, film_bank_list
+from api.views.filmbank_views import film_bank_delete, film_bank_list, film_bank_feedback
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -73,7 +73,7 @@ urlpatterns = [
     # --- Film Bank ---
     path("api/film-bank/", film_bank_list, name="film-bank-list"),
     path("api/film-bank/<int:movie_id>/", film_bank_delete,name="film-bank-delete"),
-
+    path("api/film-bank/<int:movie_id>/feedback/", film_bank_feedback,name="film-bank-feedback"),
     # --- Statistics ---
     path("api/stats/weekly/", stats_payload, name="stats-payload"),
     path("api/stats/all-time/", stats_all_time, name="stats-all-time"),

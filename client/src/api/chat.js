@@ -32,7 +32,7 @@ export async function fetchFilmBank(token, page = 1, pageSize = 20){
     return data;
 }
 
-export async function deleteFilmBankMovie(movieId, token){
+export async function dismissFilmBankMovie(movieId, token){
     const res = await apiFetch(`/api/film-bank/${movieId}/`,{
         token,
         method: "DELETE",
@@ -43,5 +43,20 @@ export async function deleteFilmBankMovie(movieId, token){
         throw new Error(extractErrorMessage("Failed to remove film.", data));
     }
 
+    return data;
+}
+
+export async function submitFilmBankFeedback(movieId, token, feedback){
+    const res = await apiFetch(`/api/film-bank/${movieId}/feedback/`, {
+        token,
+        method: "POST",
+        body: {
+            rating: feedback.rating,
+            watched: feedback.watched,
+            text: feedback.text ?? "",
+        },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(extractErrorMessage("Failed to submit feedback.", data));
     return data;
 }
