@@ -833,31 +833,6 @@
 }
 .fb-submit-btn.disabled { opacity: 0.35; cursor: not-allowed; }
 
-.chat-history-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.chat-history-delete {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid rgba(0, 255, 120, 0.22);
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-
 .chat-history-item:hover .chat-history-delete,
 .chat-history-item.active .chat-history-delete {
   opacity: 1;

@@ -119,30 +119,41 @@ const Chat = () => {
   const filmBankCount = useMemo(() => filmBank.length, [filmBank]);
 
   const handleDeleteChat = (chatId) => {
-    const remaining = chatHistory.filter((c) => c.id !== chatId);
+    setChatHistory((prev) => {
+      const remaining = prev.filter((c) => c.id !== chatId);
 
-    if (remaining.length === 0) {
-      const newChat = {
-        id: Date.now(),
-        title: "New Conversation",
-        messages: [INITIAL_ASSISTANT_MESSAGE],
-        createdAt: new Date(),
-      };
+      const nextChats =
+        remaining.length > 0
+          ? remaining
+          : [
+              {
+                id: Date.now(),
+                title: "New Conversation",
+                messages: [INITIAL_ASSISTANT_MESSAGE],
+                createdAt: new Date(),
+              },
+            ];
 
-      setChatHistory([newChat]);
-      setActiveChatId(newChat.id);
-      setMessages(newChat.messages);
+      const nextActive =
+        activeChatId === chatId
+          ? nextChats[0]
+          : nextChats.find((c) => c.id === activeChatId) || nextChats[0];
+
+      setActiveChatId(nextActive.id);
+      setMessages(nextActive.messages);
       setDeleteTarget(null);
-      return;
-    }
-    setChatHistory(remaining);
 
-    if (activeChatId === chatId){
-      setActiveChatId(remaining[0].id);
-      setMessages(remaining[0].messages);
-    }
-    setDeleteTarget(null);
-  }
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          chats: nextChats,
+          activeChatId: nextActive.id,
+        })
+      );
+
+      return nextChats;
+    });
+  };
   // -------------------------------------------------------------------------
   // Film Bank
   // -------------------------------------------------------------------------
@@ -345,15 +356,15 @@ const Chat = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-actions">
-            <button className="sidebar-action-button" onClick={() => setBankOpen(true)}>
+            <button className="sidebar-action-button terminal-btn" onClick={() => setBankOpen(true)}>
               Film Bank
               {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
             </button>
-            <button className="sidebar-action-button" onClick={() => navigate("/stats")}>
+            <button className="sidebar-action-button terminal-btn" onClick={() => navigate("/stats")}>
               Stats
             </button>
           </div>
-          <button className="new-chat-button" onClick={handleNewChat}>+ New Chat</button>
+          <button className="new-chat-button terminal-btn" onClick={handleNewChat}>+ New Chat</button>
         </div>
 
         <div className="chat-history">
