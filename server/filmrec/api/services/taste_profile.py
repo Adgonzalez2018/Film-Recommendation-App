@@ -1,12 +1,15 @@
-import json
-from pathlib import Path
-from collections import Counter
-
-from django.core.management.base import BaseCommand
+#api/services/taste_profile.py
 from django.utils import timezone
+from __future__ import annotations
 
-from api.models import MovieUser # adjust import if needed
+from collections import Counter
+from typing import Iterable
 
+from api.models import MovieUser
+
+# ---------------------------------------------------------------------------
+# Baseline taste rules
+# ---------------------------------------------------------------------------
 # Heuristically select the liked and disliked movies from user
 # only take uppers, lowers, remove mids (noise) (ratings 3-3.5)
 LOVED_MIN = 4.0
@@ -17,6 +20,46 @@ CAP_LOVED = 100
 CAP_DISLIKED = 60
 CAP_RECENT = 20
 
+# Small headroom so recent docs still ahve room after loved/dislike
+QUERY_HEADROOM = 50
+
+def load_rated_movieusers(user_id: int) -> list[MovieUser]:
+    # Load a capped set of MovieUser rows with all related movie metadata
+    # to build the initial baseline taste profile
+    limit = CAP_LOVED + CAP_DISLIKED + CAP_RECENT + QUERY_HEADROOM
+    
+    return list(
+        MovieUser.objects
+        .filter(user_id=user_id)
+        .select_related(
+            "movie__moviegenre_set__genre",
+            "movie__moviecrew_set__person",
+            "movie__moviecast_set_person",
+        )
+        .order_by("-rating", "-watched_date")[:limit]
+    )
+
+def split_movieusers(
+        all_rated: list[MovieUser],
+) -> tuple[list[MovieUser], list[MovieUser], list[MovieUser]]:
+    # Split movieUser rows into loved/disliked/recent buckets.
+    loved_mus = [mu for mu in all_rated if (mu.rating or 0) >= LOVED_MIN][:CAP_LOVED]
+    disliked_mus = [mu for mu in all_rated if (mu.rating or 0) <= DISLIKED_MAX][:CAP_DISLIKED]
+    
+    loved_ids = {mu.movie_id for mu in loved_mus}
+    disliked_ids = {mu.movie_id for mu in disliked_mus}
+    excluded = loved_ids | disliked_ids
+    recent_mus = sorted(
+        [mu for mu in all_rated if mu.watched_date and mu.movie_id not in excluded],
+        key=lambda mu:mu.watched_date,
+        reverse=True
+    )[:CAP_RECENT]
+
+    return loved_mus, disliked_mus, recent_mus
+
+# ---------------------------------------------------------------------------
+# Doc builders
+# ---------------------------------------------------------------------------
 def mu_to_doc(mu, doc_type: str) -> dict:
     mv = mu.movie
     title = mv.title or "Unknown"
@@ -76,7 +119,21 @@ def mu_to_doc(mu, doc_type: str) -> dict:
         "text": text,
     }
 
-def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
+def movieusers_to_docs(movieusers: Iterable[MovieUser], doc_type: str) -> list[dict]:
+    return [mu_to_doc(mu, doc_type) for mu in movieusers]
+
+# ---------------------------------------------------------------------------
+# Doc builders
+# ---------------------------------------------------------------------------
+def _top_items(docs: list[dict], field: str, k:int) -> list[str]:
+    counter = Counter()
+    for doc in docs:
+        for item in (doc.get(field) or []):
+            if item:
+                counter[item] += 1
+    return [item for item, _ in counter.most_common(k)]
+
+def build_summary(loved_docs: list[dict], disliked_docs: list[dict], recent_docs: list[dict]) -> dict:
     #v1 deterministic: just list top genres by freq if present in text
     # Later we should compute from real relations, directors, keywords
     def top_items(docs, field, k=6):
@@ -141,67 +198,53 @@ def build_summary(loved_docs, disliked_docs, recent_docs) -> dict:
         "generated_at": timezone.now().isoformat(),
     }
 
-class Command(BaseCommand):
-    help = "Build a capped taste TXT file for a user."
+# ---------------------------------------------------------------------------
+# Public service entry point
+# ---------------------------------------------------------------------------
 
-    def add_arguments(self,parser):
-        parser.add_argument("--user-id", type=int, required=True)
-        parser.add_argument("--out", type=str, default="taste_out")
+def build_initial_taste_artifacts(user_id: int) -> dict:
+    """
+    Main baseline taste-profile service.
+    returns:
+    {
+        summary doc: {},
+        loved doc: [],
+        disliked doc: [],
+        recent doc: [],
+        counts: {},
+    }
+    """
+    all_rated = load_rated_movieusers(user_id=user_id)
+    if not all_rated:
+        return {
+            "summary_doc": None,
+            "loved_docs": [],
+            "disliked_docs": [],
+            "recent_docs": [],
+            "counts": {
+                "total_source_rows": 0,
+                "loved": 0,
+                "disliked": 0,
+                "recent": 0,
+            }
+        }
+    
+    loved_mus, disliked_mus, recent_mus = split_movieusers(all_rated)
 
-    def handle(self, *args, **opts):
-        user_id = opts["user_id"]
-        out_dir = Path(opts["out"])
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"taste_user_{user_id}.txt"
+    loved_docs = movieusers_to_docs(loved_mus, "loved")
+    disliked_docs = movieusers_to_docs(disliked_mus, "disliked")
+    recent_docs = movieusers_to_docs(recent_mus, "recent")
 
-        # optimizeation: single queryset with all prefetches - evaluated once,
-        # then sliced in Python. Eliminates the 3 separate DB round-trips.
-        try:
-            all_rated = list(
-                MovieUser.objects
-                .filter(user_id=user_id)
-                .select_related("movie")
-                .prefetch_related(
-                    "movie__moviegenre_set__genre",
-                    "movie__moviecrew_set__person",
-                    "movie__moviecast_set__person",
-                )
-                .order_by("-rating", "-watched_date")
-                [: CAP_LOVED + CAP_DISLIKED + CAP_RECENT + 50] # small headroom
-            )
-
-            if not all_rated:
-                self.stdout.write(self.style.WARNING(f"User {user_id} has no rated movies."))
-                return
-
-            loved_mus = [mu for mu in all_rated if (mu.rating or 0) >= LOVED_MIN][:CAP_LOVED]
-            disliked_mus = [mu for mu in all_rated if (mu.rating or 0) <= DISLIKED_MAX][:CAP_DISLIKED]
-
-            loved_ids = {mu.movie_id for mu in loved_mus}
-            disliked_ids = {mu.movie_id for mu in disliked_mus}
-            excluded = loved_ids | disliked_ids
-            recent_mus = sorted(
-                [mu for mu in all_rated if mu.watched_date and mu.movie_id not in excluded],
-                key=lambda mu:mu.watched_date,
-                reverse=True
-            )[:CAP_RECENT]
-
-            loved_docs = [mu_to_doc(mu, "loved") for mu in loved_mus]
-            disliked_docs = [mu_to_doc(mu, "disliked") for mu in disliked_mus]
-            recent_docs = [mu_to_doc(mu, "recent") for mu in recent_mus]
-
-            summary_doc = build_summary(loved_docs, disliked_docs, recent_docs)
-
-            with out_path.open("w", encoding="utf-8") as f:
-                f.write(json.dumps(summary_doc, ensure_ascii=False) + "\n")
-                for d in loved_docs + disliked_docs + recent_docs:
-                    f.write(json.dumps(d, ensure_ascii=False) + "\n")
-
-            self.stdout.write(self.style.SUCCESS(f"Wrote {out_path}"))
-            self.stdout.write(self.style.SUCCESS(
-                f"Counts: loved={len(loved_docs)} disliked={len(disliked_docs)} recent={len(recent_docs)}"
-                ))
-            self.stdout.write(self.style.SUCCESS(f"File size: {out_path.stat().st_size / 1024:.1f} KB"))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error: {str(e)}"))
-            raise
+    summary_doc = build_summary(loved_docs, disliked_docs, recent_docs)
+    return {
+        "summary_doc": summary_doc,
+        "loved_docs": loved_docs,
+        "disliked_docs": disliked_docs,
+        "recent_docs": recent_docs,
+        "counts": {
+            "total_source_rows": len(all_rated),
+            "loved": len(loved_docs),
+            "disliked": len(disliked_docs),
+            "recent": len(recent_docs),
+        },
+    }
