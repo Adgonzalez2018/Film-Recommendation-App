@@ -7,10 +7,19 @@ import {
   fetchFilmBank,
   dismissFilmBankMovie,
 } from "../../api/chat";
+import ModalShell from "./ModalShell";
+import ConfirmDeleteModal from "./confirmdeleteModal";
 import FilmBankFeedbackModal from "./filmbankfeedbackModal";
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
+
+function makeChatTitle(text) {
+  const clean = text.trim().replace(/\s+/g, " ");
+  if (!clean) return "New Conversation";
+  return clean.length > 36 ? `${clean.slice(0,36)}…`: clean;
+}
+
 
 function extractErrorMessage(fallback, data) {
   if (!data) return fallback;
@@ -103,12 +112,37 @@ const Chat = () => {
 
   // Feedback modal state — which film is currently being rated
   const [feedbackFilm, setFeedbackFilm] = useState(null);
-
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const messagesEndRef = useRef(null);
   const PROMPT = "user@film:~$";
 
   const filmBankCount = useMemo(() => filmBank.length, [filmBank]);
 
+  const handleDeleteChat = (chatId) => {
+    const remaining = chatHistory.filter((c) => c.id !== chatId);
+
+    if (remaining.length === 0) {
+      const newChat = {
+        id: Date.now(),
+        title: "New Conversation",
+        messages: [INITIAL_ASSISTANT_MESSAGE],
+        createdAt: new Date(),
+      };
+
+      setChatHistory([newChat]);
+      setActiveChatId(newChat.id);
+      setMessages(newChat.messages);
+      setDeleteTarget(null);
+      return;
+    }
+    setChatHistory(remaining);
+
+    if (activeChatId === chatId){
+      setActiveChatId(remaining[0].id);
+      setMessages(remaining[0].messages);
+    }
+    setDeleteTarget(null);
+  }
   // -------------------------------------------------------------------------
   // Film Bank
   // -------------------------------------------------------------------------
@@ -217,7 +251,7 @@ const Chat = () => {
     setChatHistory((prev) =>
       prev.map((chat) =>
         chat.id === activeChatId && chat.title === "New Conversation"
-          ? { ...chat, title: trimmed.slice(0, 30) }
+          ? { ...chat, title: makeChatTitle(trimmed) }
           : chat
       )
     );
@@ -329,8 +363,26 @@ const Chat = () => {
               className={`chat-history-item ${chat.id === activeChatId ? "active" : ""}`}
               onClick={() => handleChatSelect(chat.id)}
             >
-              <div className="history-title">{chat.title}</div>
-              <div className="chat-date">{chat.date}</div>
+              <div className="chat-history-row">
+                <div className="history-title">{chat.title}</div>
+                  <button 
+                  className="chat-history-delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(chat);
+                  }}>
+                    ×
+                  </button>
+              </div>
+              <div className="chat-date">
+                {chat.createdAt
+                ? new Date(chat.createdAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })
+                : ""}
+              </div>
+        
             </div>
           ))}
         </div>
@@ -464,16 +516,11 @@ const Chat = () => {
       {/* Film Bank modal                                                      */}
       {/* ------------------------------------------------------------------ */}
       {bankOpen && (
-        <div className="film-bank-overlay" onClick={() => setBankOpen(false)}>
-          <div className="film-bank-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="film-bank-header">
-              <span className="film-bank-title">FILM BANK</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span className="film-bank-count">{filmBankCount} saved</span>
-                <button className="film-bank-close" onClick={() => setBankOpen(false)}>×</button>
-              </div>
-            </div>
-
+          <ModalShell
+            title="FILM BANK"
+            onClose={() => setBankOpen(false)}
+            className="film-bank-modal"
+          >
             {bankLoading ? (
               <div className="film-bank-empty"><p>Loading Film Bank...</p></div>
             ) : bankError ? (
@@ -512,7 +559,10 @@ const Chat = () => {
                       {/* Remove without feedback */}
                       <button
                         className="film-card-remove"
-                        onClick={() => handleRemoveFromBank(film.movieId)}
+                        onClick={() => {
+                          if (!film.movieId) return;
+                          handleRemoveFromBank(film);
+                        }}
                         aria-label={`Remove ${film.title}`}
                       >
                         ×
@@ -530,8 +580,7 @@ const Chat = () => {
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </ModalShell>
       )}
 
       {/* ------------------------------------------------------------------ */}
@@ -543,6 +592,14 @@ const Chat = () => {
           token={accessToken}
           onDone={handleFeedbackDone}
           onClose={() => setFeedbackFilm(null)}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title="DELETE CHAT"
+          message={`Are you sure you want to delete "${deleteTarget.title}"?`}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => handleDeleteChat(deleteTarget.id)}
         />
       )}
     </div>
