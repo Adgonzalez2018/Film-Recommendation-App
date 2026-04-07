@@ -20,7 +20,6 @@ function makeChatTitle(text) {
   return clean.length > 36 ? `${clean.slice(0,36)}…`: clean;
 }
 
-
 function extractErrorMessage(fallback, data) {
   if (!data) return fallback;
   if (typeof data === "string") return data;
@@ -121,8 +120,6 @@ const Chat = () => {
   const handleDeleteChat = (chatId) => {
     setChatHistory((prev) => {
       const remaining = prev.filter((c) => c.id !== chatId);
-      let nextActiveId = activeChatId;
-
       if (remaining.length === 0) {
         const newChat = {
             id: Date.now(),
@@ -130,14 +127,12 @@ const Chat = () => {
             messages: [INITIAL_ASSISTANT_MESSAGE],
             createdAt: new Date(),
           };
-          nextActiveId = newChat.id;
           setActiveChatId(newChat.id);
           setDeleteTarget(null);
           return [newChat];
         }
         if (activeChatId === chatId) {
-          nextActiveId = remaining[0].id;
-          setActiveChatId(nextActiveId);
+          setActiveChatId(remaining[0].id);
         }
         setDeleteTarget(null);
         return remaining;
@@ -219,6 +214,12 @@ const Chat = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    const activeChat = chatHistory.find((c) => c.id === activeChatId);
+    setMessages(activeChat?.messages || [INITIAL_ASSISTANT_MESSAGE]);
+  }, [activeChatId, chatHistory]);
   useEffect(() => {
     if (!activeChatId) return;
 
