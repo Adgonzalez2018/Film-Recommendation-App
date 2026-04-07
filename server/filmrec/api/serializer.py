@@ -262,3 +262,30 @@ class MovieCardSerializer(serializers.ModelSerializer):
             "avg_rating",
             "description",
         ]
+
+"""
+FILMBANK SERIALIZER
+Get Film Recommender's reasoning
+"""
+class FilmBankSerializer(serializers.ModelSerializer):
+    movie = MovieCardSerializer(read_only=True)
+    why = serializers.CharField(source="reason", allow_null=True, read_only=True)
+
+    class Meta:
+        model = FilmBank
+        fields = [
+            "id",
+            "movie",
+            "why",
+            "query_text",
+            "created_at",
+            "dismissed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "movie",
+            "why",
+            "query_text",
+            "created_at",
+            "dismissed_at",
+        ]

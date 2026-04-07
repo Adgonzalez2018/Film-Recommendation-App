@@ -868,3 +868,52 @@
   border-color: rgba(255, 80, 80, 0.5);
   color: #ff8888;
 }
+
+.chat-history-item {
+  position: relative;
+  padding: 14px 44px 12px 10px;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: rgba(0,0,0,0.25);
+}
+
+.chat-history-row {
+  display: block;
+}
+
+.history-title,
+.chat-title {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.chat-history-delete {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0, 255, 120, 0.22);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.chat-history-item:hover .chat-history-delete,
+.chat-history-item.active .chat-history-delete {
+  opacity: 1;
+}

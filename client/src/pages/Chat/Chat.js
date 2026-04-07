@@ -561,7 +561,7 @@ const Chat = () => {
                         className="film-card-remove"
                         onClick={() => {
                           if (!film.movieId) return;
-                          handleRemoveFromBank(film);
+                          handleRemoveFromBank(film.movieId);
                         }}
                         aria-label={`Remove ${film.title}`}
                       >
