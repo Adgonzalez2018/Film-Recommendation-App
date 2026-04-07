@@ -1,3 +1,6 @@
+import React, { useState } from "react";
+import ModalShell from "./ModalShell";
+
 const ConfirmDeleteModal = ({ title, message, onCancel, onConfirm }) => {
   return (
     <ModalShell title={title} onClose={onCancel} className="confirm-modal">
