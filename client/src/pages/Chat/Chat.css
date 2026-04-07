@@ -167,6 +167,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-date {
@@ -830,3 +832,39 @@
   box-shadow: 0 0 14px rgba(0, 255, 120, 0.15);
 }
 .fb-submit-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+
+.chat-history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-history-delete {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0, 255, 120, 0.22);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.chat-history-item:hover .chat-history-delete,
+.chat-history-item.active .chat-history-delete {
+  opacity: 1;
+}
+
+.chat-history-delete:hover {
+  background: rgba(255, 60, 60, 0.14);
+  border-color: rgba(255, 80, 80, 0.5);
+  color: #ff8888;
+}
