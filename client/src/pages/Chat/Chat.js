@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import "./Chat.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
@@ -10,6 +10,7 @@ import {
 import ModalShell from "./ModalShell";
 import ConfirmDeleteModal from "./confirmdeleteModal";
 import FilmBankFeedbackModal from "./filmbankfeedbackModal";
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -17,21 +18,7 @@ import FilmBankFeedbackModal from "./filmbankfeedbackModal";
 function makeChatTitle(text) {
   const clean = text.trim().replace(/\s+/g, " ");
   if (!clean) return "New Conversation";
-  return clean.length > 36 ? `${clean.slice(0,36)}…`: clean;
-}
-
-function extractErrorMessage(fallback, data) {
-  if (!data) return fallback;
-  if (typeof data === "string") return data;
-  if (typeof data === "object") {
-    if (typeof data.error === "string" && data.error.trim()) return data.error.trim();
-    if (typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
-    for (const value of Object.values(data)) {
-      if (Array.isArray(value) && typeof value[0] === "string") return value[0];
-      if (typeof value === "string" && value.trim()) return value.trim();
-    }
-  }
-  return fallback;
+  return clean.length > 36 ? `${clean.slice(0, 36)}…` : clean;
 }
 
 const STORAGE_KEY = "filmrec_chats";
@@ -54,7 +41,7 @@ function normalizeFilmBankItem(item) {
     letterboxd_uri: movie?.letterboxd_uri || movie?.letterboxd || null,
     description: movie?.description || "",
     avgRating: movie?.avg_rating ?? null,
-    reason: item?.reason || "",
+    reason: item?.why || item?.reason || "",
     queryText: item?.query_text || "",
     createdAt: item?.created_at || null,
   };
@@ -87,8 +74,146 @@ const INITIAL_ASSISTANT_MESSAGE = {
   content:
     "Hello! I'm your film recommendation AI. I know all about your Letterboxd viewing history. What would you like to know?",
   recommendations: [],
-  timestamp: new Date(),
+  timestamp: new Date().toISOString(),
 };
+
+function makeNewChat() {
+  return {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    title: "New Conversation",
+    messages: [INITIAL_ASSISTANT_MESSAGE],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reducer
+// ---------------------------------------------------------------------------
+
+const INITIAL_CHAT_STATE = {
+  chatHistory: [],
+  activeChatId: null,
+  deleteTarget: null,
+};
+
+function chatReducer(state, action) {
+  switch (action.type) {
+    case "INIT_FROM_STORAGE": {
+      const chats = Array.isArray(action.payload?.chats) ? action.payload.chats : [];
+      const activeChatId = action.payload?.activeChatId ?? null;
+
+      if (chats.length === 0) {
+        const newChat = makeNewChat();
+        return {
+          chatHistory: [newChat],
+          activeChatId: newChat.id,
+          deleteTarget: null,
+        };
+      }
+
+      const validActiveId = chats.some((c) => c.id === activeChatId)
+        ? activeChatId
+        : chats[0].id;
+
+      return {
+        chatHistory: chats,
+        activeChatId: validActiveId,
+        deleteTarget: null,
+      };
+    }
+
+    case "NEW_CHAT": {
+      const newChat = makeNewChat();
+      return {
+        ...state,
+        chatHistory: [newChat, ...state.chatHistory],
+        activeChatId: newChat.id,
+        deleteTarget: null,
+      };
+    }
+
+    case "SELECT_CHAT": {
+      if (!state.chatHistory.some((c) => c.id === action.chatId)) return state;
+      return {
+        ...state,
+        activeChatId: action.chatId,
+      };
+    }
+
+    case "OPEN_DELETE_MODAL":
+      return {
+        ...state,
+        deleteTarget: action.chat,
+      };
+
+    case "CLOSE_DELETE_MODAL":
+      return {
+        ...state,
+        deleteTarget: null,
+      };
+
+    case "DELETE_CHAT": {
+      const remaining = state.chatHistory.filter((c) => c.id !== action.chatId);
+
+      if (remaining.length === 0) {
+        const newChat = makeNewChat();
+        return {
+          chatHistory: [newChat],
+          activeChatId: newChat.id,
+          deleteTarget: null,
+        };
+      }
+
+      const nextActiveId =
+        state.activeChatId === action.chatId
+          ? remaining[0].id
+          : remaining.some((c) => c.id === state.activeChatId)
+            ? state.activeChatId
+            : remaining[0].id;
+
+      return {
+        chatHistory: remaining,
+        activeChatId: nextActiveId,
+        deleteTarget: null,
+      };
+    }
+
+    case "APPEND_USER_MESSAGE": {
+      return {
+        ...state,
+        chatHistory: state.chatHistory.map((chat) =>
+          chat.id === state.activeChatId
+            ? {
+                ...chat,
+                title:
+                  chat.title === "New Conversation"
+                    ? makeChatTitle(action.message.content)
+                    : chat.title,
+                messages: [...(Array.isArray(chat.messages) ? chat.messages : []), action.message],
+              }
+            : chat
+        ),
+      };
+    }
+
+    case "APPEND_ASSISTANT_MESSAGE": {
+      return {
+        ...state,
+        chatHistory: state.chatHistory.map((chat) =>
+          chat.id === state.activeChatId
+            ? {
+                ...chat,
+                messages: [...(Array.isArray(chat.messages) ? chat.messages : []), action.message],
+              }
+            : chat
+        ),
+      };
+    }
+
+    default:
+      return state;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -98,46 +223,28 @@ const Chat = () => {
   const navigate = useNavigate();
   const { accessToken, isAuthenticating, authError } = useAuth();
 
-  const [messages, setMessages]       = useState([INITIAL_ASSISTANT_MESSAGE]);
-  const [input, setInput]             = useState("");
-  const [chatHistory, setChatHistory] = useState([]);
-  const [activeChatId, setActiveChatId] = useState(null);
+  const [chatState, dispatch] = useReducer(chatReducer, INITIAL_CHAT_STATE);
+  const [input, setInput] = useState("");
 
-  const [isLoading, setIsLoading]     = useState(false);
-  const [filmBank, setFilmBank]       = useState([]);
-  const [bankOpen, setBankOpen]       = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [filmBank, setFilmBank] = useState([]);
+  const [bankOpen, setBankOpen] = useState(false);
   const [bankLoading, setBankLoading] = useState(false);
-  const [bankError, setBankError]     = useState("");
+  const [bankError, setBankError] = useState("");
 
-  // Feedback modal state — which film is currently being rated
   const [feedbackFilm, setFeedbackFilm] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
   const messagesEndRef = useRef(null);
   const PROMPT = "user@film:~$";
 
+  const activeChat =
+    chatState.chatHistory.find((c) => c.id === chatState.activeChatId) || null;
+
+  const messages = Array.isArray(activeChat?.messages)
+    ? activeChat.messages
+    : [INITIAL_ASSISTANT_MESSAGE];
+
   const filmBankCount = useMemo(() => filmBank.length, [filmBank]);
 
-  const handleDeleteChat = (chatId) => {
-    setChatHistory((prev) => {
-      const remaining = prev.filter((c) => c.id !== chatId);
-      if (remaining.length === 0) {
-        const newChat = {
-            id: Date.now(),
-            title: "New Conversation",
-            messages: [INITIAL_ASSISTANT_MESSAGE],
-            createdAt: new Date(),
-          };
-          setActiveChatId(newChat.id);
-          setDeleteTarget(null);
-          return [newChat];
-        }
-        if (activeChatId === chatId) {
-          setActiveChatId(remaining[0].id);
-        }
-        setDeleteTarget(null);
-        return remaining;
-      });
-  };
   // -------------------------------------------------------------------------
   // Film Bank
   // -------------------------------------------------------------------------
@@ -159,7 +266,6 @@ const Chat = () => {
     }
   };
 
-  // Dismiss without feedback (plain remove ×)
   const handleRemoveFromBank = async (movieId) => {
     if (!movieId || !accessToken) return;
     const prev = filmBank;
@@ -172,7 +278,6 @@ const Chat = () => {
     }
   };
 
-  // Called by FilmBankFeedbackModal after a successful POST
   const handleFeedbackDone = (movieId) => {
     setFeedbackFilm(null);
     setFilmBank((current) => current.filter((f) => f.movieId !== movieId));
@@ -190,54 +295,47 @@ const Chat = () => {
   // Effects
   // -------------------------------------------------------------------------
 
-  useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
-  useEffect(() => { loadFilmBank(); }, [accessToken]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    loadFilmBank();
+  }, [accessToken]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+
+      if (!saved) {
+        dispatch({
+          type: "INIT_FROM_STORAGE",
+          payload: { chats: [], activeChatId: null },
+        });
+        return;
+      }
+
       const parsed = JSON.parse(saved);
-      setChatHistory(parsed.chats || []);
-      setActiveChatId(parsed.activeChatId);
-      const activeChat = parsed.chats?.find((c) => c.id == parsed.activeChatId);
-      setMessages(activeChat?.messages || [INITIAL_ASSISTANT_MESSAGE]);
-    } else {
-      const initialChat = {
-        id: Date.now(),
-        title: "New Conversation",
-        messages: [INITIAL_ASSISTANT_MESSAGE],
-        createdAt: new Date(),
-      };
-      setChatHistory([initialChat]);
-      setActiveChatId(initialChat.id);
-      setMessages(initialChat.messages);
+      dispatch({ type: "INIT_FROM_STORAGE", payload: parsed });
+    } catch (err) {
+      console.error("Failed to restore chats from localStorage:", err);
+      localStorage.removeItem(STORAGE_KEY);
+      dispatch({
+        type: "INIT_FROM_STORAGE",
+        payload: { chats: [], activeChatId: null },
+      });
     }
   }, []);
 
   useEffect(() => {
-    if (!activeChatId) return;
-
-    const activeChat = chatHistory.find((c) => c.id === activeChatId);
-    setMessages(activeChat?.messages || [INITIAL_ASSISTANT_MESSAGE]);
-  }, [activeChatId, chatHistory]);
-  useEffect(() => {
-    if (!activeChatId) return;
-
-    setChatHistory((prev) =>
-    prev.map((chat) =>
-    chat.id === activeChatId && chat.messages !== messages
-        ? { ...chat, messages }
-      : chat
-    )
-  );
-  }, [messages, activeChatId]);
-
-  useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ chats: chatHistory, activeChatId })
+      JSON.stringify({
+        chats: chatState.chatHistory,
+        activeChatId: chatState.activeChatId,
+      })
     );
-  }, [chatHistory, activeChatId]);
+  }, [chatState.chatHistory, chatState.activeChatId]);
 
   // -------------------------------------------------------------------------
   // Messaging
@@ -246,27 +344,20 @@ const Chat = () => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed || isLoading || !accessToken) return;
+
+    if (!trimmed || isLoading || !accessToken || !chatState.activeChatId) return;
 
     const userMessage = {
       id: Date.now(),
       role: "user",
       content: trimmed,
       recommendations: [],
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    dispatch({ type: "APPEND_USER_MESSAGE", message: userMessage });
     setInput("");
     setIsLoading(true);
-
-    setChatHistory((prev) =>
-      prev.map((chat) =>
-        chat.id === activeChatId && chat.title === "New Conversation"
-          ? { ...chat, title: makeChatTitle(trimmed) }
-          : chat
-      )
-    );
 
     try {
       const data = await sendChatMessage(trimmed, accessToken);
@@ -274,29 +365,29 @@ const Chat = () => {
         ? data.recommendations.map(normalizeRecommendation)
         : [];
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: data?.assistant || "Here are a few picks.",
-          recommendations,
-          timestamp: new Date(),
-        },
-      ]);
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: data?.assistant || "Here are a few picks.",
+        recommendations,
+        timestamp: new Date().toISOString(),
+      };
 
-      if (recommendations.length > 0) await loadFilmBank();
+      dispatch({ type: "APPEND_ASSISTANT_MESSAGE", message: assistantMessage });
+
+      if (recommendations.length > 0) {
+        await loadFilmBank();
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 2,
-          role: "assistant",
-          content: err?.message || "Something went wrong while getting recommendations.",
-          recommendations: [],
-          timestamp: new Date(),
-        },
-      ]);
+      const errorMessage = {
+        id: Date.now() + 2,
+        role: "assistant",
+        content: err?.message || "Something went wrong while getting recommendations.",
+        recommendations: [],
+        timestamp: new Date().toISOString(),
+      };
+
+      dispatch({ type: "APPEND_ASSISTANT_MESSAGE", message: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -307,22 +398,15 @@ const Chat = () => {
   // -------------------------------------------------------------------------
 
   const handleNewChat = () => {
-    const newChat = {
-      id: Date.now(),
-      title: "New Conversation",
-      messages: [INITIAL_ASSISTANT_MESSAGE],
-      createdAt: new Date(),
-    };
-    setChatHistory((prev) => [newChat, ...prev]);
-    setActiveChatId(newChat.id);
-    setMessages(newChat.messages);
+    dispatch({ type: "NEW_CHAT" });
   };
 
   const handleChatSelect = (chatId) => {
-    const selected = chatHistory.find((c) => c.id === chatId);
-    if (!selected) return;
-    setActiveChatId(chatId);
-    setMessages(selected.messages);
+    dispatch({ type: "SELECT_CHAT", chatId });
+  };
+
+  const handleDeleteChat = (chatId) => {
+    dispatch({ type: "DELETE_CHAT", chatId });
   };
 
   // -------------------------------------------------------------------------
@@ -332,7 +416,9 @@ const Chat = () => {
   if (isAuthenticating) {
     return (
       <div className="chat-container dark-mode">
-        <div className="auth-loading"><p>Authenticating...</p></div>
+        <div className="auth-loading">
+          <p>Authenticating...</p>
+        </div>
       </div>
     );
   }
@@ -342,7 +428,9 @@ const Chat = () => {
       <div className="chat-container dark-mode">
         <div className="auth-error-container">
           <div className="error-message">{authError}</div>
-          <button className="retry-button" onClick={() => window.location.reload()}>RETRY</button>
+          <button className="retry-button" onClick={() => window.location.reload()}>
+            RETRY
+          </button>
         </div>
       </div>
     );
@@ -357,44 +445,55 @@ const Chat = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-actions">
-            <button className="sidebar-action-button terminal-btn" onClick={() => setBankOpen(true)}>
+            <button
+              className="sidebar-action-button terminal-btn"
+              onClick={() => setBankOpen(true)}
+            >
               Film Bank
               {filmBankCount > 0 && <span className="bank-count">{filmBankCount}</span>}
             </button>
-            <button className="sidebar-action-button terminal-btn" onClick={() => navigate("/stats")}>
+            <button
+              className="sidebar-action-button terminal-btn"
+              onClick={() => navigate("/stats")}
+            >
               Stats
             </button>
           </div>
-          <button className="new-chat-button terminal-btn" onClick={handleNewChat}>+ New Chat</button>
+          <button className="new-chat-button terminal-btn" onClick={handleNewChat}>
+            + New Chat
+          </button>
         </div>
 
         <div className="chat-history">
-          {chatHistory.map((chat) => (
+          {chatState.chatHistory.map((chat) => (
             <div
               key={chat.id}
-              className={`chat-history-item ${chat.id === activeChatId ? "active" : ""}`}
+              className={`chat-history-item ${
+                chat.id === chatState.activeChatId ? "active" : ""
+              }`}
               onClick={() => handleChatSelect(chat.id)}
             >
               <div className="chat-history-row">
                 <div className="history-title">{chat.title}</div>
-                  <button 
+                <button
                   className="chat-history-delete"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setDeleteTarget(chat);
-                  }}>
-                    ×
-                  </button>
+                    dispatch({ type: "OPEN_DELETE_MODAL", chat });
+                  }}
+                >
+                  ×
+                </button>
               </div>
+
               <div className="chat-date">
                 {chat.createdAt
-                ? new Date(chat.createdAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                })
-                : ""}
+                  ? new Date(chat.createdAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })
+                  : ""}
               </div>
-        
             </div>
           ))}
         </div>
@@ -422,7 +521,9 @@ const Chat = () => {
           {messages.map((m) => (
             <div key={m.id} className={`message-block ${m.role}`}>
               <div className={`log-line ${m.role}`}>
-                <span className="log-prefix">{m.role === "user" ? PROMPT : "ai@film:~#"}</span>
+                <span className="log-prefix">
+                  {m.role === "user" ? PROMPT : "ai@film:~#"}
+                </span>
                 <span className="log-text">{m.content}</span>
               </div>
 
@@ -432,6 +533,7 @@ const Chat = () => {
                   <div className="chat-recommendations-grid">
                     {m.recommendations.map((film) => {
                       const movieLink = getMovieLink(film);
+
                       const card = (
                         <>
                           <div className="film-card-poster">
@@ -443,19 +545,24 @@ const Chat = () => {
                               </div>
                             )}
                           </div>
+
                           <div className="film-card-info">
                             <div className="film-card-title">{film.title}</div>
                             {film.year && <div className="film-card-year">{film.year}</div>}
+
                             {!!film.description && (
                               <div className="film-card-description">{film.description}</div>
                             )}
+
                             {!!film.why && (
                               <ul className="film-card-why">
                                 {film.why
                                   .split(/[.•]\s+|(?<=\.)\s+/)
                                   .map((p) => p.trim())
                                   .filter(Boolean)
-                                  .map((point, idx) => <li key={idx}>{point}</li>)}
+                                  .map((point, idx) => (
+                                    <li key={idx}>{point}</li>
+                                  ))}
                               </ul>
                             )}
                           </div>
@@ -494,6 +601,7 @@ const Chat = () => {
               <span className="log-text typing">typing...</span>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -524,80 +632,76 @@ const Chat = () => {
         </div>
       </main>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Film Bank modal                                                      */}
-      {/* ------------------------------------------------------------------ */}
       {bankOpen && (
-          <ModalShell
-            title="FILM BANK"
-            onClose={() => setBankOpen(false)}
-            className="film-bank-modal"
-          >
-            {bankLoading ? (
-              <div className="film-bank-empty"><p>Loading Film Bank...</p></div>
-            ) : bankError ? (
-              <div className="film-bank-empty"><p>{bankError}</p></div>
-            ) : filmBank.length === 0 ? (
-              <div className="film-bank-empty">
-                <span className="film-bank-empty-icon">⬚</span>
-                <p>Films recommended by the AI will appear here.</p>
-              </div>
-            ) : (
-              <div className="film-bank-grid">
-                {filmBank.map((film) => (
-                  <div
-                    key={film.id}
-                    className="film-card"
-                    title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
-                  >
-                    <div className="film-card-poster">
-                      {film.poster ? (
-                        <img src={film.poster} alt={film.title} />
-                      ) : (
-                        <div className="film-card-placeholder">
-                          <span>{film.title.charAt(0)}</span>
-                        </div>
-                      )}
+        <ModalShell
+          title="FILM BANK"
+          onClose={() => setBankOpen(false)}
+          className="film-bank-modal"
+        >
+          {bankLoading ? (
+            <div className="film-bank-empty">
+              <p>Loading Film Bank...</p>
+            </div>
+          ) : bankError ? (
+            <div className="film-bank-empty">
+              <p>{bankError}</p>
+            </div>
+          ) : filmBank.length === 0 ? (
+            <div className="film-bank-empty">
+              <span className="film-bank-empty-icon">⬚</span>
+              <p>Films recommended by the AI will appear here.</p>
+            </div>
+          ) : (
+            <div className="film-bank-grid">
+              {filmBank.map((film) => (
+                <div
+                  key={film.id}
+                  className="film-card"
+                  title={`${film.title}${film.year ? ` (${film.year})` : ""}`}
+                >
+                  <div className="film-card-poster">
+                    {film.poster ? (
+                      <img src={film.poster} alt={film.title} />
+                    ) : (
+                      <div className="film-card-placeholder">
+                        <span>{film.title.charAt(0)}</span>
+                      </div>
+                    )}
 
-                      {/* Rate button — opens feedback modal */}
-                      <button
-                        className="film-card-rate"
-                        onClick={() => setFeedbackFilm(film)}
-                        aria-label={`Rate ${film.title}`}
-                      >
-                        ★
-                      </button>
+                    <button
+                      className="film-card-rate"
+                      onClick={() => setFeedbackFilm(film)}
+                      aria-label={`Rate ${film.title}`}
+                    >
+                      ★
+                    </button>
 
-                      {/* Remove without feedback */}
-                      <button
-                        className="film-card-remove"
-                        onClick={() => {
-                          if (!film.movieId) return;
-                          handleRemoveFromBank(film.movieId);
-                        }}
-                        aria-label={`Remove ${film.title}`}
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    <div className="film-card-info">
-                      <div className="film-card-title">{film.title}</div>
-                      {film.year && <div className="film-card-year">{film.year}</div>}
-                      {!!film.reason && (
-                        <div className="film-card-description">{film.reason}</div>
-                      )}
-                    </div>
+                    <button
+                      className="film-card-remove"
+                      onClick={() => {
+                        if (!film.movieId) return;
+                        handleRemoveFromBank(film.movieId);
+                      }}
+                      aria-label={`Remove ${film.title}`}
+                    >
+                      ×
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </ModalShell>
+
+                  <div className="film-card-info">
+                    <div className="film-card-title">{film.title}</div>
+                    {film.year && <div className="film-card-year">{film.year}</div>}
+                    {!!film.reason && (
+                      <div className="film-card-description">{film.reason}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ModalShell>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Feedback modal — rendered above the film bank modal                 */}
-      {/* ------------------------------------------------------------------ */}
       {feedbackFilm && (
         <FilmBankFeedbackModal
           film={feedbackFilm}
@@ -606,12 +710,13 @@ const Chat = () => {
           onClose={() => setFeedbackFilm(null)}
         />
       )}
-      {deleteTarget && (
+
+      {chatState.deleteTarget && (
         <ConfirmDeleteModal
           title="DELETE CHAT"
-          message={`Are you sure you want to delete "${deleteTarget.title}"?`}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => handleDeleteChat(deleteTarget.id)}
+          message={`Are you sure you want to delete "${chatState.deleteTarget.title}"?`}
+          onCancel={() => dispatch({ type: "CLOSE_DELETE_MODAL" })}
+          onConfirm={() => handleDeleteChat(chatState.deleteTarget.id)}
         />
       )}
     </div>
