@@ -121,38 +121,27 @@ const Chat = () => {
   const handleDeleteChat = (chatId) => {
     setChatHistory((prev) => {
       const remaining = prev.filter((c) => c.id !== chatId);
+      let nextActiveId = activeChatId;
 
-      const nextChats =
-        remaining.length > 0
-          ? remaining
-          : [
-              {
-                id: Date.now(),
-                title: "New Conversation",
-                messages: [INITIAL_ASSISTANT_MESSAGE],
-                createdAt: new Date(),
-              },
-            ];
-
-      const nextActive =
-        activeChatId === chatId
-          ? nextChats[0]
-          : nextChats.find((c) => c.id === activeChatId) || nextChats[0];
-
-      setActiveChatId(nextActive.id);
-      setMessages(nextActive.messages);
-      setDeleteTarget(null);
-
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          chats: nextChats,
-          activeChatId: nextActive.id,
-        })
-      );
-
-      return nextChats;
-    });
+      if (remaining.length === 0) {
+        const newChat = {
+            id: Date.now(),
+            title: "New Conversation",
+            messages: [INITIAL_ASSISTANT_MESSAGE],
+            createdAt: new Date(),
+          };
+          nextActiveId = newChat.id;
+          setActiveChatId(newChat.id);
+          setDeleteTarget(null);
+          return [newChat];
+        }
+        if (activeChatId === chatId) {
+          nextActiveId = remaining[0].id;
+          setActiveChatId(nextActiveId);
+        }
+        setDeleteTarget(null);
+        return remaining;
+      });
   };
   // -------------------------------------------------------------------------
   // Film Bank
@@ -232,11 +221,22 @@ const Chat = () => {
 
   useEffect(() => {
     if (!activeChatId) return;
-    const updatedChats = chatHistory.map((chat) =>
-      chat.id === activeChatId ? { ...chat, messages } : chat
+
+    setChatHistory((prev) =>
+    prev.map((chat) =>
+    chat.id === activeChatId && chat.messages !== messages
+        ? { ...chat, messages }
+      : chat
+    )
+  );
+  }, [messages, activeChatId]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ chats: chatHistory, activeChatId })
     );
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ chats: updatedChats, activeChatId }));
-  }, [messages, chatHistory, activeChatId]);
+  }, [chatHistory, activeChatId]);
 
   // -------------------------------------------------------------------------
   // Messaging
