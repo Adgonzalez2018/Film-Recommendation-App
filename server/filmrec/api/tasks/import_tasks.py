@@ -69,7 +69,7 @@ def enqueue_taste_rebuild(user_id: int, result, *, is_res=False) -> bool:
     logger.info("taste rebuild queued user=%s", user_id)
     return True, "queued"
 
-@shared_task(queue="taste")
+@shared_task
 def build_and_index_taste(user_id):
     logger.warning(f"[taste task] starting for user_id={user_id}")
     try:

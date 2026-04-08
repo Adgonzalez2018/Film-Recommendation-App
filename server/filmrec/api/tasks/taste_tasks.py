@@ -53,7 +53,7 @@ def pending_feedback_count(user_id: int) -> int:
         user_id=user_id,
         feedback_submitted_at__isnull=False,
     )
-    
+
     if user.last_taste_rebuild_at:
         qs = qs.filter(feedback_submitted_at__gt=user.last_taste_rebuild_at)\
         

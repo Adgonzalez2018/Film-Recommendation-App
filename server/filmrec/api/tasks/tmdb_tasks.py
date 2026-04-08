@@ -26,7 +26,6 @@ _INTER_MOVIE_DELAY = .3
 
 @shared_task(
         bind=True,
-        queue="tmdb",
         max_retries=4,
         default_retry_delay=30, # first retry after 30s; celery doubles with backoff
         autoretry_for=(Exception,),
@@ -97,7 +96,7 @@ def enrich_movie_from_tmdb(self, movie_id: int, batch_id=None):
         _mark_failed(movie, batch_id, str(e))
         raise # let celery autoretry handle it
 
-@shared_task(queue="tmdb")
+@shared_task
 def enrich_movie_chunk(movie_ids: list, batch_id=None):
     """
     Process a chunk of movie IDs sequentially on one worker
