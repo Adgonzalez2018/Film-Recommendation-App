@@ -176,7 +176,7 @@ def enqueue_taste_profile_refresh(
             "TASTE_PROFILE queued init user=%s reason=%s out=%s",
             user_id,
             reason,
-            out=out_dir,
+            out_dir,
         )
         return "rebuild"
     
@@ -228,7 +228,7 @@ def enqueue_feedback_taste_refresh(
             reason="feedback",
             out=out_dir,
         )
-        logger.inf(
+        logger.info(
             "FEEDBACK_TASTE queued rebuild user=%s reason=strong_signal out=%s",
             user_id,
             out_dir,
