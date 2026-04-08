@@ -18,7 +18,10 @@ import FilmBankFeedbackModal from "./filmbankfeedbackModal";
 function makeChatTitle(text) {
   const clean = text.trim().replace(/\s+/g, " ");
   if (!clean) return "New Conversation";
-  return clean.length > 36 ? `${clean.slice(0, 36)}…` : clean;
+  const noPunctuation = clean.replace(/[?.!,:;]+$/g, "");
+  const words = noPunctuation.split(" ").slice(0, 7).join(" ");
+
+  return words.length > 40 ? `${clean.slice(0, 40)}…` : words;
 }
 
 const STORAGE_KEY = "filmrec_chats";
