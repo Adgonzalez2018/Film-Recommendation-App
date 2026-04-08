@@ -10,7 +10,9 @@ Allows:
     - Also saves their username to model
     - And Resync their data if they just uploaded something new
 
-Dependencies: UnifiedImportHelper.py
+Dependencies: rss_sync.py, csvImport.py, and unifiedImportHelper.py
+tmdb_tasks -> async enrichment
+import_tasks -> async build user taste summary
 """
 from django.utils import timezone
 from datetime import timedelta
@@ -28,9 +30,9 @@ from ..utils.unifiedImportHelper import (
 from ..services.csvImport import run_letterboxd_import
 from ..services.rss_sync import sync_user_rss_watches
 from ..tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
-from ..tasks.import_tasks import (
-    build_and_index_taste,
-    enqueue_taste_rebuild,
+from ..tasks.taste_tasks import (
+    enqueue_taste_profile_refresh,
+    run_rebuild_taste_profile,
 )
 from ..models import ImportBatch, WatchEvent
 
@@ -52,6 +54,14 @@ GUARD RAILS:
     - If files are empty
 
 """
+
+def _has_meaningful_updates(*, events_created=0, rel_created=0, rel_updated=0) -> bool:
+    return any([
+        (events_created or 0) > 0,
+        (rel_created or 0) > 0,
+        (rel_updated or 0) > 0,
+    ])
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def manual_import(request):
@@ -175,17 +185,17 @@ def manual_import(request):
             "last_manual_sync",
         ])
         
-        # Debugging info (for Railways)
-        print("TASTE GATE", {
-            "user_id": request.user.id,
-            "events_created": counters.get("events_created", 0),
-            "rel_created": counters.get("rel_created", 0),
-            "rel_updated": counters.get("rel_updated", 0),
-        })
-        
-        # Checks if any events, are updated or created, if so then we rebuild taste summary
-        # if user doesn't have one then we also build a user taste summary
-        taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, counters)
+        has_updates = _has_meaningful_updates(
+            events_created=counters.get("events_created", 0),
+            rel_created=counters.get("rel_created", 0),
+            rel_updated=counters.get("rel_updated",0),
+        )
+        taste_action = enqueue_taste_profile_refresh(
+            user_id=request.user.id,
+            reason="csv",
+            has_updates=has_updates,
+        )
+
         return Response(
             {
                 "status": "completed",
@@ -199,8 +209,7 @@ def manual_import(request):
                 "tmdb_queued": batch.tmdb_queued,
                 "tmdb_done": batch.tmdb_done,
                 "tmdb_failed": batch.tmdb_failed,
-                "taste_rebuild_queued": taste_rebuild_queued,
-                "taste_rebuild_reason": taste_reason
+                "taste_action": taste_action, # init | rebuild | noop
             },
             status=status.HTTP_200_OK,
         )
@@ -314,6 +323,11 @@ def import_rss(request):
             },
         )
         if res.error:
+            batch.status = "failed"
+            batch.error_message = str(res.error)
+            batch.finished_at = timezone.now()
+            batch.save(update_fields=["status", "error_message", "finished_at"])
+            
             return Response(
                 {"error": res.error, "batch_id": batch.id},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -356,15 +370,18 @@ def import_rss(request):
             "last_rss_sync",
         ])
 
-        # debugging info (railways)
-        print("TASTE GATE RSS", {
-            "user_id": request.user.id,
-            "events_created": res.events_created or 0,
-            "rel_created": res.rel_created or 0,
-            "rel_updated": res.rel_updated or 0,
-        })
-        # build taste summary if events are made or if no user taste summary exists
-        taste_rebuild_queued, taste_reason = enqueue_taste_rebuild(request.user.id, res, is_res=True)
+        has_updates = _has_meaningful_updates(
+            events_created=res.events_created or 0,
+            rel_created=res.rel_created or 0,
+            rel_updated=res.rel_updated or 0,
+        )
+
+        taste_action = enqueue_taste_profile_refresh(
+            user_id=request.user.id,
+            reason="rss",
+            has_updates=has_updates,
+        )
+
         message = None
         if (res.entries_seen or 0) == 0:
             message = (
@@ -384,8 +401,7 @@ def import_rss(request):
                         "tmdb_done": batch.tmdb_done,
                         "tmdb_failed": batch.tmdb_failed,
                         "entries_seen": res.entries_seen,
-                        "taste_rebuild_queued": taste_rebuild_queued,
-                        "taste_rebuild_reason": taste_reason,
+                        "taste_action": taste_action,
                         "message": message,
                     },
                     status=status.HTTP_200_OK,
@@ -492,7 +508,10 @@ def skip_onboarding(request):
 def rebuild_taste(request):
     # Manual Trigger for taste building (debug)
     try:
-        result = build_and_index_taste.delay(request.user.id)
+        result = run_rebuild_taste_profile.delay(
+            user_id=request.user.id,
+            reason="manual",
+        )
         return Response(
             {
                 "status": "queued", 

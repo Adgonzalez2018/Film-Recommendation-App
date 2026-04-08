@@ -101,7 +101,9 @@ class User(AbstractUser):
 
     # RAG - store id for vector store -> goes to LM (for taste summary)
     taste_vector_store_id = models.CharField(max_length=255, blank=True, null=True, unique=True, db_index=True)
-
+    # keep record for each time profile is rebuilt
+    last_taste_rebuild_at = models.DateTimeField(null=True, blank=True)
+    
     def __str__(self):
         return self.username
     

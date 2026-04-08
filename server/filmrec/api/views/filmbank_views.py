@@ -8,6 +8,7 @@ from rest_framework import status
 
 from ..models import FilmBank
 from ..serializer import FilmBankSerializer
+from ..tasks.taste_tasks import enqueue_feedback_taste_refresh
 
 """
 Upon pressing the FilmBank Button on /Chat
@@ -46,7 +47,6 @@ def film_bank_list(request):
     end = start + page_size
     items = qs[start:end]
 
-    items = qs[start:end]
     return Response(
         {
             "page": page,
@@ -96,9 +96,9 @@ def film_bank_feedback(request, movie_id: int):
     text = (request.data.get("text") or "").strip()
 
     if rating not in {"good", "neutral", "bad"}:
-        return Response({"error": "Invalid rating."})
-    if rating not in {True, False, None}:
-        return Response({"error": "Invalid watched value."})
+        return Response({"error": "Invalid rating."}, status=status.HTTP_400_BAD_REQUEST)
+    if watched not in {True, False, None}:
+        return Response({"error": "Invalid watched value."}, status=status.HTTP_400_BAD_REQUEST)
     
     fb = FilmBank.objects.filter(
         user=request.user,
@@ -108,17 +108,27 @@ def film_bank_feedback(request, movie_id: int):
 
     if not fb:
         return Response({"error": "Film not found in Film Bank."},status=status.HTTP_404_NOT_FOUND)
+    
     fb.feedback_rating = rating
     fb.feedback_watched = watched
     fb.feedback_text = text
     fb.feedback_submitted_at = timezone.now()
+    fb.status = "dismissed"
     fb.dismissed_at = timezone.now()
     fb.save(update_fields=[
         "feedback_rating",
         "feedback_watched",
         "feedback_text",
         "feedback_submitted_at",
+        "status",
         "dismissed_at",
     ])
+    
+    taste_action = enqueue_feedback_taste_refresh(
+        user_id=request.user.id,
+        rating=rating,
+        watched=watched,
+        text=text,
+    )
 
-    return Response({"status": "saved"}, status=status.HTTP_200_OK)
+    return Response({"status": "saved", "taste_action": taste_action}, status=status.HTTP_200_OK)
