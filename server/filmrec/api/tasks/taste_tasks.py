@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 DEFAULT_TASTE_OUT_DIR = "taste_out"
-
 FEEDBACK_REBUILD_THRESHOLD = 3
 
 # ---------------------------------------------------------------------------
@@ -46,13 +45,15 @@ def pending_feedback_count(user_id: int) -> int:
     Simple first version: count all feedback rows that still exist
     """
     try:
-        user = User.objects.filter(id=user_id)
+        user = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return 0
+    
     qs =  FilmBank.objects.filter(
         user_id=user_id,
         feedback_submitted_at__isnull=False,
     )
+    
     if user.last_taste_rebuild_at:
         qs = qs.filter(feedback_submitted_at__gt=user.last_taste_rebuild_at)\
         

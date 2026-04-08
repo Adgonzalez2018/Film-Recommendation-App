@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 
 from api.services.taste_profile import build_initial_taste_artifacts
 from api.services.feedback_profile import build_feedback_taste_artifacts
-from api.services.taste_store import write_taste_file, flatten_taste_docs
+from api.services.taste_store import write_taste_file
 from api.services.taste_merge import merge_taste_artifacts
 
 class Command(BaseCommand):
@@ -30,6 +30,7 @@ class Command(BaseCommand):
                     self.style.WARNING(f"User {user_id} has no baseline taste data.")
                 )
                 return
+            
             feedback_artifacts = build_feedback_taste_artifacts(user_id=user_id)
 
             merged = merge_taste_artifacts(

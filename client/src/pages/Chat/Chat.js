@@ -514,7 +514,7 @@ const Chat = () => {
 
       <main className="chat-main">
         <header className="chat-header">
-          <h1 className="header-title">Film-Recommender v1.1</h1>
+          <h1 className="header-title">Film-Recommender v1.3</h1>
         </header>
 
         <div className="messages-container">

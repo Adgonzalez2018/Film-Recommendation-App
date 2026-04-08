@@ -6,7 +6,7 @@ from api.services.taste_profile import build_initial_taste_artifacts
 from api.services.taste_store import write_taste_file, flatten_taste_docs
 
 class Command(BaseCommand):
-    help = "Build a capped taste TXT file for a user."
+    help = "Iinitialize the baseline taste profile TXT file for a user."
 
     def add_arguments(self,parser):
         parser.add_argument("--user-id", type=int, required=True)
