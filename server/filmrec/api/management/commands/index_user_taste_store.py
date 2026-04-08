@@ -1,37 +1,36 @@
 # Vector store per Movie
 from pathlib import Path
-from openai import OpenAI
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-User = get_user_model()
-# tune based on your OpenAI rate limits. 10 is a safe default;
-# raise to 20 if you're on a higher tier
-DELETE_WORKERS = 10
-
-def _delete_file(client: OpenAI, store_id: str, file_id: str) -> str:
-    # Delete a single vector store file. Returns file_id on success
-    client.vector_stores.files.delete(vector_store_id=store_id,file_id=file_id)
-    return file_id
+from api.services.taste_store import get_taste_file_path
+from api.services.taste_index import ensure_taste_indexed
 
 class Command(BaseCommand):
     help = "Create/Update a user's taste vector store from taste_user_id.txt"
     def add_arguments(self, parser):
         parser.add_argument("--user-id", type=int, required=True)
         parser.add_argument("--file", type=str, required=True, help="Path to taste_user_id.txt")
+        parser.add_argument("--out", type=str, default="taste_out", help="base output director for canonical taste files.")
         parser.add_argument("--name-prefix", type=str, default="FilmRec Taste Store")
 
     def handle(self, *args, **opts):
-        client = OpenAI()
-
-        user = User.objects.get(id=opts["user_id"])
-        file_path = Path(opts["file"])
+        user_id = opts["user_id"]
+        out = opts["out"]
+        explicit_file = opts.get("file")
+        name_prefix = opts["name_prefix"]
+        file_path = Path(explicit_file) if explicit_file else get_taste_file_path(user_id=user_id, out=out)
         if not file_path.exists():
             raise FileNotFoundError(f"Missing File: {file_path}")
         
-        store_id = getattr(user, "taste_vector_store_id", None)
+        result = ensure_taste_indexed(
+            user_id=user_id,
+            file_path=file_path,
+            name_prefix=name_prefix,
+            clear_existing=True,
+        )
+        delete_count = result["deleted_count"]
 
         # Create store if missing
         if not store_id:
