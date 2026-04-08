@@ -1,6 +1,7 @@
 #api/services/taste_profile.py
-from django.utils import timezone
 from __future__ import annotations
+
+from django.utils import timezone
 
 from collections import Counter
 from typing import Iterable
