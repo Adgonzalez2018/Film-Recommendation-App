@@ -23,7 +23,8 @@ def _weighted_list_to_score_map(items: list[str], weight: float) -> dict[str, fl
     for idx, item in enumerate(items or []):
         if not item:
             continue
-        score = max(weight * (1.0 - idx * .08), 0.05)
+        factor = max(weight * (1.0 - idx * .08), 0.05)
+        score = weight * factor
         out[item] = round(score, 4)
     return out
 

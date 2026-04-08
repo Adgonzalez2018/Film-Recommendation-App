@@ -1,77 +1,3 @@
-#api/services/feedback_profile.py
-from __future__ import annotations
-from collections import Counter, defaultdict
-from typing import Iterable
-
-from django.utils import timezone
-
-from api.models import FilmBank
-
-# ---------------------------------------------------------------------------
-# Feedback weighting rules
-# ---------------------------------------------------------------------------
-GOOD_WEIGHT = 2.0
-NEUTRAL_WEIGHT = .35
-BAD_WEIGHT = -2.0
-
-WATCHED_BONUS_MULTIPLIER = 1.25
-TEXT_BONUS_MULTIPLIER = 1.10
-
-CAP_FEEDBACK_ROWS = 200
-
-# ---------------------------------------------------------------------------
-# Feedback weighting rules
-# ---------------------------------------------------------------------------
-
-def load_feedback_rows(user_id: int) -> list[FilmBank]:
-    # Load recent FilmBank rows that have actual submitted feedback.
-    return list(
-        FilmBank.objects
-        .filter(
-            user_id=user_id,
-            feedback_submitted_at__isnull=False,
-            feedback_rating__isnull=False,
-        )
-        .select_related("movie")
-        .prefetch_related(
-            "movie__moviegenre_set__genre",
-            "movie__moviecrew_set__person",
-            "movie_moviecast_person__person",
-        )
-        .order_by("-feedback_submitted_at")[:CAP_FEEDBACK_ROWS]
-    )
-
-# ---------------------------------------------------------------------------
-# Row scoring
-# ---------------------------------------------------------------------------
-
-def feedback_weight(fb: FilmBank) -> float:
-    """
-    Convert a FilmBank feedback row into one scalar weight.
-    Positive means reinforcement.
-    Negative means avoid / correction
-    """
-    rating = fb.feedback_rating
-    watched = fb.feedback_watched
-    text = (fb.feedback_text or "").strip()
-
-    if rating == "good":
-        weight = GOOD_WEIGHT
-    elif rating == "neutral":
-        weight = NEUTRAL_WEIGHT
-    elif rating == "bad":
-        weight = BAD_WEIGHT
-    else:
-        weight = 0.0
-
-    if watched is True:
-        weight *= WATCHED_BONUS_MULTIPLIER
-    
-    if text:
-        weight *= TEXT_BONUS_MULTIPLIER
-
-    return round(weight, 4)
-
 # api/services/feedback_profile.py
 from __future__ import annotations
 
@@ -81,7 +7,6 @@ from typing import Iterable
 from django.utils import timezone
 
 from api.models import FilmBank
-
 
 # ---------------------------------------------------------------------------
 # Feedback weighting rules
@@ -164,6 +89,7 @@ def fb_to_doc(fb: FilmBank) -> dict:
     year = getattr(mv, "year", None)
     year_str = f" ({year})" if year else ""
     weight = feedback_weight(fb)
+
     genres = [mg.genre.name for mg in mv.moviegenre_set.all() if mg.genre_id]
 
     directors = [
@@ -175,7 +101,7 @@ def fb_to_doc(fb: FilmBank) -> dict:
     actors = [
         mc.person.name
         for mc in sorted(
-            mv.moveiecast_set.all(),
+            mv.moviecast_set.all(),
             key=lambda x: x.order if x.order is not None else 999999,
         )[:3]
         if mc.person_id
@@ -184,25 +110,26 @@ def fb_to_doc(fb: FilmBank) -> dict:
     text_lines = [
         "USER_RECOMMENDATION_FEEDBACK",
         f"Movie: {title}{year_str}",
-        f"Recommendation rating: {fb.feedback_rating or 'unknown'}",
+        f"Recommendation rating: {fb.feedback_rating or '(unknown)'}",
         f"Watched: {fb.feedback_watched}",
-        f"Genres: {', '.join(genres)} if genres else Genres: (unknown)",
+        f"Genres: {', '.join(genres)}" if genres else "Genres: (unknown)",
     ]
 
     if directors:
         text_lines.append(f"Director: {', '.join(directors)}")
     if actors:
-        text_lines.append(f"Actors: {', '.join(directors)}")
+        text_lines.append(f"Actors: {', '.join(actors)}")
     if fb.reason:
         text_lines.append(f"Recommendation reason: {fb.reason}")
     if fb.feedback_text:
-        text_lines.append(f"Feedback weight: {weight:.2f}")
+        text_lines.append(f"User feedback: {fb.feedback_text[:300]}")
+    text_lines.append(f"Feedback weight: {weight:.2f}")
 
     return {
         "id": f"taste:feedback:filmbank:{fb.id}",
         "type": "feedback",
         "movie_id": mv.id,
-        "movie_id": getattr(mv, "tmdb_id", None),
+        "tmdb_id": getattr(mv, "tmdb_id", None),
         "title": title,
         "year": year,
         "genres": genres,
@@ -210,14 +137,16 @@ def fb_to_doc(fb: FilmBank) -> dict:
         "actors": actors,
         "feedback_rating": fb.feedback_rating,
         "feedback_watched": fb.feedback_watched,
-        "feedback_text": fb.feedback_text,
+        "feedback_text": fb.feedback_text or "",
         "feedback_weight": weight,
         "submitted_at": fb.feedback_submitted_at.isoformat() if fb.feedback_submitted_at else None,
         "text": "\n".join(text_lines),
     }
 
+
 def feedback_rows_to_docs(rows: Iterable[FilmBank]) -> list[dict]:
     return [fb_to_doc(row) for row in rows]
+
 
 # ---------------------------------------------------------------------------
 # Aggregation
@@ -234,19 +163,22 @@ def _score_items(docs: list[dict], field: str) -> dict[str, float]:
 
     return dict(scores)
 
+
 def _top_positive(score_map: dict[str, float], k: int) -> list[str]:
     return [
-        key for key, value in
-        sorted(score_map.items(), key=lambda x: (-x[1], x[0]))
+        key
+        for key, value in sorted(score_map.items(), key=lambda x: (-x[1], x[0]))
         if value > 0
     ][:k]
 
+
 def _top_negative(score_map: dict[str, float], k: int) -> list[str]:
     return [
-        key for key, value in
-        sorted(score_map.items(), key=lambda x: (x[1], x[0]))
+        key
+        for key, value in sorted(score_map.items(), key=lambda x: (x[1], x[0]))
         if value < 0
-    ]
+    ][:k]
+
 
 def build_feedback_summary(feedback_docs: list[dict]) -> dict:
     genre_scores = _score_items(feedback_docs, "genres")
@@ -262,14 +194,18 @@ def build_feedback_summary(feedback_docs: list[dict]) -> dict:
     positive_actors = _top_positive(actor_scores, k=5)
     negative_actors = _top_negative(actor_scores, k=3)
 
-    rating_counter = Counter(doc.get("feedback_rating") for doc in feedback_docs if doc.get("feedback_rating"))
+    rating_counter = Counter(
+        doc.get("feedback_rating")
+        for doc in feedback_docs
+        if doc.get("feedback_rating")
+    )
     watched_yes = sum(1 for doc in feedback_docs if doc.get("feedback_watched") is True)
     watched_no = sum(1 for doc in feedback_docs if doc.get("feedback_watched") is False)
 
     notable_text = [
         doc.get("feedback_text", "").strip()
         for doc in feedback_docs
-        if doc.get("feedback_text","").strip()
+        if doc.get("feedback_text", "").strip()
     ][:10]
 
     text = "\n".join([
@@ -314,6 +250,7 @@ def build_feedback_summary(feedback_docs: list[dict]) -> dict:
         "generated_at": timezone.now().isoformat(),
     }
 
+
 # ---------------------------------------------------------------------------
 # Public service entry point
 # ---------------------------------------------------------------------------
@@ -328,7 +265,7 @@ def build_feedback_taste_artifacts(user_id: int) -> dict:
                 "total_feedback_rows": 0,
             },
         }
-    
+
     feedback_docs = feedback_rows_to_docs(rows)
     summary_doc = build_feedback_summary(feedback_docs)
 
