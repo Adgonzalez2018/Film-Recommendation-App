@@ -5,8 +5,6 @@
 import csv
 import io
 
-from django.db.models import Q
-
 from ..models import MovieUser, WatchEvent
 from ..utils.unifiedImportHelper import (
     makeEventKey,
@@ -163,7 +161,9 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
     desired_event_keys = set()
 
     for r in rows:
-        movie = r["_movie"]
+        movie = r.get("_movie")
+        if not movie:
+            continue
         
         if r["kind"] == "watched":
             event_posted = r["posted_date"]
@@ -207,7 +207,18 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         pair = (e["movie"].id, e["posted_date"])
         if pair in existing_watch_pairs or e["event_key"] in staged_event_keys:
             continue
-        new_event_objects.append(WatchEvent(...))
+        new_event_objects.append(
+        WatchEvent(
+                user=user,
+                movie=e["movie"],
+                posted_date=e["posted_date"],
+                watched_date=e["watched_date"],
+                rewatch=e["rewatch"],
+                source=e["source"],
+                entry_url=e["entry_url"],
+                event_key=e["event_key"],
+            )
+        )
         staged_event_keys.add(e["event_key"])
         existing_watch_pairs.add(pair)
 
@@ -244,7 +255,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         }
 
     for r in rows:
-        movie = r["_movie"]
+        movie = r.get("_movie")
         if not movie:
             continue
         
