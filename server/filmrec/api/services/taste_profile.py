@@ -31,7 +31,7 @@ def load_rated_movieusers(user_id: int) -> list[MovieUser]:
 
     return list(
         MovieUser.objects
-        .filter(user_id=user_id)
+        .filter(user_id=user_id, rating__isnull=False)
         .select_related("movie")
         .prefetch_related(
             "movie__moviegenre_set__genre",
@@ -48,9 +48,9 @@ def split_movieusers(
     """
     Split MovieUser rows into loved / disliked / recent buckets.
     """
-    loved_mus = [mu for mu in all_rated if (mu.rating or 0) >= LOVED_MIN][:CAP_LOVED]
-    disliked_mus = [mu for mu in all_rated if (mu.rating or 0) <= DISLIKED_MAX][:CAP_DISLIKED]
-
+    loved_mus = [mu for mu in all_rated if mu.rating is not None and mu.rating >= LOVED_MIN][:CAP_LOVED]
+    disliked_mus = [mu for mu in all_rated if mu.rating is not None and mu.rating <= DISLIKED_MAX][:CAP_DISLIKED]
+    
     loved_ids = {mu.movie_id for mu in loved_mus}
     disliked_ids = {mu.movie_id for mu in disliked_mus}
     excluded = loved_ids | disliked_ids

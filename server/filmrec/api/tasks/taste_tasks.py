@@ -5,17 +5,19 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
+from django.core import cache
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 
 from api.models import FilmBank
-from api.services.taste_store import taste_file_exists
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 DEFAULT_TASTE_OUT_DIR = "taste_out"
 FEEDBACK_REBUILD_THRESHOLD = 3
+TASTE_QUEUE_LOCK_SECONDS = 60 * 10  # 10m
+TASTE_RUN_LOCK_SECONDS = 60 * 20    # 20m
 
 # ---------------------------------------------------------------------------
 # Feedback-trigger policy
@@ -33,9 +35,6 @@ def is_strong_feedback_signal(*, rating: str | None, watched, text: str) -> bool
         return True
     
     return False
-
-def _mark_taste_rebuilt(user_id: int) -> None:
-    User.objects.filter(id=user_id).update(last_taste_rebuild_at=timezone.now())
 
 def pending_feedback_count(user_id: int) -> int:
     """
@@ -64,21 +63,51 @@ def _taste_out_dir() -> str:
     # override later with settings
     return getattr(settings, "TASTE_OUT_DIR", DEFAULT_TASTE_OUT_DIR)
 
-def should_init_taste_profile(user_id: int, out: str | None = None):
+def _queue_lock_key(user_id: int) -> str:
+    return f"taste:queue-lock:user:{user_id}"
+
+def _run_lock_key(user_id: int) -> str:
+    return f"taste:run-lock:user:{user_id}"
+
+def _acquire_queue_lock(user_id: int) -> bool:
+    return cache.add(_queue_lock_key(user_id), "1", timeout=TASTE_QUEUE_LOCK_SECONDS)
+
+def _release_queue_lock(user_id: int) -> None:
+    cache.delete(_run_lock_key(user_id))
+
+def _acquire_run_lock(user_id: int) -> bool:
+    return cache.add(_run_lock_key(user_id), "1", timeout=TASTE_RUN_LOCK_SECONDS)
+
+def _release_run_lock(user_id: int) -> None:
+    cache.delete(_run_lock_key(user_id))
+
+def _mark_taste_rebuilt(user_id: int) -> None:
+    User.objects.filter(id=user_id).update(last_taste_rebuild_at=timezone.now())
+
+def _user_has_source_data(user) -> bool:
+    return (
+        (getattr(user, "manual_import_count", 0) or 0) > 0
+        or (getattr(user, "rss_import_count", 0) or 0) > 0
+    )
+
+def _has_built_taste_profile(user) -> bool:
+    # DB-backed truth, not filesystem truth
+    return bool(
+        getattr(user, "last_taste_rebuild_at", None)
+        or getattr(user, "taste_vectore_store_id", None)
+    )
+
+def should_init_taste_profile(user_id: int):
     # Init only if the user has enough soruce data and has no taste file
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return False
     
-    has_source_data = (
-        (getattr(user, "manual_import_count", 0) or 0) > 0
-        or (getattr(user, "rss_import_count", 0) or 0) > 0
-    )
-
-    if not has_source_data:
+    if not _user_has_source_data(user):
         return False
-    return not taste_file_exists(user_id=user_id, out=out or _taste_out_dir())
+
+    return not _has_built_taste_profile(user)
 
 def should_rebuild_taste_profile(
         *,
@@ -93,7 +122,12 @@ def should_rebuild_taste_profile(
         - reason is allowed
         - there were meaningful updates
     """
-    if not taste_file_exists(user_id=user_id, out=out or _taste_out_dir()):
+    try:
+        user = User.objects.get(id=user_id)
+    except user.DoesNotExist:
+        return False
+    
+    if not _has_built_taste_profile(user):
         return False
     
     if not has_updates:
@@ -105,17 +139,26 @@ def should_rebuild_taste_profile(
 @shared_task
 def run_init_taste_profile(user_id: int, out: str | None = None) -> None:
     out_dir = out or _taste_out_dir()
-    logger.info("INIT_TASTE_PROFILE start user=%s out=%s", user_id, out_dir)
 
-    call_command(
-        "init_taste_profile",
-        user_id=user_id,
-        out=out_dir,
-    )
+    if not _acquire_run_lock(user_id):
+        logger.info("INIT_TASTE_PROFILE skip user=%s reason=run_lock_exists", user_id)
+        return
     
-    _mark_taste_rebuilt(user_id)
-    
-    logger.info("INIT_TASTE_PROFILE success user=%s out=%s", user_id, out_dir)
+    try:
+        logger.info("INIT_TASTE_PROFILE start user=%s out=%s", user_id, out_dir)
+        
+        call_command(
+            "init_taste_profile",
+            user_id=user_id,
+            out=out_dir,
+        )
+        
+        _mark_taste_rebuilt(user_id)
+        
+        logger.info("INIT_TASTE_PROFILE success user=%s out=%s", user_id, out_dir)
+    finally:
+        _release_run_lock(user_id)
+        _release_queue_lock(user_id)
 
 @shared_task
 def run_rebuild_taste_profile(
@@ -124,23 +167,34 @@ def run_rebuild_taste_profile(
     out: str | None = None,
 ) -> None:
     out_dir = out or _taste_out_dir()
-    logger.info(
-        "REBUILD_TASTE_PROFILE start user=%s reason=%s out=%s",
-        user_id,
-        reason,
-        out_dir,
-    )
+    if not _acquire_run_lock(user_id):
+        logger.info(
+            "REBUILD_TASTE_PROFILE skip user=%s reason=%s cause=run_lock_exists",
+            user_id,
+            reason,
+        )  
+        return
+    try:
+        logger.info(
+            "REBUILD_TASTE_PROFILE start user=%s reason=%s out=%s",
+            user_id,
+            reason,
+            out_dir,
+        )
 
-    # rebuild the user taste summary
-    call_command("rebuild_taste_profile", user_id=user_id, out=out_dir, reason=reason,)
+        # rebuild the user taste summary
+        call_command("rebuild_taste_profile", user_id=user_id, out=out_dir, reason=reason,)
 
-    _mark_taste_rebuilt(user_id)
-    logger.info(
-        "REBUILD_TASTE_PROFILE success user=%s reason=%s out=%s",
-        user_id,
-        reason,
-        out_dir,
-    )
+        _mark_taste_rebuilt(user_id)
+        logger.info(
+            "REBUILD_TASTE_PROFILE success user=%s reason=%s out=%s",
+            user_id,
+            reason,
+            out_dir,
+        )
+    finally:
+        _release_run_lock(user_id)
+        _release_queue_lock(user_id)
 
 def enqueue_taste_profile_refresh(
         *,
@@ -158,7 +212,15 @@ def enqueue_taste_profile_refresh(
     """
     out_dir = out or _taste_out_dir()
 
-    if should_init_taste_profile(user_id=user_id, out=out_dir):
+    if not _acquire_queue_lock(user_id):
+        logger.info(
+            "TASTE_PROFILE noop init user=%s reason=%s cause=queue_lock_exists",
+            user_id,
+            reason,
+        )
+        return "noop"
+    
+    if should_init_taste_profile(user_id=user_id):
         run_init_taste_profile.delay(user_id=user_id, out=out_dir)
         logger.info(
             "TASTE_PROFILE queued init user=%s reason=%s out=%s",
@@ -180,6 +242,7 @@ def enqueue_taste_profile_refresh(
         )
         return "rebuild"
     
+    _release_queue_lock(user_id)
     logger.info(
         "TASTE_PROFILE noop user=%s reason=%s out=%s",
         user_id,
@@ -205,20 +268,28 @@ def enqueue_feedback_taste_refresh(
     """
     out_dir = out or _taste_out_dir()
     
-    if should_init_taste_profile(user_id=user_id, out=out_dir):
+    if not _acquire_queue_lock(user_id):
+        logger.info(
+            "FEEDBACK_TASTE noop user=%s cause=queue_lock_exists", user_id,)
+        return "noop"
+    
+    if should_init_taste_profile(user_id=user_id):
         run_init_taste_profile.delay(user_id=user_id, out=out_dir)
         logger.info(
-            "FEEDBACK_TASTE queued init user=%s out=%s",
-            user_id,
-            out_dir,
-        )
+            "FEEDBACK_TASTE queued init user=%s out=%s", user_id, out_dir,)
         return "init"
     
-    if not taste_file_exists(user_id=user_id, out=out_dir):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExists:
+        _release_queue_lock(user_id)
+        return "noop"
+    
+    if not _has_built_taste_profile(user):
+        _release_queue_lock(user_id)
         logger.info(
-            "FEEDBACK_TASTE noop user=%s reason=no_taste_file_and_no_init out=%s",
+            "FEEDBACK_TASTE noop user=%s reason=no_built_profile",
             user_id,
-            out_dir,
         )
         return "noop"
     
@@ -250,6 +321,7 @@ def enqueue_feedback_taste_refresh(
         )
         return "rebuild"
     
+    _release_queue_lock(user_id)
     logger.info(
         "FEEDBACK_TASTE deffered user=%s count=%s out=%s",
         user_id,
