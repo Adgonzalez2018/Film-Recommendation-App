@@ -379,6 +379,13 @@ def makeEventKey(user_id:int, uri: str, posted_date: Optional[date], entry_url: 
         f"{user_id}|{unique_part}|{date_part}".encode("utf-8")
     ).hexdigest()
 
+# agnostic watchkey
+def makeWatchKey(user_id: int, letterboxd_uri: str, posted_date: date) -> str:
+    # source agnostic key - same move + same date = same event regardless
+    return hashlib.sha1(
+        f"{user_id}|{letterboxd_uri}|{posted_date.isoformat()}".encode()
+    ).hexdigest()
+
 def build_watchEventKey(user_id: int, movie, posted_date):
     if not movie or not movie.letterboxd_uri or not posted_date:
         return None
@@ -388,12 +395,12 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
     if not posted_date or not movie or not movie.letterboxd_uri:
         return None, False
     
-    event_key = makeEventKey(user.id, movie.letterboxd_uri, posted_date, entry_url=entry_url or movie.letterboxd_uri,)
+    event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
     try:
         we, created = WatchEvent.objects.get_or_create(
             user=user,
             movie=movie,
-            posted_date=posted_date,
+            event_key=event_key,
             defaults={
                 "movie": movie,
                 "posted_date": posted_date,
@@ -405,7 +412,7 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
         )
         return we, created
     except IntegrityError:
-        we = WatchEvent.objects.get(user=user, event_key=event_key)
+        we = WatchEvent.objects.get(user=user, event_key=event_key).first()
         return we, False
 
 def upsert_movieuser_snapshot(user, movie, updates):
