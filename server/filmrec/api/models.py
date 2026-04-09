@@ -35,6 +35,9 @@ class Movie(models.Model):
     year = models.IntegerField(blank=True, null=True)
     overview = models.TextField(blank=True, null=True)
     avg_rating = models.FloatField(default=0.0, blank=True, null=True)
+    tagline = models.TextField(null=True, blank=True)
+    keywords = models.TextField(null=True, blank=True)
+    collection_name = models.CharField(max_length=255, null=True, blank=True)
     
     budget = models.BigIntegerField(blank=True, null=True)
     revenue = models.BigIntegerField(blank=True, null=True)

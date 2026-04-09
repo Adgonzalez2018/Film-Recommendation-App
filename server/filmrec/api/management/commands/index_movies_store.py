@@ -1,4 +1,4 @@
-# Vector store per Movie
+#api/management/commands/index_movies_store.py
 import os
 from pathlib import Path
 from openai import OpenAI
@@ -18,30 +18,35 @@ class Command(BaseCommand):
 
         file_path = Path(opts["file"])
         if not file_path.exists():
-            raise FileNotFoundError(f"Missing File: {file_path}")
-        
-        store_id = os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
+            raise FileNotFoundError(f"Missing file: {file_path}")
 
-        # Create store if missing
+        # CLI flag takes priority, then env
+        store_id = opts.get("store_id") or os.getenv("OPENAI_MOVIES_VECTOR_STORE_ID")
+
         if not store_id:
             vs = client.vector_stores.create(name=opts["name"])
             store_id = vs.id
-            self.stdout.write(self.style.SUCCESS(f"Created movies vector store: {store_id}"))
+            self.stdout.write(self.style.SUCCESS(f"Created vector store: {store_id}"))
             self.stdout.write(self.style.WARNING(
-                "Set OPENAI_MOVIES_VECTOR_STORE_ID to this value so you reuse it."
+                f"Add to your env: OPENAI_MOVIES_VECTOR_STORE_ID={store_id}"
             ))
         else:
-            self.stdout.write(self.style.SUCCESS(f"Using movies vector store: {store_id}"))
-
-        # upload + poll until indexed
-        try:
-            with file_path.open("rb") as f:
-                client.vector_stores.files.upload_and_poll(
-                    vector_store_id=store_id,
-                    file=f,
+            self.stdout.write(f"Using existing store: {store_id}")
+            # Delete old files so you're not paying for stale embeddings
+            existing = client.vector_stores.files.list(vector_store_id=store_id)
+            for vf in existing.data:
+                client.vector_stores.files.delete(
+                    vector_store_id=store_id, file_id=vf.id
                 )
-        except Exception as e:
-            raise RuntimeError(f"Upload Failed: {e}")
+                self.stdout.write(f"  Deleted old file: {vf.id}")
 
-        self.stdout.write(self.style.SUCCESS(f"Uploaded and indexed: {file_path}"))
-        self.stdout.write(self.style.SUCCESS(f"Movies Store ID: {store_id}"))
+        with file_path.open("rb") as f:
+            batch = client.vector_stores.files.upload_and_poll(
+                vector_store_id=store_id,
+                file=f,
+            )
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Uploaded and indexed: {file_path} | status: {batch.status}"
+        ))
+        self.stdout.write(self.style.SUCCESS(f"Store ID: {store_id}"))

@@ -123,12 +123,20 @@ def film_bank_feedback(request, movie_id: int):
         "status",
         "dismissed_at",
     ])
-    
+    print(
+        f"[DEBUG] film_bank_feedback user={request.user.id} movie_id={movie_id} "
+        f"rating={rating!r} watched={watched!r} text_len={len(text)}",
+        flush=True,
+    )
     taste_action = enqueue_feedback_taste_refresh(
         user_id=request.user.id,
         rating=rating,
         watched=watched,
         text=text,
     )
-
+    print(
+        f"[DEBUG] film_bank_feedback taste_action={taste_action} "
+        f"user={request.user.id} movie_id={movie_id}",
+        flush=True,
+    )
     return Response({"status": "saved", "taste_action": taste_action}, status=status.HTTP_200_OK)

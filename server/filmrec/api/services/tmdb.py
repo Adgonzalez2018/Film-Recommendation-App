@@ -130,20 +130,28 @@ def _upsert_movie_fields_from_tmdb(*, tmdb_id: int, data: Dict[str, Any]) -> Dic
     poster_path = data.get("poster_path")
     poster_url = (IMG_BASE_W500 + poster_path) if poster_path else None
 
-    return {
-            "title":(data.get("title") or "").strip() or "Unknown",
-            "year": year,
-            "overview": data.get("overview"),
-            "avg_rating": data.get("vote_average"),
-            "budget": data.get("budget"),
-            "revenue": data.get("revenue"),
-            "runtime": data.get("runtime"),
-            "language": data.get("original_language"),
-            "country": _safe_country_name(data),
-            "poster_url": poster_url,
-            "tmdb_id": tmdb_id,
-        }
+    # keywords comes back as {"keywords": [...]} when appended
+    kw_list = (data.get("keywords") or {}).get("keywords") or []
+    keywords_str = ", ".join(k["name"] for k in kw_list if k.get("name"))
 
+    collection = (data.get("belongs_to_collection") or {}).get("name")
+
+    return {
+        "title": (data.get("title") or "").strip() or "Unknown",
+        "year": year,
+        "overview": data.get("overview"),
+        "avg_rating": data.get("vote_average"),
+        "budget": data.get("budget"),
+        "revenue": data.get("revenue"),
+        "runtime": data.get("runtime"),
+        "language": data.get("original_language"),
+        "country": _safe_country_name(data),
+        "poster_url": poster_url,
+        "tmdb_id": tmdb_id,
+        "tagline": (data.get("tagline") or "").strip() or None,
+        "keywords": keywords_str or None,
+        "collection_name": collection or None,
+    }
 @transaction.atomic
 def upsert_tmdb_movie(tmdb_id, cast_limit: int = 12) -> Movie:
     try:
@@ -368,3 +376,7 @@ def _bulk_upsert_persons(tmdb_ids: list, name_url_by_tmdb_id: dict) -> None:
         Person.objects.bulk_create(to_create, ignore_conflicts=True)
     if to_update:
         Person.objects.bulk_update(to_update, ["name", "profile_url"])
+
+def get_movie_details(tmdb_id: int) -> Dict[str, Any]:
+    return tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits,keywords"})
+

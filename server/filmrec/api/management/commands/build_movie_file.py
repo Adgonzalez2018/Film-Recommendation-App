@@ -1,3 +1,4 @@
+#api/management/commands/build_movie_file.py
 import json
 from pathlib import Path
 
@@ -13,33 +14,28 @@ from api.models import (
 
 def build_movie_text(movie, genres, directors, cast_names):
     title = movie.title or "Unknown"
-    year = movie.year           # No release date
-    year_str = f" ({year})" if year else ""
+    year_str = f" ({movie.year})" if movie.year else ""
 
-    parts = [
-        "MOVIE",
-        f"Title: {title}{year_str}", 
-    ]
+    parts = ["MOVIE", f"Title: {title}{year_str}"]
 
     if genres:
-        parts.append(f"Genres:{', '.join(genres)}")
+        parts.append(f"Genres: {', '.join(genres)}")
+    if movie.tagline:
+        parts.append(f"Tagline: {movie.tagline}")
     if directors:
-        parts.append(f"Director:{', '.join(directors)}")
+        parts.append(f"Director: {', '.join(directors)}")
     if cast_names:
         parts.append(f"Cast: {', '.join(cast_names)}")
-    if movie.runtime:
-        parts.append(f"Runtime: {movie.runtime} min")
-    if movie.language:
-        parts.append(f"Language: {movie.language}")
-    if movie.country:
-        parts.append(f"Country: {movie.country}")
+    if movie.keywords:
+        parts.append(f"Keywords: {movie.keywords}")
+    if movie.collection_name:
+        parts.append(f"Series: {movie.collection_name}")
     if movie.overview:
-        # keep overview short
         ov = movie.overview.strip()
         if len(ov) > 800:
             ov = ov[:800].rsplit(" ", 1)[0] + "..."
         parts.append(f"Overview: {ov}")
-    
+
     return "\n".join(parts)
 
 class Command(BaseCommand):
@@ -125,9 +121,9 @@ class Command(BaseCommand):
                     "genres": genres,
                     "directors": directors,
                     "cast": cast,
-                    "runtime": m.runtime,
-                    "language": m.language,
-                    "country": m.country,
+                    "tagline": m.tagline,
+                    "keywords": m.keywords,
+                    "collection_name": m.collection_name,
                     "poster_url": m.poster_url,
                     "letterboxd_uri": m.letterboxd_uri,
                     "text": text,
