@@ -203,7 +203,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
     new_event_objects = []
     staged_event_keys = set()
 
-    for e in desired_event_keys:
+    for e in desired_event_rows:
         pair = (e["movie"].id, e["posted_date"])
         if pair in existing_watch_pairs or e["event_key"] in staged_event_keys:
             continue
