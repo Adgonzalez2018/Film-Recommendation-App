@@ -33,7 +33,14 @@ CELERY_TIMEZONE = "America/New_York"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 60 * 20
 CELERY_TASK_SOFT_TIME_LIMIT = 60 * 18
+CELERY_TASK_DEFAULT_QUEUE = "default"
 
+CELERY_TASK_ROUTES = {
+    "api.tasks.tmdb_tasks.enrich_movie_from_tmdb": {"queue": "tmdb"},
+    "api.tasks.tmdb_tasks.enrich_movie_chunk": {"queue": "tmdb"},
+    "api.tasks.taste_tasks.run_init_taste_profile": {"queue": "taste"},
+    "api.tasks.taste_tasks.run_rebuild_taste_profile": {"queue": "taste"},
+}
 # --------------------------------------------------
 # Hosts / CORS / CSRF
 # --------------------------------------------------
