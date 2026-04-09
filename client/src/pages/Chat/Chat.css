@@ -326,7 +326,18 @@
   box-shadow: 0 0 18px rgba(0, 255, 120, 0.18);
 }
 
-.send-button { padding: 10px 14px; }
+.send-button { 
+  padding: 10px 14px;
+  background: rgba(0, 255, 120, 0.06);
+  border: 1px solid var(--border-color);
+  color: #77ffad;
+  cursor: pointer;
+  border-radius: 0;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+ }
+ 
 .send-button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ─── Scrollbars ─────────────────────────────────────────────────────────── */
