@@ -1,10 +1,9 @@
-# management/commands/enrich_movies.py
 from django.core.management.base import BaseCommand
 from api.models import Movie
-from api.services.tmdb import fetch_tmdb_details  # you'll extend this
+from api.services.tmdb import upsert_tmdb_movie
 
 class Command(BaseCommand):
-    help = "Backfill tagline, keywords, collection for existing movies"
+    help = "Backfill tagline, keywords, collection_name for existing movies"
 
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=None)
@@ -20,12 +19,16 @@ class Command(BaseCommand):
         total = qs.count()
         self.stdout.write(f"Enriching {total} movies...")
 
+        ok, failed = 0, 0
         for i, mv in enumerate(qs, 1):
             try:
-                enrich_movie(mv)
-                if i % 100 == 0:
-                    self.stdout.write(f"  {i}/{total}")
+                upsert_tmdb_movie(mv.tmdb_id)
+                ok += 1
             except Exception as e:
+                failed += 1
                 self.stderr.write(f"Failed tmdb_id={mv.tmdb_id}: {e}")
 
-        self.stdout.write(self.style.SUCCESS("Done."))
+            if i % 100 == 0:
+                self.stdout.write(f"  {i}/{total} (ok={ok} failed={failed})")
+
+        self.stdout.write(self.style.SUCCESS(f"Done. ok={ok} failed={failed}"))
