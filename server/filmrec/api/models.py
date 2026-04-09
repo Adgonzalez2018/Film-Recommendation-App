@@ -165,8 +165,6 @@ class ImportBatch(models.Model):
     had_watchlist = models.BooleanField(default=False)
     had_films = models.BooleanField(default=False)
 
-    # add to event
-    events_created = models.IntegerField(default=0)
     def __str__(self):
         return f"ImportBatch<{self.user_id}:{self.source}:{self.created_at}>"
 
@@ -239,9 +237,14 @@ class WatchEvent(models.Model):
     rewatch = models.BooleanField(default=False)
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=[
-                "user", "event_key"
-            ], name="unique_watch_event_user_event_key")
+            models.UniqueConstraint(
+                fields=["user", "movie", "posted_date"],
+                name="unique_watch_per_user_movie_date"
+            ),
+            models.UniqueConstraint(
+                fields=["user","event_key"],
+                name="unique_watch_event_key"
+            )
         ]
 
 """
