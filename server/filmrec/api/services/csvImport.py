@@ -5,6 +5,8 @@
 import csv
 import io
 
+from django.db.models import Q
+
 from ..models import MovieUser, WatchEvent
 from ..utils.unifiedImportHelper import (
     makeEventKey,
@@ -173,7 +175,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "posted_date": r["posted_date"],
                     "watched_date": None,
                     "rewatch": False,
-                    "source": "manual",
+                    "source": "csv",
                     "entry_url": movie.letterboxd_uri,
                 })
                 desired_event_keys.add(event_key)
@@ -188,35 +190,26 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                     "posted_date": event_posted,
                     "watched_date": r["watched_date"],
                     "rewatch": r["rewatch"],
-                    "source": "manual",
+                    "source": "csv",
                     "entry_url": movie.letterboxd_uri,
                 })
                 desired_event_keys.add(event_key)
 
-    existing_event_keys = set(
-        WatchEvent.objects.filter(user=user,event_key__in=desired_event_keys)
-        .values_list("event_key", flat=True)
+    existing_watch_pairs = set(
+        WatchEvent.objects.filter(user=user, movie_id__in=movie_ids)
+        .values_list("movie_id", "posted_date")
     )
 
     new_event_objects = []
     staged_event_keys = set()
 
-    for e in desired_event_rows:
-        if e["event_key"] in existing_event_keys or e["event_key"] in staged_event_keys:
+    for e in desired_event_keys:
+        pair = (e["movie"].id, e["posted_date"])
+        if pair in existing_watch_pairs or e["event_key"] in staged_event_keys:
             continue
-        new_event_objects.append(
-            WatchEvent(
-                user=user,
-                movie=e["movie"],
-                posted_date=e["posted_date"],
-                watched_date=e["watched_date"],
-                rewatch=e["rewatch"],
-                source=e["source"],
-                entry_url=e["entry_url"],
-                event_key=e["event_key"],
-            )
-        )
+        new_event_objects.append(WatchEvent(...))
         staged_event_keys.add(e["event_key"])
+        existing_watch_pairs.add(pair)
 
     if new_event_objects:
         WatchEvent.objects.bulk_create(new_event_objects, ignore_conflicts=True)

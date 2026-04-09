@@ -134,6 +134,8 @@ def manual_import(request):
         had_films=bool(films_file),
     )
     try:
+        print(f"[DEBUG] manual_import try block entered user={request.user.id}", flush=True)
+
         # If everything checks out then we run the actual manual import
         counters = run_letterboxd_import(
             user=request.user,
@@ -142,6 +144,8 @@ def manual_import(request):
             watchlist_file=watchlist_file,
             films_file=films_file,
         )
+        print(f"[DEBUG] run_letterboxd_import done counters={counters}", flush=True)
+
         # MARK any movie that isn't in our movie database
         movie_ids = counters.get("movies_to_enrich", [])
         tmdb_queued = len(set(movie_ids))
@@ -190,11 +194,14 @@ def manual_import(request):
             rel_created=counters.get("rel_created", 0),
             rel_updated=counters.get("rel_updated",0),
         )
+        print(f"[DEBUG] has_updates={has_updates} about to call taste refresh", flush=True)
+
         taste_action = enqueue_taste_profile_refresh(
             user_id=request.user.id,
             reason="csv",
             has_updates=has_updates,
         )
+        print(f"[DEBUG] taste_action={taste_action}", flush=True)
 
         return Response(
             {
@@ -215,6 +222,8 @@ def manual_import(request):
         )
     # Debugging info if Manual Import Failed (railways logging)
     except Exception as e:
+        print(f"[DEBUG] manual_import EXCEPTION: {e}", flush=True)  # <-- this is critical
+
         batch.status = "failed"
         batch.error_message = str(e)
         batch.finished_at = timezone.now()

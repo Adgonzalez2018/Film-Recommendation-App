@@ -392,7 +392,8 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
     try:
         we, created = WatchEvent.objects.get_or_create(
             user=user,
-            event_key=event_key,
+            movie=movie,
+            posted_date=posted_date,
             defaults={
                 "movie": movie,
                 "posted_date": posted_date,
