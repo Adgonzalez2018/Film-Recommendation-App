@@ -22,14 +22,8 @@ CAP_RECENT = 20
 QUERY_HEADROOM = 50
 
 
-def load_rated_movieusers(user_id: int) -> list[MovieUser]:
-    """
-    Load a capped set of MovieUser rows with all related movie metadata
-    needed to build the initial baseline taste profile.
-    """
-    limit = CAP_LOVED + CAP_DISLIKED + CAP_RECENT + QUERY_HEADROOM
-
-    return list(
+def load_taste_movieusers(user_id: int):
+    base = (
         MovieUser.objects
         .filter(user_id=user_id, rating__isnull=False)
         .select_related("movie")
@@ -38,9 +32,27 @@ def load_rated_movieusers(user_id: int) -> list[MovieUser]:
             "movie__moviecrew_set__person",
             "movie__moviecast_set__person",
         )
-        .order_by("-rating", "-watched_date")[:limit]
     )
 
+    loved = list(
+        base.filter(rating__gte=LOVED_MIN)
+        .order_by("-rating", "-watched_date")[:CAP_LOVED]
+    )
+
+    disliked = list(
+        base.filter(rating__lte=DISLIKED_MAX)
+        .order_by("rating", "-watched_date")[:CAP_DISLIKED]
+    )
+
+    excluded_ids = {mu.movie_id for mu in loved} | {mu.movie_id for mu in disliked}
+
+    recent = list(
+        base.exclude(movie_id__in=excluded_ids)
+        .filter(watched_date__isnull=False)
+        .order_by("-watched_date")[:CAP_RECENT]
+    )
+
+    return loved, disliked, recent
 
 def split_movieusers(
     all_rated: list[MovieUser],
@@ -195,8 +207,9 @@ def build_initial_taste_artifacts(user_id: int) -> dict:
     """
     Main baseline taste-profile service.
     """
-    all_rated = load_rated_movieusers(user_id=user_id)
-    if not all_rated:
+    loved_mus, disliked_mus, recent_mus = load_taste_movieusers(user_id=user_id)
+
+    if not loved_mus and not disliked_mus and not recent_mus:
         return {
             "summary_doc": None,
             "loved_docs": [],
@@ -210,8 +223,6 @@ def build_initial_taste_artifacts(user_id: int) -> dict:
             },
         }
 
-    loved_mus, disliked_mus, recent_mus = split_movieusers(all_rated)
-
     loved_docs = movieusers_to_docs(loved_mus, "loved")
     disliked_docs = movieusers_to_docs(disliked_mus, "disliked")
     recent_docs = movieusers_to_docs(recent_mus, "recent")
@@ -224,7 +235,7 @@ def build_initial_taste_artifacts(user_id: int) -> dict:
         "disliked_docs": disliked_docs,
         "recent_docs": recent_docs,
         "counts": {
-            "total_source_rows": len(all_rated),
+            "total_source_rows": len(loved_mus) + len(disliked_mus) + len(recent_mus),
             "loved": len(loved_docs),
             "disliked": len(disliked_docs),
             "recent": len(recent_docs),
