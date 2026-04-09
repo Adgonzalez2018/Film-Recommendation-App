@@ -5,7 +5,7 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
-from django.core import cache
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 
