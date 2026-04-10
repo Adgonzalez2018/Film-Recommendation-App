@@ -9,7 +9,7 @@ from django.utils import timezone
 from api.models import User
 from api.services.rss_sync import sync_user_rss_watches
 from api.tasks.tmdb_tasks import enqueue_tmdb_enrichment_for_movies
-from api.tasks.taste_tasks import enqueue_feedback_taste_refresh
+from api.tasks.taste_tasks import enqueue_taste_profile_refresh
 
 def _has_meaningful_updates(*, events_created=0, rel_created=0, rel_updated=0) -> bool:
     return any([
@@ -82,7 +82,7 @@ class Command(BaseCommand):
                         rel_created=res.rel_created or 0,
                         rel_updated=res.rel_updated or 0,
                     )
-                    taste_action = enqueue_feedback_taste_refresh(
+                    taste_action = enqueue_taste_profile_refresh(
                         user_id=user.id,
                         reason="rss",
                         has_updates=has_updates,
@@ -90,7 +90,7 @@ class Command(BaseCommand):
                     ok += 1
                     self.stdout.write(self.style.SUCCESS(
                         f"[ok] user_id={user.id} "
-                        f"entries_seen={res.entires_seen}"
+                        f"entries_seen={res.entries_seen}"
                         f"events+{res.events_created} rel+{res.rel_created} upd+{res.rel_updated}"
                         f"tmdb_queued={len(set(movie_ids))} taste_action={taste_action}"
                     ))

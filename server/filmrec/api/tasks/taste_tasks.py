@@ -73,7 +73,7 @@ def _acquire_queue_lock(user_id: int) -> bool:
     return cache.add(_queue_lock_key(user_id), "1", timeout=TASTE_QUEUE_LOCK_SECONDS)
 
 def _release_queue_lock(user_id: int) -> None:
-    cache.delete(_run_lock_key(user_id))
+    cache.delete(_queue_lock_key(user_id))
 
 def _acquire_run_lock(user_id: int) -> bool:
     return cache.add(_run_lock_key(user_id), "1", timeout=TASTE_RUN_LOCK_SECONDS)
@@ -94,7 +94,7 @@ def _has_built_taste_profile(user) -> bool:
     # DB-backed truth, not filesystem truth
     return bool(
         getattr(user, "last_taste_rebuild_at", None)
-        or getattr(user, "taste_vectore_store_id", None)
+        or getattr(user, "taste_vector_store_id", None)
     )
 
 def should_init_taste_profile(user_id: int):
@@ -124,7 +124,7 @@ def should_rebuild_taste_profile(
     """
     try:
         user = User.objects.get(id=user_id)
-    except user.DoesNotExist:
+    except User.DoesNotExists:
         return False
     
     if not _has_built_taste_profile(user):
