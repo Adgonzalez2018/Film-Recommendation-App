@@ -44,8 +44,9 @@ urlpatterns = [
     # --- Authentication ---
     path("api/login/", loginView, name="login"),
     path("api/register/", registerView, name="register"),
-    path("api/password-reset/", password_reset_request, name="password-reset"),
     path("api/password-reset-confirm/", password_reset_confirm, name="password-reset-confirm"),
+    path("api/password-reset/", password_reset_request, name="password-reset"),
+
     
     # for authentication anything passing the login/registration
     path("api/ping/", ping, name="ping"),
@@ -72,8 +73,11 @@ urlpatterns = [
 
     # --- Film Bank ---
     path("api/film-bank/", film_bank_list, name="film-bank-list"),
-    path("api/film-bank/<int:movie_id>/", film_bank_delete,name="film-bank-delete"),
+    # feedback
     path("api/film-bank/<int:movie_id>/feedback/", film_bank_feedback,name="film-bank-feedback"),
+    # delete/dismiss a film from recommended film bank
+    path("api/film-bank/<int:movie_id>/", film_bank_delete,name="film-bank-delete"),
+
     # --- Statistics ---
     path("api/stats/weekly/", stats_payload, name="stats-payload"),
     path("api/stats/all-time/", stats_all_time, name="stats-all-time"),
