@@ -204,7 +204,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
     staged_event_keys = set()
 
     for e in desired_event_rows:
-        if e["event_key"] in existing_event_keys or e["event_keys"] in staged_event_keys:
+        if e["event_key"] in existing_event_keys or e["event_key"] in staged_event_keys:
             continue
         new_event_objects.append(
         WatchEvent(

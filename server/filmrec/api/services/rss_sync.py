@@ -247,7 +247,7 @@ def sync_user_rss_watches(
         event_key = None
         parsed_title, parsed_year = _parse_entry_title(title)
         if posted_date and link:
-            event_key = makeWatchKey(user.id, link, posted_date, entry_ref)
+            event_key = makeWatchKey(user.id, link, posted_date)
             if event_key in existing_event_keys:
                 logger.info(
                     "RSS skip existing event_key user_id=%s idx=%s event_key=%r", 
