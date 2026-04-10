@@ -7,7 +7,7 @@ import io
 
 from ..models import MovieUser, WatchEvent
 from ..utils.unifiedImportHelper import (
-    makeEventKey,
+    makeWatchKey,
     resolve_movies_bulk,
     normalize_movie_candidate,
     needToEnrich
@@ -168,7 +168,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         if r["kind"] == "watched":
             event_posted = r["posted_date"]
             if event_posted and movie.letterboxd_uri:
-                event_key = makeEventKey(user.id, movie.letterboxd_uri, event_posted, entry_url=movie.letterboxd_uri,)
+                event_key = makeWatchKey(user.id, movie.letterboxd_uri, event_posted)
                 desired_event_rows.append({
                     "event_key": event_key,
                     "movie": movie,
@@ -183,7 +183,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         elif r["kind"] == "review":
             event_posted = r["posted_date"] or r["watched_date"]
             if event_posted and movie.letterboxd_uri:
-                event_key = makeEventKey(user.id, movie.letterboxd_uri, event_posted)
+                event_key = makeWatchKey(user.id, movie.letterboxd_uri, event_posted)
                 desired_event_rows.append({
                     "event_key": event_key,
                     "movie": movie,
@@ -195,17 +195,16 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 })
                 desired_event_keys.add(event_key)
 
-    existing_watch_pairs = set(
+    existing_event_keys = set(
         WatchEvent.objects.filter(user=user, movie_id__in=movie_ids)
-        .values_list("movie_id", "posted_date")
+        .values_list("event_key", flat=True)
     )
 
     new_event_objects = []
     staged_event_keys = set()
 
     for e in desired_event_rows:
-        pair = (e["movie"].id, e["posted_date"])
-        if pair in existing_watch_pairs or e["event_key"] in staged_event_keys:
+        if e["event_key"] in existing_event_keys or e["event_keys"] in staged_event_keys:
             continue
         new_event_objects.append(
         WatchEvent(
@@ -220,7 +219,6 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
             )
         )
         staged_event_keys.add(e["event_key"])
-        existing_watch_pairs.add(pair)
 
     if new_event_objects:
         WatchEvent.objects.bulk_create(new_event_objects, ignore_conflicts=True)

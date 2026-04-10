@@ -29,7 +29,7 @@ from api.utils.unifiedImportHelper import (
     upsert_movieuser_snapshot,
     upsert_watch_event,
     resolve_movie_one,
-    makeEventKey,
+    makeWatchKey,
     )
 
 logger = logging.getLogger(__name__)
@@ -176,7 +176,7 @@ def sync_user_rss_watches(
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
     # unique set of event keys alr in user's watchevent table
     existing_event_keys = set(
-        WatchEvent.objects.filter(user=user, source="rss")
+        WatchEvent.objects.filter(user=user) # all sources
         .values_list("event_key", flat=True)
     )
     logger.info(
@@ -247,9 +247,8 @@ def sync_user_rss_watches(
         event_key = None
         parsed_title, parsed_year = _parse_entry_title(title)
         if posted_date and link:
-            event_key = makeEventKey(user.id, link, posted_date, entry_ref)
+            event_key = makeWatchKey(user.id, link, posted_date, entry_ref)
             if event_key in existing_event_keys:
-                res.stopped_early = True
                 logger.info(
                     "RSS skip existing event_key user_id=%s idx=%s event_key=%r", 
                     user.id,
@@ -260,8 +259,7 @@ def sync_user_rss_watches(
 
         logger.info(
             "RSS resolving movie user_id=%s idx=%s parsed_title=%s parsed_year=%s norm_link=%r", 
-            user.id,
-            idx,
+            user.id, idx,
             parsed_title,
             parsed_year,
             link,
