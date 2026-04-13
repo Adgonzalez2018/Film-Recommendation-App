@@ -4,21 +4,25 @@
 # & Profile Page
 import csv
 import io
+from collections import defaultdict
 
 from ..models import MovieUser, WatchEvent
 from ..utils.unifiedImportHelper import (
     makeWatchKey,
     resolve_movies_bulk,
+    resolve_movie_one,
     normalize_movie_candidate,
     needToEnrich
 )
-
 from ..utils.dates import parse_iso_date
 
 def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchlist_file=None, films_file=None):
     """
-    Optimized business logic import
-    same return shape as before
+    CSV import Pipeline:
+        - never attach user data to weak placeholder Movie rows
+        - prefer bulk resolution for speed, but fall bac kt orws
+        - dedupe watch events soruce-agnostically by (user, canonical movie uri, date)
+        - collapse all csv rows into one final Movieuser snapshot per movie
     """
     movies_to_enrich = set()
     events_created = 0 # go to watchEvent 
@@ -121,6 +125,15 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 changed = True
         return changed
     
+    def is_strong_movie_identity(movie):
+        if not movie or not getattr(movie,"id", None):
+            return False
+        return bool(
+            getattr(movie, "tmdb_id", None) is not None
+            or getattr(movie, "letterboxd_uri", None)
+            or getattr(movie, "year", None) is not None
+        )
+    
     rows = parse_rows()
     if not rows:
         return {
@@ -142,16 +155,48 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
         for r in rows
     ]
 
-    resolved_movies = resolve_movies_bulk(candidates)
-    for r, movie in zip(rows, resolved_movies):
-        if not movie or not movie.id:
+    # First pass: bulk resolution for speed
+    bulk_resolved = resolve_movies_bulk(candidates)
+
+    for r, cand, movie in zip(rows, candidates, bulk_resolved):
+        final_movie = movie
+        weak_movie = (
+            final_movie is None
+            or final_movie.id is None
+            or not is_strong_movie_identity(final_movie)
+        )
+
+        if weak_movie:
+            final_movie, created, _ = resolve_movie_one(
+                title=cand.title,
+                year=cand.year,
+                uri=cand.raw_uri,
+                tmdb_id=cand.tmdb_id,
+            )
+            if created:
+                movies_created += 1
+        if not final_movie or not final_movie.id:
             continue
-        r["_movie"] = movie
+
+        if not is_strong_movie_identity(final_movie):
+            # last guard: do not persisst user data
+            continue
+
+        r["_movie"] = final_movie
         movies_matched += 1
         if needToEnrich(movie):
             movies_to_enrich.add(movie.id)
 
     movie_ids = list({r["_movie"].id for r in rows if r.get("_movie")})
+    if not movie_ids:
+        return {
+            "movies_created": movies_created,
+            "movies_matched": 0,
+            "events_created": 0,
+            "rel_created": 0,
+            "rel_updated": 0,
+            "movies_to_enrich": list(movies_to_enrich),
+        }
     
     existing_mu_qs = MovieUser.objects.filter(user=user,movie_id__in=movie_ids)
     existing_mu_map = {mu.movie_id: mu for mu in existing_mu_qs}
@@ -196,7 +241,7 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
                 desired_event_keys.add(event_key)
 
     existing_event_keys = set(
-        WatchEvent.objects.filter(user=user, movie_id__in=movie_ids)
+        WatchEvent.objects.filter(user=user, event_key__in=desired_event_keys)
         .values_list("event_key", flat=True)
     )
 

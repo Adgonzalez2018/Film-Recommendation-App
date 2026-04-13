@@ -2,6 +2,15 @@ from django.core.management.base import BaseCommand
 from api.models import Movie
 from api.services.tmdb import upsert_tmdb_movie
 
+import re
+
+def _title_to_slug(title: str) -> str:
+    s = title.lower().strip()
+    s = re.sub(r"[''']", "", s)
+    s = re.sub(r"[^a-z0-9\s-]", "", s)
+    s = re.sub(r"\s+", "-", s).strip("-")
+    return s
+
 class Command(BaseCommand):
     help = "Backfill tagline, keywords, collection_name for existing movies"
 
@@ -23,6 +32,13 @@ class Command(BaseCommand):
         for i, mv in enumerate(qs, 1):
             try:
                 upsert_tmdb_movie(mv.tmdb_id)
+                mv.refresh_from_db()
+                if not mv.letterboxd_uri and mv.title:
+                    slug = _title_to_slug(mv.title)
+                    if slug:
+                        Movie.objects.filter(pk=mv.pk).update(
+                            letterboxd_uri=f"https://letterboxd.com/film/{slug}/"
+                        )
                 ok += 1
             except Exception as e:
                 failed += 1

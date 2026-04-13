@@ -22,6 +22,16 @@ class NormalizedMovieCandidate:
     weak_uri: Optional[str]
     tmdb_id: Optional[int] = None
 
+# --- deduping guardrail ---
+def _derive_slug_uri(title: str) -> Optional[str]:
+    if not title or title == "Unknown":
+        return None
+    s = title.lower().strip()
+    s = re.sub(r"[''']", "", s)
+    s = re.sub(r"[^a-z0-9\s-]", "", s)
+    s = re.sub(r"\s+", "-", s).strip("-")
+    return f"https://letterboxd.com/film/{s}/" if s else None
+
 def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
     # Returns canonical uri and weak uri
     # canonical uri is stable film-page uri
@@ -260,7 +270,6 @@ def upsertMovie(title: str, year: int | None, uri: str | None, tmdb_id: int | No
 
 def resolve_movie_one(title: str, year: int | None, uri: str | None, tmdb_id: int | None = None):
     cand = normalize_movie_candidate(title, year, uri, tmdb_id)
-
     movie = choose_existing_movie_one(cand)
     created = False
     if movie:
@@ -269,7 +278,7 @@ def resolve_movie_one(title: str, year: int | None, uri: str | None, tmdb_id: in
         return movie, created, needToEnrich(movie)
     
     try:
-        create_uri = cand.canonical_uri or None
+        create_uri = cand.canonical_uri or _derive_slug_uri(cand.title) # fallback slug
         movie = Movie.objects.create(
             title=cand.title,
             year=cand.year,
@@ -288,9 +297,15 @@ def resolve_movie_one(title: str, year: int | None, uri: str | None, tmdb_id: in
         return movie, False, needToEnrich(movie)
     
 def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
+    tmdb_ids = {c.tmdb_id for c in candidates if c.tmdb_id is not None}
     canonical_uris = {c.canonical_uri for c in candidates if c.canonical_uri}
     titles = {c.title for c in candidates if c.title}
     years = {c.year for c in candidates if c.year is not None}
+
+    existing_by_tmdb = {}
+    if tmdb_ids:
+        for m in Movie.objects.filter(tmdb_id__in=tmdb_ids):
+            existing_by_tmdb[m.tmdb_id] = m
 
     existing_by_uri = {}
     if canonical_uris:
@@ -307,6 +322,8 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
     to_create = {}
 
     def choose_existing_bulk(c: NormalizedMovieCandidate):
+        if c.tmdb_id is not None and c.tmdb_id in existing_by_tmdb:
+            return existing_by_tmdb[c.tmdb_id]
         if c.canonical_uri and c.canonical_uri in existing_by_uri:
             return existing_by_uri[c.canonical_uri]
         if c.title and c.year is not None and (c.title, c.year) in existing_by_pair:
@@ -320,14 +337,24 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
                 to_patch[movie.id] = movie
             resolved.append(movie)
             continue
+        
+        has_strong_identity = (
+            c.tmdb_id is not None
+            or c.canonical_uri is not None
+            or (c.title and c.year is not None)
+        )
+        if not has_strong_identity:
+            resolved.append(None)
+            continue
 
-        create_key = (c.canonical_uri, c.title, c.year)
+        create_key = (c.tmdb_id, c.canonical_uri, c.title, c.year)
 
         if create_key not in to_create:
             to_create[create_key] = Movie(
                 title=c.title,
                 year=c.year,
                 letterboxd_uri=c.canonical_uri or None,
+                tmdb_id=c.tmdb_id,
             )
 
         resolved.append(to_create[create_key])
@@ -335,13 +362,17 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
     if to_patch:
         Movie.objects.bulk_update(
             list(to_patch.values()),
-            ["letterboxd_uri", "title", "year"],
+            ["tmdb_id","letterboxd_uri", "title", "year"],
         )
 
     if to_create:
         Movie.objects.bulk_create(list(to_create.values()), ignore_conflicts=True)
-
         # Re-fetch all possible created rows
+        refetched_by_tmdb = {}
+        if tmdb_ids:
+            for m in Movie.objects.filter(tmdb_id__in=tmdb_ids):
+                refetched_by_tmdb[m.tmdb_id] = m
+
         refetched_by_uri = {}
         if canonical_uris:
             for m in Movie.objects.filter(letterboxd_uri__in=canonical_uris):
@@ -353,20 +384,22 @@ def resolve_movies_bulk(candidates: list[NormalizedMovieCandidate]):
                 refetched_by_pair[(m.title, m.year)] = m
 
         new_resolved = []
-        for movie in resolved:
-            if movie.id is not None:
+        for cand, movie in zip(candidates, resolved):
+            if movie is not None and movie.id is not None:
                 new_resolved.append(movie)
                 continue
-
             replacement = None
-            if movie.letterboxd_uri:
-                replacement = refetched_by_uri.get(movie.letterboxd_uri)
 
-            if replacement is None and movie.title and movie.year is not None:
-                replacement = refetched_by_pair.get((movie.title, movie.year))
+            if cand.tmdb_id is not None:
+                replacement = refetched_by_tmdb.get(cand.tmdb_id)
 
-            new_resolved.append(replacement or movie)
+            if replacement is None and cand.canonical_uri:
+                replacement= refetched_by_uri.get(cand.canonical_uri)
+            
+            if replacement is None and cand.title and cand.year is not None:
+                replacement = refetched_by_pair.get((cand.title, cand.year))
 
+            new_resolved.append(replacement)
         resolved = new_resolved
 
     return resolved
