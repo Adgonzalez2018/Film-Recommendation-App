@@ -21,7 +21,6 @@ import logging
 from django.db import IntegrityError
 
 from api.models import User, WatchEvent
-
 from api.utils.unifiedImportHelper import (
     normalize_letterboxd_uri,
     build_letterboxd_rss_url,
@@ -30,17 +29,13 @@ from api.utils.unifiedImportHelper import (
     upsert_watch_event,
     resolve_movie_one,
     makeWatchKey,
-    )
+)
 
 logger = logging.getLogger(__name__)
 _TITLE_RE = re.compile(r"^(?P<title>.+?)(?:,\s*(?P<year>\d{4}))?(?:\s*-\s*.+)?$")
 
-def _parse_published_date(entry) -> date | None:
-    """
-    Returns a *date* for when the RSS entry was published/updated.
-    prefer parsed structs if available; fall back to parsing string
-    """
 
+def _parse_published_date(entry) -> date | None:
     tp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     if tp:
         try:
@@ -48,31 +43,30 @@ def _parse_published_date(entry) -> date | None:
         except Exception:
             return None
 
-    # fallback: try published string
     s = getattr(entry, "published", None) or getattr(entry, "updated", None)
     if not s:
         return None
 
-    # RSS commonly uses RFC822
     try:
         return parsedate_to_datetime(s).date()
     except Exception:
         pass
 
-    # last-ditch: iso like str
     try:
         return datetime.fromisoformat(s).date()
     except Exception:
         return None
-    
+
+
 def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
     s = (entry_title or "").strip()
     if not s:
         return "Untitled", None
+
     m = _TITLE_RE.match(s)
     if not m:
         return s[:255], None
-    
+
     title = (m.group("title") or "").strip()[:255] or "Untitled"
     year_str = m.group("year")
     try:
@@ -81,6 +75,7 @@ def _parse_entry_title(entry_title: str) -> Tuple[str, Optional[int]]:
         year = None
 
     return title, year
+
 
 @dataclass
 class RSSSyncResult:
@@ -95,17 +90,24 @@ class RSSSyncResult:
     error: Optional[str] = None
     movie_ids_to_enrich: list[int] | None = None
 
+
 def sync_user_rss_watches(
     user: User,
     *,
     rss_input: Optional[str] = None,
-    cutoff_buffer_days: int = 7, # give a full week of buffer
+    cutoff_buffer_days: int = 7,
+    has_manual_history: bool = False,
 ) -> RSSSyncResult:
     """
-    Incremental RSS sync (newest first).
-    Stop when:
-      - entry date <= (user.last_sync.date - buffer_days), OR
-      - exact WatchEvent already exists (event_key)
+    RSS should behave as a lightweight incremental sync.
+
+    Rules:
+      - Canonicalize RSS links before resolution.
+      - Deduplicate on canonical movie URI + posted_date.
+      - If user already has CSV/manual import history, RSS should only consider
+        a tight recent window.
+      - Only touch MovieUser when a NEW WatchEvent is actually created.
+      - Never overwrite an existing MovieUser.watched_date from CSV/reviews.
     """
     movies_to_enrich = set()
     raw = (rss_input if rss_input is not None else user.letterboxd_username) or ""
@@ -113,24 +115,22 @@ def sync_user_rss_watches(
     rss_url = build_letterboxd_rss_url(raw)
 
     logger.info(
-        "RSS sync start user_id=%s raw =%r rss_url=%r last_rss_sync=%r",
+        "RSS sync start user_id=%s raw=%r rss_url=%r last_rss_sync=%r",
         user.id,
         raw,
         rss_url,
-        getattr(user,"last_rss_sync", None),
+        getattr(user, "last_rss_sync", None),
     )
+
     if not rss_url:
-        logger.warning("RSS sync invalid input user_id=%s raw =%r", user.id, raw)
-        return RSSSyncResult(user_id=user.id, rss_url="", error="No valid letterboxd username/RSS input.")
+        logger.warning("RSS sync invalid input user_id=%s raw=%r", user.id, raw)
+        return RSSSyncResult(
+            user_id=user.id,
+            rss_url="",
+            error="No valid letterboxd username/RSS input.",
+        )
 
     feed = feedparser.parse(rss_url)
-    logger.info("RSS feed keys user_id=%s keys=%s", user.id, list(feed.keys()))
-    logger.info("RSS feed href=%r", getattr(feed, "href", None))
-    logger.info("RSS feed version=%r", getattr(feed, "version", None))
-    logger.info("RSS feed status=%r", getattr(feed, "status", None))
-    logger.info("RSS feed headers=%r", getattr(feed, "headers", None))
-    logger.info("RSS feed feed_title=%r", getattr(feed, "feed", {}).get("title") if getattr(feed, "feed", None) else None)
-    logger.info("RSS raw first feed object=%r", feed.feed)
     status_code = getattr(feed, "status", None)
     bozo = getattr(feed, "bozo", False)
     bozo_exc = getattr(feed, "bozo_exception", None)
@@ -144,27 +144,15 @@ def sync_user_rss_watches(
         len(entries),
         bozo_exc,
     )
+
     if status_code and status_code != 200:
-        logger.warning(
-            "RSS bad status user_id=%s status=%r rss_url=%r",
-            user.id,
-            status_code,
-            rss_url,
-        )
         return RSSSyncResult(
-            user_id = user.id,
-            rss_url = rss_url,
-            error =f"RSS returned HTTP {status_code}.",
+            user_id=user.id,
+            rss_url=rss_url,
+            error=f"RSS returned HTTP {status_code}.",
         )
-    
+
     if not entries:
-        logger.warning(
-            "RSS no entries user_id=%s rss_url=%r bozo=%r bozo_exc=%r",
-            user.id,
-            rss_url,
-            bozo,
-            bozo_exc,
-        )
         return RSSSyncResult(
             user_id=user.id,
             rss_url=rss_url,
@@ -174,69 +162,52 @@ def sync_user_rss_watches(
         )
 
     res = RSSSyncResult(user_id=user.id, rss_url=rss_url)
-    # unique set of event keys alr in user's watchevent table
+
     existing_event_keys = set(
-        WatchEvent.objects.filter(user=user) # all sources
-        .values_list("event_key", flat=True)
-    )
-    logger.info(
-        "RSS existing keys user_id=%s count=%s",
-        user.id,
-        len(existing_event_keys),
+        WatchEvent.objects.filter(user=user).values_list("event_key", flat=True)
     )
 
+    # Tighten RSS behavior after CSV/manual import exists.
     last_rss = getattr(user, "last_rss_sync", None)
     cutoff_date = None
+
     if last_rss:
-        cutoff_date = user.last_rss_sync.date() - timedelta(days=cutoff_buffer_days)
+        # Normal incremental behavior after first RSS sync.
+        cutoff_date = last_rss.date() - timedelta(days=cutoff_buffer_days)
+    elif has_manual_history:
+        # If user already imported CSV, RSS should only look at a recent window.
+        # Prevent RSS from acting like a second historical importer.
+        cutoff_date = datetime.utcnow().date() - timedelta(days=30)
 
     logger.info(
-        "RSS cutoff user_id=%s cutoff_date=%r buffer_days=%s",
+        "RSS cutoff user_id=%s cutoff_date=%r buffer_days=%s has_manual_history=%r",
         user.id,
         cutoff_date,
         cutoff_buffer_days,
+        has_manual_history,
     )
 
     for idx, entry in enumerate(entries, start=1):
-        link = (getattr(entry, "link", "") or "").strip()
+        raw_link = (getattr(entry, "link", "") or "").strip()
         title = (getattr(entry, "title", "") or "").strip()
-        entry_ref = (getattr(entry, "id", "") or getattr(entry, "link","") or "").strip()
-        logger.warning(
-            "RSS entry start user_id=%s idx=%s raw_title=%r raw_link=%r entry_ref=%r",
-            user.id,
-            idx,
-            title,
-            link,
-            entry_ref,
-        )
-        
-        if not link:
-            logger.info("RSS skip no link user_id=%s idx=%s", user.id, idx)
-            continue
-        logger.info("RSS raw entry link user_id=%s title=%r raw_link=%r", user.id, title, link,)
+        entry_ref = (getattr(entry, "id", "") or getattr(entry, "link", "") or "").strip()
 
-        link = normalize_letterboxd_uri(link)
-        logger.info("RSS normalized entry link user_id=%s normalized_link=%r", user.id, link,)
-        if not link:
-            logger.info("RSS skip bad normalized link user_id=%s idx=%s", user.id, idx)
+        if not raw_link:
             continue
-        
+
+        link = normalize_letterboxd_uri(raw_link)
+        if not link:
+            continue
+
+        posted_date = _parse_published_date(entry)
+
+        # Count only parseable candidate entries
         res.entries_seen += 1
-        posted_date = _parse_published_date(entry)  # date | None
-        logger.info(
-            "RSS entry parsed user_id=%s, idx=%s title=%r norm_link=%r posted_date=%r",
-            user.id,
-            idx,
-            title,
-            link,
-            posted_date
-        )
-        
-        # stop on cutoff (entries are newest first)
+
         if cutoff_date and posted_date and posted_date <= cutoff_date:
             res.stopped_early = True
             logger.info(
-                "RSS stop cutoff user_id=%s idx=%s posted_date=%r cutoff_date=%r", 
+                "RSS stop cutoff user_id=%s idx=%s posted_date=%r cutoff_date=%r",
                 user.id,
                 idx,
                 posted_date,
@@ -244,12 +215,10 @@ def sync_user_rss_watches(
             )
             break
 
-        event_key = None
         parsed_title, parsed_year = _parse_entry_title(title)
+
         try:
             movie, was_created, _ = resolve_movie_one(parsed_title, parsed_year, link)
-            if not movie or not movie.letterboxd_uri or not posted_date:
-                continue
         except Exception:
             logger.exception(
                 "RSS resolve_movie_one failed user_id=%s idx=%s parsed_title=%r parsed_year=%s norm_link=%r",
@@ -261,30 +230,48 @@ def sync_user_rss_watches(
             )
             continue
 
-        event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
-        if event_key in existing_event_keys:
-            logger.info("RSS skip existing event_key user_id=%s idx=%s", user.id, idx)
+        if not movie or not movie.id or not movie.letterboxd_uri or not posted_date:
             continue
 
-        logger.info(
-            "RSS movie resolved user_id=%s idx=%s movie_id=%s was_created=%r",
-            user.id,
-            idx,
-            getattr(movie, "id", None),
-            was_created,
-        )
+        event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
+
+        if event_key in existing_event_keys:
+            logger.info(
+                "RSS skip existing event_key user_id=%s idx=%s event_key=%r",
+                user.id,
+                idx,
+                event_key,
+            )
+            continue
+
+        duplicate_same_day = WatchEvent.objects.filter(
+            user=user,
+            movie=movie,
+            posted_date=posted_date,
+        ).exists()
+        if duplicate_same_day:
+            logger.info(
+                "RSS skip same movie/day user_id=%s idx=%s movie_id=%s posted_date=%r",
+                user.id,
+                idx,
+                movie.id,
+                posted_date,
+            )
+            existing_event_keys.add(event_key)
+            continue
+
         if was_created:
             res.movies_created += 1
-        
+
         try:
             _, we_created = upsert_watch_event(
                 user=user,
                 movie=movie,
                 posted_date=posted_date,
-                watched_date=posted_date,
+                watched_date=posted_date,  # fallback only for RSS-created event rows
                 rewatch=False,
                 source="rss",
-                entry_url=entry_ref or link,
+                entry_url=entry_ref or raw_link,
             )
         except IntegrityError:
             we_created = False
@@ -292,26 +279,33 @@ def sync_user_rss_watches(
                 "RSS upsert_watch_event integrity error user_id=%s idx=%s movie_id=%s",
                 user.id,
                 idx,
-                getattr(movie, "id", None),
+                movie.id,
             )
 
-        if we_created:
-            res.events_created += 1
-            existing_event_keys.add(event_key)
+        if not we_created:
+            # Critical tightening: do not touch MovieUser unless a new event was created.
+            continue
+
+        res.events_created += 1
+        existing_event_keys.add(event_key)
 
         if needToEnrich(movie):
             movies_to_enrich.add(movie.id)
 
-        defaults = {"watch_status": "Watched"}
         try:
             mu, created_mu, changed_mu = upsert_movieuser_snapshot(
                 user,
                 movie,
-                defaults,
+                {"watch_status": "Watched"},
             )
-            if mu.watched_date is None and posted_date:
+
+            # Only fill missing watched_date; never overwrite CSV/review truth.
+            if mu.watched_date is None:
                 mu.watched_date = posted_date
                 mu.save(update_fields=["watched_date"])
+                if not created_mu:
+                    changed_mu = True
+
         except IntegrityError:
             created_mu = False
             changed_mu = False
@@ -319,7 +313,7 @@ def sync_user_rss_watches(
         if created_mu:
             res.rel_created += 1
         elif changed_mu:
-            res.rel_updated += 1 
+            res.rel_updated += 1
 
     res.movie_ids_to_enrich = list(movies_to_enrich)
     return res

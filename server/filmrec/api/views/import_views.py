@@ -314,9 +314,11 @@ def import_rss(request):
     )
 
     try:
+        has_manual_history = (request.user.manual_import_count or 0) > 0
+
         # tries running main rss import job (synchronusly) (if nothing for user usually gets 50 movies)
         # Somewhat slow, thinking of moving to an asynchronous job or trying to optimize
-        res = sync_user_rss_watches(request.user, rss_input=rss_input)
+        res = sync_user_rss_watches(request.user, rss_input=rss_input, has_manual_history=has_manual_history)
         print(
             "RSS RESULT",
             {
