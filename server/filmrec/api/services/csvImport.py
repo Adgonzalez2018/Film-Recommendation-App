@@ -184,8 +184,8 @@ def run_letterboxd_import(*, user, watched_file=None, reviews_file=None, watchli
 
         r["_movie"] = final_movie
         movies_matched += 1
-        if needToEnrich(movie):
-            movies_to_enrich.add(movie.id)
+        if needToEnrich(final_movie):
+            movies_to_enrich.add(final_movie.id)
 
     movie_ids = list({r["_movie"].id for r in rows if r.get("_movie")})
     if not movie_ids:

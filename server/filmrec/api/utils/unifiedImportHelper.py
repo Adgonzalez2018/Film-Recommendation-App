@@ -109,22 +109,23 @@ def choose_existing_movie_one(cand: NormalizedMovieCandidate) -> Optional[Movie]
         
     return None
 
-def normalize_letterboxd_uri(uri: str):
-    """
-    Accepts:
-        - https://letterboxd.com/film/<slug>/
-        - https://letterboxd.com/film/<slug>
-        - /film/<slug>/
-        - film/<slug>/
-        - https://boxd.it/<id>/
-        - https://boxd.it/<id>
-        returns a normalized url string, or None if blank/unparseable
+from urllib.parse import urlparse
 
+def normalize_letterboxd_uri(uri: str | None):
     """
-    # older version
+    Normalize any Letterboxd movie-ish URL to the canonical film page:
+      - https://letterboxd.com/film/<slug>/
+      - /film/<slug>/
+      - /<username>/film/<slug>/
+      - /<username>/film/<slug>/<review_or_diary_id>/
+      - /<username>/films/<slug>/
+      - /<username>/films/<slug>/<review_or_diary_id>/
+      - https://boxd.it/<id>/   -> leave as boxd shortlink if that's all we have
+    """
     uri = (uri or "").strip()
     if not uri:
         return None
+
     if uri.startswith("/"):
         path = uri
         host = ""
@@ -138,19 +139,29 @@ def normalize_letterboxd_uri(uri: str):
             path = parsed.path or ""
         except Exception:
             return None
-    
-    parts = [p for p in path.split("/") if p]
 
-    # global film path: /film/<slug>/
+    parts = [p for p in path.split("/") if p]
+    if not parts:
+        return None
+
+    # canonical film page already
     if len(parts) >= 2 and parts[0] == "film":
         return f"https://letterboxd.com/film/{parts[1]}/"
-    # user-scoped RSS item path: /<username>/films/<slug>/
+
+    # user-scoped film/diary/review pages:
+    # /<username>/film/<slug>/...
     if len(parts) >= 3 and parts[1] == "film":
         return f"https://letterboxd.com/film/{parts[2]}/"
-    # short boxd.it link
-    if host in {"boxd.it","www.boxd.it"} and parts:
+
+    # sometimes users / feeds may surface plural variant:
+    # /<username>/films/<slug>/...
+    if len(parts) >= 3 and parts[1] == "films":
+        return f"https://letterboxd.com/film/{parts[2]}/"
+
+    # short boxd.it links
+    if host in {"boxd.it", "www.boxd.it"} and parts:
         return f"https://boxd.it/{parts[0]}/"
-    
+
     return None
 
 def extract_letterboxd_username(input_str: str) -> str | None:
@@ -445,7 +456,7 @@ def upsert_watch_event(*, user, movie, posted_date, watched_date=None, rewatch=F
         )
         return we, created
     except IntegrityError:
-        we = WatchEvent.objects.get(user=user, event_key=event_key).first()
+        we = WatchEvent.objects.filter(user=user, event_key=event_key).first()
         return we, False
 
 def upsert_movieuser_snapshot(user, movie, updates):

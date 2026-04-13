@@ -266,6 +266,13 @@ def sync_user_rss_watches(
         )
         try:
             movie, was_created, _ = resolve_movie_one(parsed_title, parsed_year, link)
+            if not movie or not movie.letterboxd_uri or not posted_date:
+                continue
+            
+            event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
+            if event_key in existing_event_keys:
+                continue
+            
         except Exception:
             logger.exception(
                 "RSS resolve_movie_one failed user_id=%s idx=%s parsed_title=%r parsed_year=%s norm_link=%r",
