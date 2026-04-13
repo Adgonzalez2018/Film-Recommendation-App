@@ -23,14 +23,18 @@ class NormalizedMovieCandidate:
     tmdb_id: Optional[int] = None
 
 # --- deduping guardrail ---
-def _derive_slug_uri(title: str) -> Optional[str]:
+def _derive_slug_uri(title: str, year: int | None = None) -> Optional[str]:
     if not title or title == "Unknown":
         return None
     s = title.lower().strip()
     s = re.sub(r"[''']", "", s)
     s = re.sub(r"[^a-z0-9\s-]", "", s)
     s = re.sub(r"\s+", "-", s).strip("-")
-    return f"https://letterboxd.com/film/{s}/" if s else None
+    if not s:
+        return None
+    # don't append year by default - only use it if caller explicitly passes it
+    # and the plain slug won't exist (caller's responsibility)
+    return f"https://letterboxd.com/film/{s}/"
 
 def normalize_letterboxd_movie_identity(uri: str | None) -> tuple[Optional[str], Optional[str]]:
     # Returns canonical uri and weak uri

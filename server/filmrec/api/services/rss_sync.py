@@ -246,33 +246,10 @@ def sync_user_rss_watches(
 
         event_key = None
         parsed_title, parsed_year = _parse_entry_title(title)
-        if posted_date and link:
-            event_key = makeWatchKey(user.id, link, posted_date)
-            if event_key in existing_event_keys:
-                logger.info(
-                    "RSS skip existing event_key user_id=%s idx=%s event_key=%r", 
-                    user.id,
-                    idx,
-                    event_key,
-                )
-                continue
-
-        logger.info(
-            "RSS resolving movie user_id=%s idx=%s parsed_title=%s parsed_year=%s norm_link=%r", 
-            user.id, idx,
-            parsed_title,
-            parsed_year,
-            link,
-        )
         try:
             movie, was_created, _ = resolve_movie_one(parsed_title, parsed_year, link)
             if not movie or not movie.letterboxd_uri or not posted_date:
                 continue
-            
-            event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
-            if event_key in existing_event_keys:
-                continue
-            
         except Exception:
             logger.exception(
                 "RSS resolve_movie_one failed user_id=%s idx=%s parsed_title=%r parsed_year=%s norm_link=%r",
@@ -283,7 +260,12 @@ def sync_user_rss_watches(
                 link,
             )
             continue
-            
+
+        event_key = makeWatchKey(user.id, movie.letterboxd_uri, posted_date)
+        if event_key in existing_event_keys:
+            logger.info("RSS skip existing event_key user_id=%s idx=%s", user.id, idx)
+            continue
+
         logger.info(
             "RSS movie resolved user_id=%s idx=%s movie_id=%s was_created=%r",
             user.id,
@@ -293,39 +275,43 @@ def sync_user_rss_watches(
         )
         if was_created:
             res.movies_created += 1
-        # event key + stop if already imported
-        if posted_date:
-            try:
-                _, we_created = upsert_watch_event(
-                    user=user,
-                    movie=movie,
-                    posted_date=posted_date,
-                    watched_date=posted_date,
-                    rewatch=False,
-                    source="rss",
-                    entry_url=entry_ref or link,
-                )
-            except IntegrityError:
-                we_created = False
-                logger.exception(
-                    "RSS upsert_watch_event integrity error user_id=%s idx=%s movie_id=%s",
-                    user.id,
-                    idx,
-                    getattr(movie, "id", None),
-                )
+        
+        try:
+            _, we_created = upsert_watch_event(
+                user=user,
+                movie=movie,
+                posted_date=posted_date,
+                watched_date=posted_date,
+                rewatch=False,
+                source="rss",
+                entry_url=entry_ref or link,
+            )
+        except IntegrityError:
+            we_created = False
+            logger.exception(
+                "RSS upsert_watch_event integrity error user_id=%s idx=%s movie_id=%s",
+                user.id,
+                idx,
+                getattr(movie, "id", None),
+            )
 
-            if we_created:
-                res.events_created += 1
-                existing_event_keys.add(event_key)
+        if we_created:
+            res.events_created += 1
+            existing_event_keys.add(event_key)
 
         if needToEnrich(movie):
             movies_to_enrich.add(movie.id)
 
         defaults = {"watch_status": "Watched"}
-        if posted_date:
-            defaults["watched_date"] = posted_date
         try:
-            _, created_mu, changed_mu = upsert_movieuser_snapshot(user, movie, defaults)
+            mu, created_mu, changed_mu = upsert_movieuser_snapshot(
+                user,
+                movie,
+                defaults,
+            )
+            if mu.watched_date is None and posted_date:
+                mu.watched_date = posted_date
+                mu.save(update_fields=["watched_date"])
         except IntegrityError:
             created_mu = False
             changed_mu = False
