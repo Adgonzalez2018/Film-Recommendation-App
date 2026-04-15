@@ -226,12 +226,7 @@ No invented titles or TMDB IDs. Only recommend movies from the retrieved context
     )
 
 def _fallback_why(mv, user_msg=""):
-    bits = []
-    if getattr(mv, "year", None):
-        bits.append(str(mv.year))
-    if getattr(mv, "overview", None):
-        return f"A strong match for your prompt. {mv.overview[:140].rstrip()}..."
-    return "A strong match for your prompt and taste profile."
+    return ""
 
 def _build_contextual_query(msg: str, user) -> str:
     parts = [msg.strip()]
@@ -470,7 +465,7 @@ def chat_recommend(request):
         if len(movies_payload) == 3:
             break
 
-    if  len(movies_payload) < 1:
+    if len(movies_payload) < 3:
         logger.info(
             "chat_recommend clarify after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
             request.user.id,

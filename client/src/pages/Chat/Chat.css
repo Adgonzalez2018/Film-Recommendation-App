@@ -907,7 +907,7 @@
 .chat-header-row {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: right;
   justify-content: space-between;
   gap: 12px;
 }

@@ -538,6 +538,7 @@ const Chat = () => {
       <main className="chat-main">
         <header className="chat-header">
           <h1 className="header-title">Film-Recommender {UPDATES_VERSION}</h1>
+
           <button
             type="button"
             className="updates-link-btn"
@@ -739,7 +740,7 @@ const Chat = () => {
           onClose={() => setUpdatesOpen(false)}
         />
       )}
-      
+
       {feedbackFilm && (
         <FilmBankFeedbackModal
           film={feedbackFilm}
