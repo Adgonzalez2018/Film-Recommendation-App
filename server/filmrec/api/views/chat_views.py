@@ -189,7 +189,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 12,
+            "max_num_results": 15,
         }
     ]
     taste_line = (
@@ -200,7 +200,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
     system = f"""
 You are a film recommender. Use the retrieved movie context and user taste summary to recommend films.
 
-Return 3-5 movies ranked strongest first.
+Return 6-8 movies ranked strongest first.
 For each recommendation: 
 - Select ONE movie record from the retrieved context
 - Copy the title and year EXACTLY from that record
@@ -283,7 +283,7 @@ CHAT_RESPONSE_SCHEMA = {
             "recommendations": {
                 "type": "array",
                 "minItems": 0,
-                "maxItems": 8,  # 3 + 2 backups
+                "maxItems": 10,  # 3 + 2 backups
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
