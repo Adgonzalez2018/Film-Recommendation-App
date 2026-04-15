@@ -8,8 +8,18 @@ import {
   dismissFilmBankMovie,
 } from "../../api/chat";
 import ModalShell from "./ModalShell";
+import UpdatesModal from "./UpdatesModal";
 import ConfirmDeleteModal from "./confirmdeleteModal";
 import FilmBankFeedbackModal from "./filmbankfeedbackModal";
+
+const UPDATES_VERSION = "V1.4";
+const UPDATES_STORAGE_KEY = "filmrec_updates_seen_version";
+const UPDATES_BULLETS = [
+  "Film Bank recommendations can now be rated without being auto-dismissed.",
+  "Recommendation cards now keep Letterboxd links first, with TMDB as fallback.",
+  "Chat history delete flow has been cleaned up and made more stable.",
+  "General UI polish and recommendation modal improvements.",
+];
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -222,7 +232,7 @@ function chatReducer(state, action) {
 const Chat = () => {
   const navigate = useNavigate();
   const { accessToken, isAuthenticating, authError } = useAuth();
-
+  const [updatesOpen, setUpdatesOpen] = useState(false);
   const [chatState, dispatch] = useReducer(chatReducer, INITIAL_CHAT_STATE);
   const [input, setInput] = useState("");
 
@@ -336,6 +346,19 @@ const Chat = () => {
       })
     );
   }, [chatState.chatHistory, chatState.activeChatId]);
+
+  useEffect(() => {
+    try {
+      const seenVersion = localStorage.getItem(UPDATES_STORAGE_KEY);
+
+      if (seenVersion !== UPDATES_VERSION){
+        setUpdatesOpen(true);
+        localStorage.setItem(UPDATES_STORAGE_KEY, UPDATES_VERSION);
+      }
+    } catch (err) {
+      console.error("Failed to read updates version localStorage:", err);
+    }
+  })
 
   // -------------------------------------------------------------------------
   // Messaging
@@ -514,7 +537,14 @@ const Chat = () => {
 
       <main className="chat-main">
         <header className="chat-header">
-          <h1 className="header-title">Film-Recommender v1.3</h1>
+          <h1 className="header-title">Film-Recommender {UPDATES_VERSION}</h1>
+          <button
+            type="button"
+            className="updates-link-btn"
+            onClick={() => setUpdatesOpen(true)}
+          >
+            Updates
+          </button>
         </header>
 
         <div className="messages-container">
@@ -702,6 +732,14 @@ const Chat = () => {
         </ModalShell>
       )}
 
+      {updatesOpen && (
+        <UpdatesModal
+          version={UPDATES_VERSION}
+          updates={UPDATES_BULLETS}
+          onClose={() => setUpdatesOpen(false)}
+        />
+      )}
+      
       {feedbackFilm && (
         <FilmBankFeedbackModal
           film={feedbackFilm}
