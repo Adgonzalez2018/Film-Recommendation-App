@@ -903,3 +903,84 @@
 .chat-history-item.active .chat-history-delete {
   opacity: 1;
 }
+
+.chat-header-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.updates-link-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+
+.updates-link-btn:hover {
+  color: var(--green);
+  text-shadow: 0 0 10px rgba(0, 255, 120, 0.18);
+}
+
+.updates-modal {
+  width: 520px;
+  max-width: 92vw;
+}
+
+.updates-modal-body {
+  padding: 18px 18px 16px;
+}
+
+.updates-intro {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+}
+
+.updates-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
+.updates-list-item {
+  margin-bottom: 10px;
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.updates-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 255, 120, 0.12);
+}
+
+.updates-close-btn {
+  padding: 9px 14px;
+  background: rgba(0, 255, 120, 0.08);
+  border: 1px solid rgba(0, 255, 120, 0.35);
+  color: var(--green);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.updates-close-btn:hover {
+  background: rgba(0, 255, 120, 0.15);
+  border-color: rgba(0, 255, 120, 0.6);
+  box-shadow: 0 0 14px rgba(0, 255, 120, 0.15);
+}
