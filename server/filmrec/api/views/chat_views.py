@@ -441,10 +441,6 @@ def chat_recommend(request):
         if not mv:
             mv = Movie.objects.filter(title__iexact=returned_title).order_by("-year").first()
 
-        # icontains fallback BEFORE the validity check
-        if not mv:
-            mv = Movie.objects.filter(title__icontains=returned_title).order_by("-year").first()
-
         if not _is_valid_movie(mv):
             logger.debug("Rejecting recommendation reason=movie_not_found title=%r year=%r", returned_title, returned_year,)
             continue
