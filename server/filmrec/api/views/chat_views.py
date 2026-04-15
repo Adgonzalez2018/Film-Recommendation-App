@@ -189,7 +189,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 6,
+            "max_num_results": 12,
         }
     ]
     taste_line = (
@@ -283,7 +283,7 @@ CHAT_RESPONSE_SCHEMA = {
             "recommendations": {
                 "type": "array",
                 "minItems": 0,
-                "maxItems": 5,  # 3 + 2 backups
+                "maxItems": 8,  # 3 + 2 backups
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -405,7 +405,7 @@ def chat_recommend(request):
         )
     
     recs = data.get("recommendations", [])
-    if not isinstance(recs, list) or len(recs) < 3:
+    if not isinstance(recs, list) or len(recs) < 1:
         return Response(
             {
                 "type": "clarify",
@@ -444,6 +444,11 @@ def chat_recommend(request):
             logger.debug("Rejecting recommendation reason=movie_not_found title=%r year=%r", returned_title, returned_year,)
             continue
 
+        if not mv:
+            mv = Movie.objects.filter(
+                title__icontains=returned_title
+            ).order_by("-year").first()
+
         tmdb_id_int = mv.tmdb_id
 
         # ensure movie exists in DB
@@ -465,7 +470,7 @@ def chat_recommend(request):
         if len(movies_payload) == 3:
             break
 
-    if len(movies_payload) < 3:
+    if len(movies_payload) < MIN_RECS:
         logger.info(
             "chat_recommend clarify after filter user=%s, taste_store=%s excluded_count=%s raw_recs=%s final_recs=%s",
             request.user.id,
