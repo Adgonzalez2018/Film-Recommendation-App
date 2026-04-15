@@ -33,12 +33,6 @@ class Command(BaseCommand):
             try:
                 upsert_tmdb_movie(mv.tmdb_id)
                 mv.refresh_from_db()
-                if not mv.letterboxd_uri and mv.title:
-                    slug = _title_to_slug(mv.title)
-                    if slug:
-                        Movie.objects.filter(pk=mv.pk).update(
-                            letterboxd_uri=f"https://letterboxd.com/film/{slug}/"
-                        )
                 ok += 1
             except Exception as e:
                 failed += 1

@@ -19,12 +19,23 @@ const FilmBankFeedbackModal = ({ film, token, onDone, onClose }) => {
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
+
     setSubmitting(true);
     setError("");
 
     try {
-      await submitFilmBankFeedback(film.movieId, token, { rating, watched, text });
-      onDone(film.movieId);
+      await submitFilmBankFeedback(film.movieId, token, {
+        rating,
+        watched,
+        text,
+      });
+
+      onDone?.({
+        movieId: film.movieId,
+        rating,
+        watched,
+        text,
+      });
     } catch (err) {
       setError(err?.message || "Failed to submit feedback.");
       setSubmitting(false);
@@ -51,6 +62,7 @@ const FilmBankFeedbackModal = ({ film, token, onDone, onClose }) => {
           {RATINGS.map((r) => (
             <button
               key={r.value}
+              type="button"
               className={`fb-rating-btn ${rating === r.value ? "active" : ""}`}
               onClick={() => setRating(r.value)}
             >
@@ -70,6 +82,7 @@ const FilmBankFeedbackModal = ({ film, token, onDone, onClose }) => {
           ].map((opt) => (
             <button
               key={String(opt.value)}
+              type="button"
               className={`fb-watched-btn ${watched === opt.value ? "active" : ""}`}
               onClick={() => setWatched(opt.value)}
             >
@@ -97,15 +110,21 @@ const FilmBankFeedbackModal = ({ film, token, onDone, onClose }) => {
       {error && <div className="fb-feedback-error">{error}</div>}
 
       <div className="fb-feedback-actions">
-        <button className="fb-cancel-btn" onClick={onClose} disabled={submitting}>
+        <button
+          type="button"
+          className="fb-cancel-btn"
+          onClick={onClose}
+          disabled={submitting}
+        >
           CANCEL
         </button>
         <button
+          type="button"
           className={`fb-submit-btn ${!canSubmit ? "disabled" : ""}`}
           onClick={handleSubmit}
           disabled={!canSubmit}
         >
-          {submitting ? "SAVING..." : "SUBMIT"}
+          {submitting ? "SAVING..." : "SAVE FEEDBACK"}
         </button>
       </div>
     </ModalShell>

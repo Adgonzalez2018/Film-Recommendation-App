@@ -12,31 +12,19 @@ from api.models import (
     MovieCast,
 ) # adjust import if needed
 
-def build_movie_text(movie, genres, directors, cast_names):
+def build_movie_text(movie):
     title = movie.title or "Unknown"
     year_str = f" ({movie.year})" if movie.year else ""
 
-    parts = ["MOVIE", f"Title: {title}{year_str}"]
+    parts = [f"{title}{year_str}"]
 
-    if genres:
-        parts.append(f"Genres: {', '.join(genres)}")
-    if movie.tagline:
-        parts.append(f"Tagline: {movie.tagline}")
-    if directors:
-        parts.append(f"Director: {', '.join(directors)}")
-    if cast_names:
-        parts.append(f"Cast: {', '.join(cast_names)}")
-    if movie.keywords:
-        parts.append(f"Keywords: {movie.keywords}")
-    if movie.collection_name:
-        parts.append(f"Series: {movie.collection_name}")
     if movie.overview:
         ov = movie.overview.strip()
         if len(ov) > 800:
             ov = ov[:800].rsplit(" ", 1)[0] + "..."
-        parts.append(f"Overview: {ov}")
+        parts.append(ov)
 
-    return "\n".join(parts)
+    return "\n\n".join(parts)
 
 class Command(BaseCommand):
     help = "Build global movies JSONL for vector indexing."
@@ -110,22 +98,16 @@ class Command(BaseCommand):
                     if len(cast) >= cast_n:
                         break
 
-                text = build_movie_text(m, genres, directors, cast)
+                text = build_movie_text(m)
 
                 doc = {
                     "id": f"movie:{m.id}",
-                    "movie_id": m.id,
-                    "tmdb_id": m.tmdb_id,
-                    "title": m.title,
-                    "year": m.year,
                     "genres": genres,
                     "directors": directors,
                     "cast": cast,
                     "tagline": m.tagline,
                     "keywords": m.keywords,
                     "collection_name": m.collection_name,
-                    "poster_url": m.poster_url,
-                    "letterboxd_uri": m.letterboxd_uri,
                     "text": text,
                 }
 

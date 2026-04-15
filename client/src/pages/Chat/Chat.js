@@ -44,7 +44,7 @@ function normalizeFilmBankItem(item) {
     reason: item?.why || item?.reason || "",
     queryText: item?.query_text || "",
     createdAt: item?.created_at || null,
-  };
+  };  
 }
 
 function getMovieLink(film) {
@@ -278,9 +278,9 @@ const Chat = () => {
     }
   };
 
-  const handleFeedbackDone = (movieId) => {
+  const handleFeedbackDone = async () => {
     setFeedbackFilm(null);
-    setFilmBank((current) => current.filter((f) => f.movieId !== movieId));
+    await loadFilmBank();
   };
 
   // -------------------------------------------------------------------------
