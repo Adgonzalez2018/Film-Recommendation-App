@@ -203,7 +203,7 @@ You are a film recommender. Use the retrieved movie context and user taste summa
 Return 3-5 movies ranked strongest first.
 For each recommendation: 
 - Select ONE movie record from the retrieved context
-- Copy the tmdb_id and title EXACTLY from that record
+- Copy the title and year EXACTLY from that record
 - Do NOT modify or guess IDs or titles
 - Do NOT combine information from multiple movies
 
@@ -293,12 +293,10 @@ CHAT_RESPONSE_SCHEMA = {
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "tmdb_id": {
-                            "type": "integer",
-                        },
                         "title": {"type": "string"},
+                        "year": { "type": ["integer", "null"]}
                     },
-                    "required": ["tmdb_id", "title"],
+                    "required": ["title", "year"],
                 },
             },
         },
@@ -429,15 +427,29 @@ def chat_recommend(request):
     film_bank_entries = []
 
     for r in recs:
-        tmdb_id = r.get("tmdb_id")
         returned_title = (r.get("title") or "").strip()
-        why = _clean_why(r.get("why"))
+        returned_year = r.get("year")
 
-        # hard exclude safety check
-        try:
-            tmdb_id_int = int(tmdb_id)
-        except Exception:
+        if not returned_title:
+            logger.warning("Rejecting recommendation reason=missing_title")
             continue
+
+        mv = None
+
+        if returned_year is not None:
+            mv = Movie.objects.filter(
+                title__iexact=returned_title,
+                year=returned_year,
+            ).first()
+
+        if not mv:
+            mv = Movie.objects.filter(title__iexact=returned_title).order_by("-year").first()
+
+        if not _is_valid_movie(mv):
+            logger.debug("Rejecting recommendation reason=movie_not_found title=%r year=%r", returned_title, returned_year,)
+            continue
+
+        tmdb_id_int = mv.tmdb_id
 
         # ensure movie exists in DB
         if tmdb_id_int in excluded_set:
@@ -448,34 +460,12 @@ def chat_recommend(request):
             logger.debug("Skipping tmdb_id=%s reason=duplicate", tmdb_id_int)
             continue
 
-        # just look up no tmdb api call
-        mv = Movie.objects.filter(tmdb_id=tmdb_id_int).first()
-        if not mv:
-            try:
-                mv = upsert_tmdb_movie(tmdb_id_int)
-            except:
-                continue
         
-        if not returned_title:
-            logger.warning("Rejecting recommendation tmdb_Id=%s reason=missing_title", tmdb_id_int)
-            continue
-
-        if mv.title.strip().lower() != returned_title.lower():
-            logger.warning(
-                "Rejecting mismatched recommendation tmdb_id=%s returned_title=%r db_title=%r",
-                tmdb_id_int,
-                returned_title,
-                mv.title,
-            )
-            continue
-
-        if not _is_valid_movie(mv):
-            logger.debug("Skipping tmdb_id=%s reason=invalid_movie", tmdb_id_int)
-            continue
-    
         seen_tmdb_ids.add(tmdb_id_int)
-        movies_payload.append(_movie_payload(mv, why=_fallback_why(mv, msg)))
-        film_bank_entries.append((mv, _fallback_why(mv, msg)))
+        why = _fallback_why(mv, msg)
+
+        movies_payload.append(_movie_payload(mv,why=why))
+        film_bank_entries.append((mv, why))
 
         if len(movies_payload) == 3:
             break
