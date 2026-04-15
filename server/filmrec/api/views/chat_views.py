@@ -424,7 +424,7 @@ def chat_recommend(request):
     for r in recs:
         returned_title = (r.get("title") or "").strip()
         returned_year = r.get("year")
-        logger.info("RAW REC: title=%r year=%r", returned_title, returned_year)
+        logger.warning("RAW REC: title=%r year=%r", returned_title, returned_year)
 
         if not returned_title:
             logger.warning("Rejecting recommendation reason=missing_title")
