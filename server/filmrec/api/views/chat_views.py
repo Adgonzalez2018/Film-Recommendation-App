@@ -189,7 +189,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 12,
+            "max_num_results": 8,
         }
     ]
     taste_line = (
@@ -200,7 +200,14 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
     system = f"""
 You are a film recommender. Use the retrieved movie context and user taste summary to recommend films.
 
-Return 3-5 movies ranked strongest first. For each movie, write a "why" that:
+Return 3-5 movies ranked strongest first. 
+For each recommendation:
+- Use exactly one retrieved movie as the source
+- The tmdb_id, title, and why must all refer to the same movie
+- Do not mix details from different retrieved films
+- The "why" must reference the returned movie, not another candidate
+
+For each "why":
 - References something specific from the user's taste (a director, genre, theme, or mood they like)
 - Mentions one concrete detail about the film (tone, theme, or style) that makes it a match
 - Is 1-2 sentences, specific and personal — not generic praise like "a great film" or "you might enjoy"
@@ -283,15 +290,15 @@ CHAT_RESPONSE_SCHEMA = {
                     "properties": {
                         "tmdb_id": {
                             "type": "integer",
-                            "minimum": 1
                         },
+                        "title": {"type": "string"},
                         "why": {
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 280   # short explanation
                         },
                     },
-                    "required": ["tmdb_id", "why"],
+                    "required": ["tmdb_id", "title", "why"],
                 },
             },
         },
@@ -423,6 +430,7 @@ def chat_recommend(request):
 
     for r in recs:
         tmdb_id = r.get("tmdb_id")
+        returned_title = (r.get("title") or "").strip()
         why = _clean_why(r.get("why"))
 
         # hard exclude safety check
@@ -446,6 +454,16 @@ def chat_recommend(request):
             try:
                 mv = upsert_tmdb_movie(tmdb_id_int)
             except:
+                continue
+        
+        if mv and returned_title:
+            if mv.title.strip().lower() != returned_title.lower():
+                logger.warning(
+                    "Rejecting mismatched recommendation tmbdb_id=%s returned_title=%r db_title=%r",
+                    tmdb_id_int,
+                    returned_title,
+                    mv.title,
+                )
                 continue
 
         if not _is_valid_movie(mv):

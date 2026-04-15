@@ -1,6 +1,7 @@
 #api/management/commands/rebuild_taste_profile.py
 from django.core.management.base import BaseCommand
 
+from api.services.taste_index import ensure_taste_indexed
 from api.services.taste_profile import build_initial_taste_artifacts
 from api.services.feedback_profile import build_feedback_taste_artifacts
 from api.services.taste_store import write_taste_file
@@ -42,14 +43,22 @@ class Command(BaseCommand):
                 "rebuild_reason": reason,
             }
 
-            
+            merged_docs = [
+                d for d in merged["merged_docs"]
+                if d.get("type") != "merged_summary"
+            ]
+
             out_path = write_taste_file(
                 user_id=user_id,
                 summary_doc=summary_doc,
-                docs=merged["merged_docs"],
+                docs=merged_docs,
                 out=out,
             )
 
+            index_result = ensure_taste_indexed(
+                user_id=user_id,
+                file_path=out_path,
+            )
             base_counts = baseline_artifacts.get("counts", {})
             fb_counts = (feedback_artifacts or {}).get("counts", {})
 
@@ -63,6 +72,7 @@ class Command(BaseCommand):
                             f"disliked={base_counts.get('disliked', 0)}",
                             f"recent={base_counts.get('recent', 0)}",
                             f"feedback={fb_counts.get('total_feedback_rows', 0)}",
+                            f"Indexed store={index_result['store_id']} deleted={index_result['deleted_count']}"
                         ]
                     )
                 )

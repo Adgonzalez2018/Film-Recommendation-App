@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from typing import Iterable
+from django.db.models import Q
 
 from django.utils import timezone
 
@@ -23,7 +24,7 @@ QUERY_HEADROOM = 50
 
 
 def load_taste_movieusers(user_id: int):
-    base = (
+    rated_base = (
         MovieUser.objects
         .filter(user_id=user_id, rating__isnull=False)
         .select_related("movie")
@@ -34,17 +35,46 @@ def load_taste_movieusers(user_id: int):
         )
     )
 
-    loved = list(
-        base.filter(rating__gte=LOVED_MIN)
-        .order_by("-rating", "-watched_date")[:CAP_LOVED]
-    )
+    use_ratings = rated_base.exists()
 
-    disliked = list(
-        base.filter(rating__lte=DISLIKED_MAX)
-        .order_by("rating", "-watched_date")[:CAP_DISLIKED]
-    )
+    if use_ratings:
+        base = rated_base
 
-    excluded_ids = {mu.movie_id for mu in loved} | {mu.movie_id for mu in disliked}
+        loved = list(
+            base.filter(rating__gte=LOVED_MIN)
+            .order_by("-rating", "-watched_date")[:CAP_LOVED]
+        )
+
+        disliked = list(
+            base.filter(rating__lte=DISLIKED_MAX)
+            .order_by("rating", "-watched_date")[:CAP_DISLIKED]
+        )
+
+        loved_ids = {mu.movie_id for mu in loved}
+        disliked_ids = {mu.movie_id for mu in disliked}
+        excluded_ids = loved_ids | disliked_ids
+
+    else:
+        base = (
+            MovieUser.objects
+            .filter(user_id=user_id)
+            .filter(Q(watched_date__isnull=False) | Q(watch_status="Watched"))
+            .select_related("movie")
+            .prefetch_related(
+                "movie__moviegenre_set__genre",
+                "movie__moviecrew_set__person",
+                "movie__moviecast_set__person",
+            )
+        )
+
+        loved = list(
+            base.order_by("-watched_date", "-id")[:CAP_LOVED]
+        )
+
+        disliked = []
+
+        loved_ids = {mu.movie_id for mu in loved}
+        excluded_ids = loved_ids
 
     recent = list(
         base.exclude(movie_id__in=excluded_ids)
@@ -52,7 +82,7 @@ def load_taste_movieusers(user_id: int):
         .order_by("-watched_date")[:CAP_RECENT]
     )
 
-    return loved, disliked, recent
+    return loved, disliked, recent, use_ratings
 
 def split_movieusers(
     all_rated: list[MovieUser],
@@ -148,13 +178,15 @@ def _top_items(docs: list[dict], field: str, k: int) -> list[str]:
     return [item for item, _ in counter.most_common(k)]
 
 
-def build_summary(loved_docs: list[dict], disliked_docs: list[dict], recent_docs: list[dict]) -> dict:
+def build_summary(loved_docs: list[dict], disliked_docs: list[dict], recent_docs: list[dict], source_type: str="ratings") -> dict:
     top_loved_genres = _top_items(loved_docs, "genres", k=6)
     top_disliked_genres = _top_items(disliked_docs, "genres", k=4)
     top_recent_genres = _top_items(recent_docs, "genres", k=4)
 
     top_loved_directors = _top_items(loved_docs, "directors", k=5)
     top_loved_actors = _top_items(loved_docs, "actors", k=5)
+
+    inferred_from_watch_history = source_type == "watch_history"
 
     avg_loved_rating = (
         sum(d.get("rating", 0) for d in loved_docs if d.get("rating") is not None) / len(loved_docs)
@@ -165,9 +197,16 @@ def build_summary(loved_docs: list[dict], disliked_docs: list[dict], recent_docs
         sum(d.get("rating", 0) for d in disliked_docs if d.get("rating") is not None) / len(disliked_docs)
         if disliked_docs else 0
     )
+    text_lines = ["USER_TASTE_SUMMARY"]
 
-    text = "\n".join([
-        "USER_TASTE_SUMMARY",
+    if inferred_from_watch_history:
+        text_lines.extend([
+            "NOTE: Profile inferred from watch history because no ratings were available.",
+            "",
+        ])
+
+    text_lines.extend([
+        f"Source type: {source_type}",
         f"Total loved movies: {len(loved_docs)}",
         f"Total disliked movies: {len(disliked_docs)}",
         f"Recent activity: {len(recent_docs)}",
@@ -183,9 +222,13 @@ def build_summary(loved_docs: list[dict], disliked_docs: list[dict], recent_docs
         f"Favorite actors: {', '.join(top_loved_actors) if top_loved_actors else '(unknown)'}",
     ])
 
+    text = "\n".join(text_lines)
+
     return {
         "id": "taste:summary",
         "type": "summary",
+        "source_type": source_type,
+        "inferred_from_watch_history": inferred_from_watch_history,
         "stats": {
             "total_loved": len(loved_docs),
             "total_disliked": len(disliked_docs),
@@ -207,7 +250,7 @@ def build_initial_taste_artifacts(user_id: int) -> dict:
     """
     Main baseline taste-profile service.
     """
-    loved_mus, disliked_mus, recent_mus = load_taste_movieusers(user_id=user_id)
+    loved_mus, disliked_mus, recent_mus, use_ratings = load_taste_movieusers(user_id=user_id)
 
     if not loved_mus and not disliked_mus and not recent_mus:
         return {
@@ -227,7 +270,7 @@ def build_initial_taste_artifacts(user_id: int) -> dict:
     disliked_docs = movieusers_to_docs(disliked_mus, "disliked")
     recent_docs = movieusers_to_docs(recent_mus, "recent")
 
-    summary_doc = build_summary(loved_docs, disliked_docs, recent_docs)
+    summary_doc = build_summary(loved_docs, disliked_docs, recent_docs, source_type="ratings" if use_ratings else "watch_history",)
 
     return {
         "summary_doc": summary_doc,
