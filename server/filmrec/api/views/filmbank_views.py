@@ -113,15 +113,11 @@ def film_bank_feedback(request, movie_id: int):
     fb.feedback_watched = watched
     fb.feedback_text = text
     fb.feedback_submitted_at = timezone.now()
-    fb.status = "dismissed"
-    fb.dismissed_at = timezone.now()
     fb.save(update_fields=[
         "feedback_rating",
         "feedback_watched",
         "feedback_text",
         "feedback_submitted_at",
-        "status",
-        "dismissed_at",
     ])
     print(
         f"[DEBUG] film_bank_feedback user={request.user.id} movie_id={movie_id} "

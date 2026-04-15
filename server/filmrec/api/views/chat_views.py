@@ -6,6 +6,7 @@ import os
 import logging
 import time
 import json
+import re
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -28,11 +29,33 @@ logger = logging.getLogger(__name__)
 MIN_RECS = 1
 
 # Get the reasoning as to why Film Recommender gave you the movie
-def _clean_why(value: str) -> str:
-    text = " ".join((value or "").split()).strip()
+def _clean_why(value: str, max_len: int = 360) -> str:
+    text = re.sub(r"\s+", " ", (value or "")).strip()
+
     if not text:
         return "Matches your taste and current prompt."
-    return text[:280]
+
+    # remove common junk prefixes
+    text = re.sub(r"^(why\s*[:\-]\s*|because\s+)", "", text, flags=re.IGNORECASE).strip()
+    text = text.strip("•- ")
+
+    if len(text) <= max_len:
+        return text
+
+    # try to cut at sentence boundary first
+    clipped = text[:max_len]
+    sentence_cut = max(clipped.rfind(". "), clipped.rfind("! "), clipped.rfind("? "))
+
+    if sentence_cut >= int(max_len * 0.6):
+        clipped = clipped[: sentence_cut + 1].strip()
+    else:
+        # fallback: cut at last word
+        clipped = clipped.rsplit(" ", 1)[0].strip()
+
+    if clipped and clipped[-1] not in ".!?":
+        clipped += "…"
+
+    return clipped
 
 def _safe_parsed_response(resp):
     parsed = getattr(resp, "output_parsed", None)
@@ -153,7 +176,7 @@ def _movie_payload(mv, why: str = "") -> dict:
         "id": mv.id,
         "title": mv.title,
         "tmdb_id": mv.tmdb_id,
-        "letterboxd": getattr(mv, "letterboxd_uri", None),
+        "letterboxd_uri": getattr(mv, "letterboxd_uri", None),
         "poster_url": _build_poster_url(mv),
         "description": getattr(mv,"overview", None),
         "avg_rating": getattr(mv, "avg_rating", None),
@@ -166,7 +189,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 8,
+            "max_num_results": 12,
         }
     ]
     taste_line = (
@@ -175,10 +198,16 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         else "No taste summary available, rely only on the user's prompt."
     )
     system = f"""
-Movie recommender. Use retrieved context to find and rank real candidates only.
-Return 3-5 movies, strongest first. No invented titles or TMDB IDs.
+You are a film recommender. Use the retrieved movie context and user taste summary to recommend films.
+
+Return 3-5 movies ranked strongest first. For each movie, write a "why" that:
+- References something specific from the user's taste (a director, genre, theme, or mood they like)
+- Mentions one concrete detail about the film (tone, theme, or style) that makes it a match
+- Is 1-2 sentences, specific and personal — not generic praise like "a great film" or "you might enjoy"
+
 Exclude TMDB IDs: [{excluded_str}]
 {taste_line}
+No invented titles or TMDB IDs. Only recommend movies from the retrieved context.
 """.strip()
 
     return _call_openai_with_retry(
@@ -198,18 +227,33 @@ def _build_contextual_query(msg: str, user) -> str:
     recent_movies = list(
         MovieUser.objects.filter(
             user=user,
-            movie__title__isnull=False, 
+            movie__title__isnull=False,
             watch_status="Watched",
         )
         .select_related("movie")
-        .order_by("-watched_date", "-id")[:3] # recent watch pull ups
+        .order_by("-watched_date", "-id")[:5]
     )
 
     if recent_movies:
         recent_titles = [mu.movie.title for mu in recent_movies if mu.movie and mu.movie.title]
         if recent_titles:
-            parts.append("recent user watches: " + ", ".join(recent_titles))
-    
+            parts.append("recent watches: " + ", ".join(recent_titles))
+
+    # add highly rated movies as taste signal
+    loved = list(
+        MovieUser.objects.filter(
+            user=user,
+            movie__title__isnull=False,
+            rating__gte=4.0,
+        )
+        .select_related("movie")
+        .order_by("-rating", "-id")[:5]
+    )
+    if loved:
+        loved_titles = [mu.movie.title for mu in loved if mu.movie and mu.movie.title]
+        if loved_titles:
+            parts.append("highly rated: " + ", ".join(loved_titles))
+
     return "\n".join(parts)
 
 CHAT_RESPONSE_SCHEMA = {

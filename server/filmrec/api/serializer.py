@@ -251,6 +251,7 @@ NEED TO ADD LETTERBOXD URL
 """
 class MovieCardSerializer(serializers.ModelSerializer):
     description = serializers.CharField(source="overview", allow_null=True, required=False)
+    letterboxd_uri = serializers.CharField(allow_null=True, required=False)
     class Meta:
         model = Movie
         fields = [
@@ -261,6 +262,7 @@ class MovieCardSerializer(serializers.ModelSerializer):
             "tmdb_id",
             "avg_rating",
             "description",
+            "letterboxd_uri",
         ]
 
 """
