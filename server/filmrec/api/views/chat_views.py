@@ -189,7 +189,7 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
         {
             "type": "file_search",
             "vector_store_ids": [movies_store_id] + ([taste_store_id] if taste_store_id else []),
-            "max_num_results": 8,
+            "max_num_results": 6,
         }
     ]
     taste_line = (
@@ -200,17 +200,14 @@ def _retrieve_and_rank(client, *, model, msg, movies_store_id, taste_store_id, e
     system = f"""
 You are a film recommender. Use the retrieved movie context and user taste summary to recommend films.
 
-Return 3-5 movies ranked strongest first. 
-For each recommendation:
-- Use exactly one retrieved movie as the source
-- The tmdb_id, title, and why must all refer to the same movie
-- Do not mix details from different retrieved films
-- The "why" must reference the returned movie, not another candidate
+Return 3-5 movies ranked strongest first.
+For each recommendation: 
+- Select ONE movie record from the retrieved context
+- Copy the tmdb_id and title EXACTLY from that record
+- Do NOT modify or guess IDs or titles
+- Do NOT combine information from multiple movies
 
-For each "why":
-- References something specific from the user's taste (a director, genre, theme, or mood they like)
-- Mentions one concrete detail about the film (tone, theme, or style) that makes it a match
-- Is 1-2 sentences, specific and personal — not generic praise like "a great film" or "you might enjoy"
+Return ONLY movies that appear in the retrieved context.
 
 Exclude TMDB IDs: [{excluded_str}]
 {taste_line}
@@ -227,6 +224,14 @@ No invented titles or TMDB IDs. Only recommend movies from the retrieved context
         timeout=60,
         max_attempts=1,
     )
+
+def _fallback_why(mv, user_msg=""):
+    bits = []
+    if getattr(mv, "year", None):
+        bits.append(str(mv.year))
+    if getattr(mv, "overview", None):
+        return f"A strong match for your prompt. {mv.overview[:140].rstrip()}..."
+    return "A strong match for your prompt and taste profile."
 
 def _build_contextual_query(msg: str, user) -> str:
     parts = [msg.strip()]
@@ -292,13 +297,8 @@ CHAT_RESPONSE_SCHEMA = {
                             "type": "integer",
                         },
                         "title": {"type": "string"},
-                        "why": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 280   # short explanation
-                        },
                     },
-                    "required": ["tmdb_id", "title", "why"],
+                    "required": ["tmdb_id", "title"],
                 },
             },
         },
@@ -456,23 +456,26 @@ def chat_recommend(request):
             except:
                 continue
         
-        if mv and returned_title:
-            if mv.title.strip().lower() != returned_title.lower():
-                logger.warning(
-                    "Rejecting mismatched recommendation tmbdb_id=%s returned_title=%r db_title=%r",
-                    tmdb_id_int,
-                    returned_title,
-                    mv.title,
-                )
-                continue
+        if not returned_title:
+            logger.warning("Rejecting recommendation tmdb_Id=%s reason=missing_title", tmdb_id_int)
+            continue
+
+        if mv.title.strip().lower() != returned_title.lower():
+            logger.warning(
+                "Rejecting mismatched recommendation tmdb_id=%s returned_title=%r db_title=%r",
+                tmdb_id_int,
+                returned_title,
+                mv.title,
+            )
+            continue
 
         if not _is_valid_movie(mv):
             logger.debug("Skipping tmdb_id=%s reason=invalid_movie", tmdb_id_int)
             continue
     
         seen_tmdb_ids.add(tmdb_id_int)
-        movies_payload.append(_movie_payload(mv, why=why))
-        film_bank_entries.append((mv, why))
+        movies_payload.append(_movie_payload(mv, why=_fallback_why(mv, msg)))
+        film_bank_entries.append((mv, _fallback_why(mv, msg)))
 
         if len(movies_payload) == 3:
             break
